@@ -1,0 +1,42 @@
+Summary of Changes
+1. API Client (client/api/client.ts)
+Added normalizeResponse<T>() function that handles both { success: true } and { ok: true } envelopes
+Added apiRequestNormalized<T>() for normalized API calls that don't throw on errors
+Added request logging: [api] METHOD path status hasAuthHeader=true/false
+Added typed API functions:
+ensureUser() - POST /api/users/ensure
+getCredits() - GET /credits
+getMyShorts(cursor?, limit?) - GET /api/shorts/mine
+getShortDetail(jobId) - GET /api/shorts/:jobId
+Exported interfaces: UserProfile, CreditsResponse, ShortItem, ShortsListResponse, ShortDetail
+2. Auth Context (client/contexts/AuthContext.tsx)
+Added userProfile state with UserProfile type
+Added ensuredUidRef to track which UID has been ensured (prevents duplicate calls)
+Calls ensureUser() once per unique UID on auth state change
+Added refreshCredits() function that updates userProfile.credits
+Clears userProfile and resets ensuredUidRef on sign-out
+3. Settings Screen (client/screens/SettingsScreen.tsx)
+Displays credits from userProfile?.credits (shows "—" if not loaded)
+Added "Refresh Credits" button with loading state
+Shows toast on success/error
+4. Library Screen (client/screens/LibraryScreen.tsx)
+Fetches shorts from /api/shorts/mine on mount
+Displays list with: quote text, status badge, duration, thumbnail, created date
+"Load More" button when hasMore === true (uses nextCursor)
+Only navigates to detail when status === "ready"; shows warning toast otherwise
+5. Short Detail Screen (client/screens/ShortDetailScreen.tsx) - NEW
+Fetches short detail from /api/shorts/:jobId
+Video player using expo-av with native controls
+Shows quote, metadata (job ID, duration, template, created date, credits used)
+"Try Again" button if 404 (video not ready)
+6. Library Navigator (client/navigation/LibraryStackNavigator.tsx)
+Added ShortDetail route with { jobId: string } param
+Registered ShortDetailScreen
+Manual Test Checklist
+Login - Sign in with email/password or Google
+Ensure called once - Check console for [api] POST /api/users/ensure 200 hasAuthHeader=true; verify it does NOT repeat on subsequent renders or tab switches
+Refresh credits works - Go to Settings tab, tap the refresh icon next to Credits, verify credits update and toast appears
+Library loads items - Go to Library tab, verify shorts list loads (or empty state if none); check console for [api] GET /api/shorts/mine?limit=24 200
+Load more works - If hasMore, tap "Load More" and verify additional items append
+Detail screen opens - Tap a short with status "ready", verify ShortDetailScreen shows metadata and video player (if videoUrl exists)
+Processing guard - Tap a short with status "processing" or "pending", verify warning toast "Still processing. Please wait."
