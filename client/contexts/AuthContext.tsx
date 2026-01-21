@@ -4,6 +4,7 @@ import React, {
   useEffect,
   useState,
   useCallback,
+  useRef,
   ReactNode,
 } from "react";
 import {
@@ -20,17 +21,19 @@ import * as WebBrowser from "expo-web-browser";
 import * as AuthSession from "expo-auth-session";
 import { Platform } from "react-native";
 import { auth } from "@/lib/firebase";
-import { clearTokenCache } from "@/api/client";
+import { clearTokenCache, ensureUser, getCredits, UserProfile } from "@/api/client";
 
 WebBrowser.maybeCompleteAuthSession();
 
 interface AuthContextType {
   user: User | null;
+  userProfile: UserProfile | null;
   isLoading: boolean;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signUpWithEmail: (email: string, password: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
+  refreshCredits: () => Promise<void>;
   error: string | null;
   clearError: () => void;
 }
@@ -45,17 +48,59 @@ const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Track which UID we've already ensured to avoid duplicate calls
+  const ensuredUidRef = useRef<string | null>(null);
+
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
       setIsLoading(false);
+
+      // Call ensureUser once per unique UID
+      if (firebaseUser && ensuredUidRef.current !== firebaseUser.uid) {
+        console.log(`[auth] SIGNED_IN uid=${firebaseUser.uid}`);
+        ensuredUidRef.current = firebaseUser.uid;
+        try {
+          const result = await ensureUser();
+          if (result.ok) {
+            setUserProfile(result.data);
+          } else {
+            console.error("[auth] ensureUser failed:", result.code, result.message);
+          }
+        } catch (err) {
+          console.error("[auth] ensureUser error:", err);
+        }
+      } else if (!firebaseUser) {
+        // User signed out
+        ensuredUidRef.current = null;
+        setUserProfile(null);
+      }
     });
 
     return unsubscribe;
   }, []);
+
+  const refreshCredits = useCallback(async () => {
+    if (!user) return;
+    try {
+      const result = await getCredits();
+      if (result.ok) {
+        setUserProfile((prev) =>
+          prev ? { ...prev, credits: result.data.credits } : null
+        );
+      } else {
+        console.error("[auth] refreshCredits failed:", result.code, result.message);
+        throw new Error(result.message);
+      }
+    } catch (err) {
+      console.error("[auth] refreshCredits error:", err);
+      throw err;
+    }
+  }, [user]);
 
   const signInWithEmail = useCallback(async (email: string, password: string) => {
     setError(null);
@@ -133,6 +178,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
     setError(null);
     try {
       clearTokenCache();
+      ensuredUidRef.current = null;
+      setUserProfile(null);
       await firebaseSignOut(auth);
     } catch (err: any) {
       setError("Sign out failed. Please try again.");
@@ -146,11 +193,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
     <AuthContext.Provider
       value={{
         user,
+        userProfile,
         isLoading,
         signInWithEmail,
         signUpWithEmail,
         signInWithGoogle,
         signOut,
+        refreshCredits,
         error,
         clearError,
       }}

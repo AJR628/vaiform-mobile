@@ -47,7 +47,7 @@ export default function ShortDetailScreen() {
   const { theme } = useTheme();
   const { showError } = useToast();
 
-  const { jobId } = route.params;
+  const { id } = route.params;
 
   const videoRef = useRef<Video>(null);
   const [detail, setDetail] = useState<ShortDetail | null>(null);
@@ -60,7 +60,7 @@ export default function ShortDetailScreen() {
     setError(null);
 
     try {
-      const result = await getShortDetail(jobId);
+      const result = await getShortDetail(id);
       if (result.ok) {
         setDetail(result.data);
       } else {
@@ -81,7 +81,7 @@ export default function ShortDetailScreen() {
 
   useEffect(() => {
     fetchDetail();
-  }, [jobId]);
+  }, [id]);
 
   const handlePlaybackStatusUpdate = (status: AVPlaybackStatus) => {
     if (status.isLoaded) {
@@ -197,9 +197,9 @@ export default function ShortDetailScreen() {
               <ThemedText style={styles.sectionTitle}>Details</ThemedText>
 
               <View style={styles.metaRow}>
-                <ThemedText style={styles.metaLabel}>Job ID</ThemedText>
+                <ThemedText style={styles.metaLabel}>ID</ThemedText>
                 <ThemedText style={styles.metaValue} numberOfLines={1}>
-                  {detail.jobId}
+                  {detail.id}
                 </ThemedText>
               </View>
 

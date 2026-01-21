@@ -1,5 +1,5 @@
-import React from "react";
-import { View, StyleSheet, Pressable, Alert, Platform } from "react-native";
+import React, { useState } from "react";
+import { View, StyleSheet, Pressable, Alert, Platform, ActivityIndicator } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
@@ -12,6 +12,7 @@ import { ThemedView } from "@/components/ThemedView";
 import { Card } from "@/components/Card";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/contexts/ToastContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius } from "@/constants/theme";
 
@@ -31,9 +32,31 @@ export default function SettingsScreen() {
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useBottomTabBarHeight();
   const { theme } = useTheme();
-  const { user, signOut } = useAuth();
+  const { user, userProfile, signOut, refreshCredits } = useAuth();
+  const { showSuccess, showError } = useToast();
+
+  const [isRefreshingCredits, setIsRefreshingCredits] = useState(false);
 
   const appVersion = Constants.expoConfig?.version || "1.0.0";
+
+  const handleRefreshCredits = async () => {
+    setIsRefreshingCredits(true);
+    try {
+      await refreshCredits();
+      showSuccess("Credits refreshed!");
+      if (Platform.OS !== "web") {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to refresh credits";
+      showError(message);
+      if (Platform.OS !== "web") {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
+    } finally {
+      setIsRefreshingCredits(false);
+    }
+  };
 
   const handleSignOut = async () => {
     Alert.alert("Sign Out", "Are you sure you want to sign out?", [
@@ -104,13 +127,26 @@ export default function SettingsScreen() {
               </View>
               <View style={styles.settingsContent}>
                 <ThemedText style={styles.settingsLabel}>Credits</ThemedText>
-                <ThemedText style={styles.settingsValue}>10 credits</ThemedText>
+                <ThemedText style={styles.settingsValue}>
+                  {userProfile?.credits ?? "—"} credits
+                </ThemedText>
               </View>
-              <Feather
-                name="chevron-right"
-                size={20}
-                color={COLORS.textTertiary}
-              />
+              <Pressable
+                onPress={handleRefreshCredits}
+                disabled={isRefreshingCredits}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={({ pressed }) => [
+                  styles.refreshButton,
+                  pressed && styles.refreshButtonPressed,
+                ]}
+                testID="button-refresh-credits"
+              >
+                {isRefreshingCredits ? (
+                  <ActivityIndicator size="small" color={COLORS.primary} />
+                ) : (
+                  <Feather name="refresh-cw" size={18} color={COLORS.primary} />
+                )}
+              </Pressable>
             </View>
           </Card>
         </View>
@@ -227,6 +263,17 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: COLORS.textSecondary,
     marginTop: 2,
+  },
+  refreshButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: `${COLORS.primary}10`,
+  },
+  refreshButtonPressed: {
+    opacity: 0.7,
   },
   signOutButton: {
     flexDirection: "row",

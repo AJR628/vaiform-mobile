@@ -4,11 +4,13 @@ import { Pressable } from "react-native";
 import { Feather } from "@expo/vector-icons";
 
 import LibraryScreen from "@/screens/LibraryScreen";
+import ShortDetailScreen from "@/screens/ShortDetailScreen";
 import { useScreenOptions } from "@/hooks/useScreenOptions";
 import { useTheme } from "@/hooks/useTheme";
 
 export type LibraryStackParamList = {
   Library: undefined;
+  ShortDetail: { id: string };
 };
 
 const Stack = createNativeStackNavigator<LibraryStackParamList>();
@@ -32,6 +34,13 @@ export default function LibraryStackNavigator() {
               <Feather name="search" size={22} color={theme.text} />
             </Pressable>
           ),
+        }}
+      />
+      <Stack.Screen
+        name="ShortDetail"
+        component={ShortDetailScreen}
+        options={{
+          headerTitle: "Short Details",
         }}
       />
     </Stack.Navigator>
