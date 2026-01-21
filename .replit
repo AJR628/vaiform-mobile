@@ -72,4 +72,4 @@ ensurePreviewReachable = "/status"
 [userenv]
 
 [userenv.shared]
-EXPO_PUBLIC_API_BASE_URL = "https://your-vaiform-backend.com"
+EXPO_PUBLIC_API_BASE_URL = "https://17e0d1d1-e327-483d-b1ea-c41bea08fb59-00-1ef93t84nlhq6.janeway.replit.dev"
