@@ -1,0 +1,127 @@
+We’re building the Vaiform mobile client in Replit (Expo). Auth + credits + /api/users/ensure + /credits + /api/shorts/mine are working in both native device and Expo Web preview after backend CORS adjustments.
+
+Current issue: The Shorts Library list loads, but tapping a short does not play it in-app. Today, the app attempts GET /api/shorts/:id for detail and gets 404 {"success":false,"error":"NOT_FOUND"} for story-* ids (e.g. story-miv81ojs). This is blocking playback even though the list already contains the playable videoUrl.
+
+Hard evidence (contract from live response):
+GET /api/shorts/mine returns items like:
+
+id: "story-..." or id: "shorts-..."
+
+status: "ready"
+
+videoUrl: https://firebasestorage.googleapis.com/.../story.mp4?alt=media&token=...
+Some “shorts” items can have videoUrl pointing to an image (e.g. short.png), so we must support both video and image viewing.
+
+Goal: Implement a clean V1 flow where user taps a saved short and it plays in the app (least friction). Do this with minimal diff, and avoid breaking existing auth/credits/library behavior.
+
+Constraints / Preferences
+
+No backend changes required for V1 playback (we already have videoUrl in list response).
+
+Do not rely on /api/shorts/:id for playback; it’s returning 404 for story-* currently.
+
+Keep platform compatibility:
+
+Native iOS/Android should play in-app.
+
+Expo Web preview should not hard-fail; if web player is flaky, provide a graceful fallback.
+
+Use the Mobile spec if needed: /# Vaiform Mobile Spec Pack.txt (repo root or mounted path; open and confirm requirements around library + playback).
+
+Required Repo Audit
+
+Find the shorts list screen (Library screen) that calls /api/shorts/mine.
+
+Find the tap handler / navigation logic. Confirm whether it:
+
+navigates to a detail screen
+
+calls /api/shorts/:id (likely)
+
+Find ShortDetailScreen and confirm current assumptions:
+
+imports expo-av video component (but package may be missing)
+
+expects detail.id vs backend keys (jobId mismatch earlier)
+
+Confirm what SDK we’re using and whether expo-av is installed in package.json. If not installed, that’s a blocker.
+
+Implementation Plan (what to build)
+
+V1 Playback should work solely from the Library item’s videoUrl:
+
+Library item onPress
+
+Gate: if item.status !== "ready" or !item.videoUrl, show toast/snackbar “Still rendering…” and return.
+
+Navigate to ShortDetailScreen passing the item (at minimum: { id, videoUrl, coverImageUrl/thumbUrl, quoteText, durationSec, mode, template }).
+
+Remove/disable any “fetch detail” call that blocks navigation/playback.
+
+ShortDetailScreen playback
+
+Decide media type from videoUrl:
+
+If ends with .mp4 / .mov → show in-app video player.
+
+If ends with .png/.jpg/.jpeg/.webp → show <Image> viewer.
+
+Add fallback button always: “Open in browser”
+
+Native: WebBrowser.openBrowserAsync(videoUrl) or Linking.openURL(videoUrl)
+
+Web: window.open(videoUrl, "_blank")
+
+Player choice
+
+Minimal path: use expo-av for now (even if deprecated warning exists), install it if missing:
+
+npx expo install expo-av
+
+Web preview reliability:
+
+If expo-av video playback is unstable on web, implement a platform guard:
+
+Platform.OS === "web" → render HTML5 video via react-native-web <video> approach or a web-only component
+
+Native → expo-av Video
+
+Must not crash on web.
+
+Logging + UX
+
+Add a single log on press: [shorts] open {id, status, hasVideoUrl, ext}
+
+Add a simple loading UI while video buffers.
+
+If player errors, show message + fallback open button.
+
+Verification Checklist
+
+Library shows items; tapping a ready item opens detail screen.
+
+For story-* id items: no /api/shorts/:id call required; video plays from list videoUrl.
+
+For shorts-* items:
+
+mp4 plays in-app
+
+png shows as image
+
+Non-ready items do not open; show “Still rendering…”
+
+Expo Web preview: no crash; either plays video in-page or can open via fallback.
+
+Native phone: plays in-app (primary path).
+
+Deliverables
+
+A short written plan + exact file paths to modify.
+
+A minimal diff implementation.
+
+Notes on any required dependency installs or SDK concerns.
+
+A brief “how to test” list (web preview + native device).
+
+Proceed by auditing first, then propose the minimal patch set.
