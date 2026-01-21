@@ -7,10 +7,11 @@ import LibraryScreen from "@/screens/LibraryScreen";
 import ShortDetailScreen from "@/screens/ShortDetailScreen";
 import { useScreenOptions } from "@/hooks/useScreenOptions";
 import { useTheme } from "@/hooks/useTheme";
+import { ShortItem } from "@/api/client";
 
 export type LibraryStackParamList = {
   Library: undefined;
-  ShortDetail: { id: string };
+  ShortDetail: { short: ShortItem };
 };
 
 const Stack = createNativeStackNavigator<LibraryStackParamList>();

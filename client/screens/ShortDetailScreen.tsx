@@ -1,11 +1,12 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useRef, useState } from "react";
 import {
   View,
   StyleSheet,
   Pressable,
-  ActivityIndicator,
   Platform,
   Dimensions,
+  Image,
+  Linking,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -13,15 +14,14 @@ import { useRoute, RouteProp } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import { Video, ResizeMode, AVPlaybackStatus } from "expo-av";
 import * as Haptics from "expo-haptics";
+import * as WebBrowser from "expo-web-browser";
 
 import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { Card } from "@/components/Card";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useTheme } from "@/hooks/useTheme";
-import { useToast } from "@/contexts/ToastContext";
 import { Spacing, BorderRadius } from "@/constants/theme";
-import { getShortDetail, ShortDetail } from "@/api/client";
 import { LibraryStackParamList } from "@/navigation/LibraryStackNavigator";
 
 const COLORS = {
@@ -40,53 +40,43 @@ const VIDEO_HEIGHT = (SCREEN_WIDTH - Spacing.lg * 2) * (16 / 9);
 
 type ShortDetailRouteProp = RouteProp<LibraryStackParamList, "ShortDetail">;
 
+function isVideoUrl(url: string): boolean {
+  const videoExtensions = [".mp4", ".mov", ".m4v", ".webm", ".avi"];
+  const lowerUrl = url.toLowerCase().split("?")[0];
+  return videoExtensions.some((ext) => lowerUrl.endsWith(ext));
+}
+
+function isImageUrl(url: string): boolean {
+  const imageExtensions = [".png", ".jpg", ".jpeg", ".webp", ".gif"];
+  const lowerUrl = url.toLowerCase().split("?")[0];
+  return imageExtensions.some((ext) => lowerUrl.endsWith(ext));
+}
+
 export default function ShortDetailScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const route = useRoute<ShortDetailRouteProp>();
   const { theme } = useTheme();
-  const { showError } = useToast();
 
-  const { id } = route.params;
+  const { short } = route.params;
 
   const videoRef = useRef<Video>(null);
-  const [detail, setDetail] = useState<ShortDetail | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [videoError, setVideoError] = useState<string | null>(null);
 
-  const fetchDetail = async () => {
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const result = await getShortDetail(id);
-      if (result.ok) {
-        setDetail(result.data);
-      } else {
-        if (result.code === "NOT_FOUND") {
-          setError("Video not ready yet");
-        } else {
-          setError(result.message || "Failed to load short details");
-        }
-      }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to load short details";
-      setError(message);
-      showError(message);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchDetail();
-  }, [id]);
+  const mediaUrl = short.videoUrl;
+  const isVideo = mediaUrl ? isVideoUrl(mediaUrl) : false;
+  const isImage = mediaUrl ? isImageUrl(mediaUrl) : false;
 
   const handlePlaybackStatusUpdate = (status: AVPlaybackStatus) => {
     if (status.isLoaded) {
       setIsPlaying(status.isPlaying);
     }
+  };
+
+  const handleVideoError = (error: string) => {
+    console.error("[shorts] Video playback error:", error);
+    setVideoError("Video playback failed");
   };
 
   const handlePlayPause = async () => {
@@ -103,10 +93,22 @@ export default function ShortDetailScreen() {
     }
   };
 
-  const handleRefresh = () => {
-    fetchDetail();
+  const handleOpenInBrowser = async () => {
+    if (!mediaUrl) return;
+
     if (Platform.OS !== "web") {
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+
+    try {
+      if (Platform.OS === "web") {
+        window.open(mediaUrl, "_blank");
+      } else {
+        await WebBrowser.openBrowserAsync(mediaUrl);
+      }
+    } catch (error) {
+      console.error("[shorts] Failed to open in browser:", error);
+      await Linking.openURL(mediaUrl);
     }
   };
 
@@ -126,119 +128,114 @@ export default function ShortDetailScreen() {
           },
         ]}
       >
-        {isLoading ? (
-          <View style={styles.centerContainer}>
-            <ActivityIndicator size="large" color={COLORS.primary} />
-            <ThemedText style={styles.loadingText}>Loading...</ThemedText>
+        {isVideo && mediaUrl && !videoError ? (
+          <Pressable onPress={handlePlayPause} style={styles.videoContainer}>
+            <Video
+              ref={videoRef}
+              source={{ uri: mediaUrl }}
+              style={styles.video}
+              resizeMode={ResizeMode.CONTAIN}
+              useNativeControls
+              onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
+              onError={(e) => handleVideoError(e)}
+              posterSource={
+                short.thumbUrl || short.coverImageUrl
+                  ? { uri: short.thumbUrl || short.coverImageUrl }
+                  : undefined
+              }
+              usePoster={!!(short.thumbUrl || short.coverImageUrl)}
+            />
+          </Pressable>
+        ) : isImage && mediaUrl ? (
+          <View style={styles.imageContainer}>
+            <Image
+              source={{ uri: mediaUrl }}
+              style={styles.image}
+              resizeMode="contain"
+            />
           </View>
-        ) : error ? (
-          <View style={styles.centerContainer}>
-            <View style={styles.errorIconContainer}>
-              <Feather name="alert-circle" size={48} color={COLORS.error} />
-            </View>
-            <ThemedText style={styles.errorTitle}>{error}</ThemedText>
-            <ThemedText style={styles.errorSubtitle}>
-              The video may still be processing.
+        ) : mediaUrl ? (
+          <View style={styles.noVideoContainer}>
+            <Feather name="play-circle" size={48} color={COLORS.textTertiary} />
+            <ThemedText style={styles.noVideoText}>
+              {videoError || "Tap below to open in browser"}
             </ThemedText>
-            <Pressable
-              style={({ pressed }) => [
-                styles.refreshButton,
-                pressed && styles.refreshButtonPressed,
-              ]}
-              onPress={handleRefresh}
-            >
-              <Feather name="refresh-cw" size={18} color={COLORS.primary} />
-              <ThemedText style={styles.refreshButtonText}>Try Again</ThemedText>
-            </Pressable>
           </View>
-        ) : detail ? (
-          <>
-            {/* Video Player */}
-            {detail.videoUrl ? (
-              <Pressable onPress={handlePlayPause} style={styles.videoContainer}>
-                <Video
-                  ref={videoRef}
-                  source={{ uri: detail.videoUrl }}
-                  style={styles.video}
-                  resizeMode={ResizeMode.CONTAIN}
-                  useNativeControls
-                  onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
-                  posterSource={
-                    detail.coverImageUrl ? { uri: detail.coverImageUrl } : undefined
-                  }
-                  usePoster={!!detail.coverImageUrl}
-                />
-              </Pressable>
-            ) : (
-              <View style={styles.noVideoContainer}>
-                <Feather name="video-off" size={48} color={COLORS.textTertiary} />
-                <ThemedText style={styles.noVideoText}>
-                  No video available
-                </ThemedText>
-              </View>
-            )}
+        ) : (
+          <View style={styles.noVideoContainer}>
+            <Feather name="video-off" size={48} color={COLORS.textTertiary} />
+            <ThemedText style={styles.noVideoText}>
+              No media available
+            </ThemedText>
+          </View>
+        )}
 
-            {/* Quote */}
-            {detail.usedQuote?.text && (
-              <Card style={styles.quoteCard}>
-                <ThemedText style={styles.quoteText}>
-                  "{detail.usedQuote.text}"
-                </ThemedText>
-                {detail.usedQuote.author && (
-                  <ThemedText style={styles.quoteAuthor}>
-                    — {detail.usedQuote.author}
-                  </ThemedText>
-                )}
-              </Card>
-            )}
-
-            {/* Metadata */}
-            <Card style={styles.metaCard}>
-              <ThemedText style={styles.sectionTitle}>Details</ThemedText>
-
-              <View style={styles.metaRow}>
-                <ThemedText style={styles.metaLabel}>ID</ThemedText>
-                <ThemedText style={styles.metaValue} numberOfLines={1}>
-                  {detail.id}
-                </ThemedText>
-              </View>
-
-              {detail.durationSec && (
-                <View style={styles.metaRow}>
-                  <ThemedText style={styles.metaLabel}>Duration</ThemedText>
-                  <ThemedText style={styles.metaValue}>
-                    {Math.round(detail.durationSec)} seconds
-                  </ThemedText>
-                </View>
-              )}
-
-              {detail.usedTemplate && (
-                <View style={styles.metaRow}>
-                  <ThemedText style={styles.metaLabel}>Template</ThemedText>
-                  <ThemedText style={styles.metaValue}>
-                    {detail.usedTemplate}
-                  </ThemedText>
-                </View>
-              )}
-
-              <View style={styles.metaRow}>
-                <ThemedText style={styles.metaLabel}>Created</ThemedText>
-                <ThemedText style={styles.metaValue}>
-                  {formatDate(detail.createdAt)}
-                </ThemedText>
-              </View>
-
-              {detail.credits && (
-                <View style={styles.metaRow}>
-                  <ThemedText style={styles.metaLabel}>Credits Used</ThemedText>
-                  <ThemedText style={styles.metaValue}>
-                    {detail.credits.cost ?? 1}
-                  </ThemedText>
-                </View>
-              )}
-            </Card>
-          </>
+        {mediaUrl ? (
+          <Pressable
+            style={({ pressed }) => [
+              styles.browserButton,
+              pressed && styles.browserButtonPressed,
+            ]}
+            onPress={handleOpenInBrowser}
+          >
+            <Feather name="external-link" size={18} color={COLORS.primary} />
+            <ThemedText style={styles.browserButtonText}>
+              Open in Browser
+            </ThemedText>
+          </Pressable>
         ) : null}
+
+        {short.quoteText ? (
+          <Card style={styles.quoteCard}>
+            <ThemedText style={styles.quoteText}>"{short.quoteText}"</ThemedText>
+          </Card>
+        ) : null}
+
+        <Card style={styles.metaCard}>
+          <ThemedText style={styles.sectionTitle}>Details</ThemedText>
+
+          <View style={styles.metaRow}>
+            <ThemedText style={styles.metaLabel}>ID</ThemedText>
+            <ThemedText style={styles.metaValue} numberOfLines={1}>
+              {short.id}
+            </ThemedText>
+          </View>
+
+          {short.durationSec ? (
+            <View style={styles.metaRow}>
+              <ThemedText style={styles.metaLabel}>Duration</ThemedText>
+              <ThemedText style={styles.metaValue}>
+                {Math.round(short.durationSec)} seconds
+              </ThemedText>
+            </View>
+          ) : null}
+
+          {short.template ? (
+            <View style={styles.metaRow}>
+              <ThemedText style={styles.metaLabel}>Template</ThemedText>
+              <ThemedText style={styles.metaValue}>{short.template}</ThemedText>
+            </View>
+          ) : null}
+
+          {short.mode ? (
+            <View style={styles.metaRow}>
+              <ThemedText style={styles.metaLabel}>Mode</ThemedText>
+              <ThemedText style={styles.metaValue}>{short.mode}</ThemedText>
+            </View>
+          ) : null}
+
+          <View style={styles.metaRow}>
+            <ThemedText style={styles.metaLabel}>Status</ThemedText>
+            <ThemedText style={styles.metaValue}>{short.status}</ThemedText>
+          </View>
+
+          <View style={[styles.metaRow, { borderBottomWidth: 0 }]}>
+            <ThemedText style={styles.metaLabel}>Created</ThemedText>
+            <ThemedText style={styles.metaValue}>
+              {formatDate(short.createdAt)}
+            </ThemedText>
+          </View>
+        </Card>
       </KeyboardAwareScrollViewCompat>
     </ThemedView>
   );
@@ -251,57 +248,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: Spacing.lg,
   },
-  centerContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: Spacing["5xl"],
-  },
-  loadingText: {
-    marginTop: Spacing.md,
-    fontSize: 14,
-    color: COLORS.textSecondary,
-  },
-  errorIconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: `${COLORS.error}10`,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: Spacing.lg,
-  },
-  errorTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: COLORS.textPrimary,
-    textAlign: "center",
-    marginBottom: Spacing.sm,
-  },
-  errorSubtitle: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    textAlign: "center",
-    marginBottom: Spacing.xl,
-  },
-  refreshButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: Spacing.xl,
-    paddingVertical: Spacing.md,
-    borderWidth: 1,
-    borderColor: COLORS.primary,
-    borderRadius: BorderRadius.xs,
-  },
-  refreshButtonPressed: {
-    opacity: 0.7,
-  },
-  refreshButtonText: {
-    marginLeft: Spacing.sm,
-    fontSize: 14,
-    fontWeight: "600",
-    color: COLORS.primary,
-  },
   videoContainer: {
     width: "100%",
     height: VIDEO_HEIGHT,
@@ -309,9 +255,24 @@ const styles = StyleSheet.create({
     backgroundColor: "#000",
     borderRadius: BorderRadius.sm,
     overflow: "hidden",
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.md,
   },
   video: {
+    width: "100%",
+    height: "100%",
+  },
+  imageContainer: {
+    width: "100%",
+    height: VIDEO_HEIGHT,
+    maxHeight: 500,
+    backgroundColor: COLORS.surface,
+    borderRadius: BorderRadius.sm,
+    overflow: "hidden",
+    marginBottom: Spacing.md,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  image: {
     width: "100%",
     height: "100%",
   },
@@ -322,7 +283,7 @@ const styles = StyleSheet.create({
     borderRadius: BorderRadius.sm,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: Spacing.lg,
+    marginBottom: Spacing.md,
     borderWidth: 1,
     borderColor: COLORS.border,
   },
@@ -330,6 +291,27 @@ const styles = StyleSheet.create({
     marginTop: Spacing.md,
     fontSize: 14,
     color: COLORS.textTertiary,
+    textAlign: "center",
+    paddingHorizontal: Spacing.lg,
+  },
+  browserButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: Spacing.md,
+    marginBottom: Spacing.lg,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    borderRadius: BorderRadius.xs,
+  },
+  browserButtonPressed: {
+    opacity: 0.7,
+  },
+  browserButtonText: {
+    marginLeft: Spacing.sm,
+    fontSize: 14,
+    fontWeight: "600",
+    color: COLORS.primary,
   },
   quoteCard: {
     marginBottom: Spacing.lg,
@@ -342,12 +324,6 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
     color: COLORS.textPrimary,
     lineHeight: 24,
-  },
-  quoteAuthor: {
-    marginTop: Spacing.sm,
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    textAlign: "right",
   },
   metaCard: {
     borderWidth: 1,

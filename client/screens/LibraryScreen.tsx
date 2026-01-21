@@ -125,8 +125,14 @@ export default function LibraryScreen() {
       }
       return;
     }
-    // Navigate to detail screen with item id (not jobId)
-    navigation.navigate("ShortDetail", { id: short.id });
+    
+    if (!short.videoUrl) {
+      showWarning("No video available for this item.");
+      return;
+    }
+    
+    console.log(`[shorts] open id=${short.id} status=${short.status} hasVideoUrl=${!!short.videoUrl}`);
+    navigation.navigate("ShortDetail", { short });
   };
 
   const handleCreateShort = () => {
