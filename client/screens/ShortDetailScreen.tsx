@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect } from "react";
 import {
   View,
   StyleSheet,
@@ -7,7 +7,9 @@ import {
   Dimensions,
   Image,
   Linking,
+  ActivityIndicator,
 } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useRoute, RouteProp } from "@react-navigation/native";
@@ -36,20 +38,45 @@ const COLORS = {
 };
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
-const VIDEO_HEIGHT = (SCREEN_WIDTH - Spacing.lg * 2) * (16 / 9);
 
 type ShortDetailRouteProp = RouteProp<LibraryStackParamList, "ShortDetail">;
 
 function isVideoUrl(url: string): boolean {
+  // Strip query string and hash
+  const clean = url.split("?")[0].split("#")[0].toLowerCase();
+  
+  // Fallback: check for known video extensions anywhere in the URL
+  // (handles cases where lastDot parsing might fail or extension is in path)
+  if (clean.includes(".mp4") || clean.includes(".mov") || clean.includes(".m4v") || clean.includes(".webm") || clean.includes(".avi")) {
+    return true;
+  }
+  
+  // Extract extension from end
+  const lastDot = clean.lastIndexOf(".");
+  if (lastDot === -1) {
+    // No extension - check for known patterns in path
+    return clean.includes("/story.mp4") || clean.includes("/short.mp4");
+  }
+  
+  const ext = clean.slice(lastDot);
   const videoExtensions = [".mp4", ".mov", ".m4v", ".webm", ".avi"];
-  const lowerUrl = url.toLowerCase().split("?")[0];
-  return videoExtensions.some((ext) => lowerUrl.endsWith(ext));
+  return videoExtensions.some((e) => ext === e);
 }
 
 function isImageUrl(url: string): boolean {
+  const clean = url.split("?")[0].split("#")[0].toLowerCase();
+  
+  // Fallback: check for known image extensions anywhere in the URL
+  if (clean.includes(".png") || clean.includes(".jpg") || clean.includes(".jpeg") || clean.includes(".webp") || clean.includes(".gif")) {
+    return true;
+  }
+  
+  const lastDot = clean.lastIndexOf(".");
+  if (lastDot === -1) return false;
+  
+  const ext = clean.slice(lastDot);
   const imageExtensions = [".png", ".jpg", ".jpeg", ".webp", ".gif"];
-  const lowerUrl = url.toLowerCase().split("?")[0];
-  return imageExtensions.some((ext) => lowerUrl.endsWith(ext));
+  return imageExtensions.some((e) => ext === e);
 }
 
 export default function ShortDetailScreen() {
@@ -63,20 +90,98 @@ export default function ShortDetailScreen() {
   const videoRef = useRef<Video>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [videoError, setVideoError] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   const mediaUrl = short.videoUrl;
   const isVideo = mediaUrl ? isVideoUrl(mediaUrl) : false;
   const isImage = mediaUrl ? isImageUrl(mediaUrl) : false;
 
+  // Log media type detection
+  useEffect(() => {
+    console.log(`[shorts] detail id=${short.id} mediaUrl=${mediaUrl?.substring(0, 60)}... isVideo=${isVideo} isImage=${isImage}`);
+  }, [short.id, mediaUrl, isVideo, isImage]);
+
+  // Native-only reachability check
+  useEffect(() => {
+    if (Platform.OS !== "web" && mediaUrl) {
+      // Fast signal: is it the URL or the player?
+      fetch(mediaUrl, { method: "HEAD" })
+        .then((res) => {
+          console.log("[shorts] Video URL reachable:", {
+            status: res.status,
+            contentType: res.headers.get("content-type"),
+            contentLength: res.headers.get("content-length"),
+          });
+        })
+        .catch((err) => {
+          // Fallback to GET with Range header (Firebase sometimes blocks HEAD)
+          console.warn("[shorts] HEAD failed, trying Range request:", err.message);
+          fetch(mediaUrl, {
+            headers: { Range: "bytes=0-1" },
+          })
+            .then((res) => {
+              console.log("[shorts] Video URL reachable (Range):", {
+                status: res.status,
+                contentType: res.headers.get("content-type"),
+              });
+            })
+            .catch((rangeErr) => {
+              console.error("[shorts] Video URL NOT reachable:", rangeErr.message);
+            });
+        });
+    }
+  }, [mediaUrl]);
+
+  // Web debug logging
+  useEffect(() => {
+    if (Platform.OS === "web" && isVideo && mediaUrl) {
+      setTimeout(() => {
+        const v = document.querySelector("video");
+        if (v) {
+          console.log("[shorts] Video element found:", {
+            src: v.currentSrc,
+            readyState: v.readyState,
+            networkState: v.networkState,
+            error: v.error,
+          });
+        } else {
+          console.warn("[shorts] Video element NOT found in DOM");
+        }
+      }, 100);
+    }
+  }, [isVideo, mediaUrl]);
+
   const handlePlaybackStatusUpdate = (status: AVPlaybackStatus) => {
     if (status.isLoaded) {
+      setIsLoading(false);
       setIsPlaying(status.isPlaying);
+    } else if (status.error) {
+      setIsLoading(false);
+      const errorMsg = status.error.localizedDescription || status.error.message || "Unknown error";
+      setVideoError(`Playback failed: ${errorMsg}`);
     }
   };
 
-  const handleVideoError = (error: string) => {
-    console.error("[shorts] Video playback error:", error);
-    setVideoError("Video playback failed");
+  const handleVideoError = (e: any) => {
+    // Read correct shape (event object)
+    const errorMsg = e?.error?.localizedDescription || e?.error?.message || JSON.stringify(e);
+    console.error("[shorts] Video playback error:", {
+      error: e?.error,
+      fullEvent: e,
+      message: errorMsg,
+    });
+    setVideoError(`Playback failed: ${errorMsg}`);
+    setIsLoading(false);
+  };
+
+  const handleVideoLoad = () => {
+    console.log("[shorts] Video onLoad fired", mediaUrl?.substring(0, 60));
+    setIsLoading(false);
+  };
+
+  const handleReadyForDisplay = () => {
+    console.log("[shorts] Video onReadyForDisplay fired");
+    setIsLoading(false);
   };
 
   const handlePlayPause = async () => {
@@ -117,8 +222,9 @@ export default function ShortDetailScreen() {
   };
 
   return (
-    <ThemedView style={styles.container}>
-      <KeyboardAwareScrollViewCompat
+    <SafeAreaView style={styles.container} edges={[]}>
+      <ThemedView style={styles.container}>
+        <KeyboardAwareScrollViewCompat
         style={{ flex: 1, backgroundColor: theme.backgroundRoot }}
         contentContainerStyle={[
           styles.scrollContent,
@@ -129,15 +235,17 @@ export default function ShortDetailScreen() {
         ]}
       >
         {isVideo && mediaUrl && !videoError ? (
-          <Pressable onPress={handlePlayPause} style={styles.videoContainer}>
+          <View style={styles.videoContainer}>
             <Video
               ref={videoRef}
               source={{ uri: mediaUrl }}
               style={styles.video}
               resizeMode={ResizeMode.CONTAIN}
-              useNativeControls
+              useNativeControls={true}
               onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
-              onError={(e) => handleVideoError(e)}
+              onError={handleVideoError}
+              onLoad={handleVideoLoad}
+              onReadyForDisplay={handleReadyForDisplay}
               posterSource={
                 short.thumbUrl || short.coverImageUrl
                   ? { uri: short.thumbUrl || short.coverImageUrl }
@@ -145,7 +253,12 @@ export default function ShortDetailScreen() {
               }
               usePoster={!!(short.thumbUrl || short.coverImageUrl)}
             />
-          </Pressable>
+            {isLoading && !videoError && (
+              <View style={[StyleSheet.absoluteFillObject, styles.loadingOverlay]} pointerEvents="none">
+                <ActivityIndicator size="large" color={COLORS.white} />
+              </View>
+            )}
+          </View>
         ) : isImage && mediaUrl ? (
           <View style={styles.imageContainer}>
             <Image
@@ -236,8 +349,9 @@ export default function ShortDetailScreen() {
             </ThemedText>
           </View>
         </Card>
-      </KeyboardAwareScrollViewCompat>
-    </ThemedView>
+        </KeyboardAwareScrollViewCompat>
+      </ThemedView>
+    </SafeAreaView>
   );
 }
 
@@ -250,12 +364,14 @@ const styles = StyleSheet.create({
   },
   videoContainer: {
     width: "100%",
-    height: VIDEO_HEIGHT,
-    maxHeight: 500,
+    aspectRatio: 9/16, // Portrait videos
+    maxHeight: SCREEN_WIDTH * 1.5, // Reasonable max
+    minHeight: 200, // Ensure not rendered at 0 height
     backgroundColor: "#000",
     borderRadius: BorderRadius.sm,
     overflow: "hidden",
     marginBottom: Spacing.md,
+    position: "relative",
   },
   video: {
     width: "100%",
@@ -263,8 +379,9 @@ const styles = StyleSheet.create({
   },
   imageContainer: {
     width: "100%",
-    height: VIDEO_HEIGHT,
-    maxHeight: 500,
+    aspectRatio: 9/16, // Portrait aspect ratio
+    maxHeight: SCREEN_WIDTH * 1.5,
+    minHeight: 200,
     backgroundColor: COLORS.surface,
     borderRadius: BorderRadius.sm,
     overflow: "hidden",
@@ -357,5 +474,10 @@ const styles = StyleSheet.create({
     flex: 1,
     textAlign: "right",
     marginLeft: Spacing.md,
+  },
+  loadingOverlay: {
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#000",
   },
 });

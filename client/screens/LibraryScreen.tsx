@@ -118,7 +118,11 @@ export default function LibraryScreen() {
   };
 
   const handleShortPress = (short: ShortItem) => {
+    const videoUrlPrefix = short.videoUrl ? short.videoUrl.substring(0, 60) : "null";
+    console.log(`[shorts] TAP id=${short.id} status=${short.status} hasVideoUrl=${!!short.videoUrl} videoUrl=${videoUrlPrefix}...`);
+    
     if (short.status !== "ready") {
+      console.log(`[shorts] BLOCKED id=${short.id} reason=status_not_ready`);
       showWarning("Still processing. Please wait.");
       if (Platform.OS !== "web") {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
@@ -127,11 +131,12 @@ export default function LibraryScreen() {
     }
     
     if (!short.videoUrl) {
+      console.log(`[shorts] BLOCKED id=${short.id} reason=missing_videoUrl`);
       showWarning("No video available for this item.");
       return;
     }
     
-    console.log(`[shorts] open id=${short.id} status=${short.status} hasVideoUrl=${!!short.videoUrl}`);
+    console.log(`[shorts] open id=${short.id} status=${short.status} hasVideoUrl=true`);
     navigation.navigate("ShortDetail", { short });
   };
 
@@ -163,6 +168,7 @@ export default function LibraryScreen() {
               <Pressable
                 key={short.id}
                 onPress={() => handleShortPress(short)}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
                 style={({ pressed }) => [pressed && styles.cardPressed]}
               >
                 <Card style={styles.formCard}>
