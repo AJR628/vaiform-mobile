@@ -118,6 +118,7 @@ export default function LibraryScreen() {
   };
 
   const handleShortPress = (short: ShortItem) => {
+    console.log(`[shorts] CARD_PRESS id=${short.id}`);
     const videoUrlPrefix = short.videoUrl ? short.videoUrl.substring(0, 60) : "null";
     console.log(`[shorts] TAP id=${short.id} status=${short.status} hasVideoUrl=${!!short.videoUrl} videoUrl=${videoUrlPrefix}...`);
     
@@ -165,13 +166,12 @@ export default function LibraryScreen() {
         ) : shorts.length > 0 ? (
           <>
             {shorts.map((short) => (
-              <Pressable
+              <Card
                 key={short.id}
                 onPress={() => handleShortPress(short)}
                 hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                style={({ pressed }) => [pressed && styles.cardPressed]}
+                style={styles.formCard}
               >
-                <Card style={styles.formCard}>
                   <View style={styles.formCardHeader}>
                     {short.thumbUrl || short.coverImageUrl ? (
                       <Image
@@ -232,7 +232,6 @@ export default function LibraryScreen() {
                     </ThemedText>
                   </View>
                 </Card>
-              </Pressable>
             ))}
             {hasMore && (
               <Pressable
@@ -311,10 +310,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: BorderRadius.sm,
-  },
-  cardPressed: {
-    opacity: 0.7,
-    transform: [{ scale: 0.98 }],
   },
   formCardHeader: {
     flexDirection: "row",

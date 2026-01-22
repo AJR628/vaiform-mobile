@@ -1,5 +1,5 @@
 import React from "react";
-import { StyleSheet, Pressable, ViewStyle } from "react-native";
+import { StyleSheet, Pressable, ViewStyle, Insets } from "react-native";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -17,6 +17,7 @@ interface CardProps {
   description?: string;
   children?: React.ReactNode;
   onPress?: () => void;
+  hitSlop?: Insets;
   style?: ViewStyle;
 }
 
@@ -52,6 +53,7 @@ export function Card({
   description,
   children,
   onPress,
+  hitSlop,
   style,
 }: CardProps) {
   const { theme } = useTheme();
@@ -76,6 +78,7 @@ export function Card({
       onPress={onPress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
+      hitSlop={hitSlop}
       style={[
         styles.card,
         {
