@@ -1,7 +1,10 @@
 import { auth } from "@/lib/firebase";
+import type { StorySession, StoryFinalizeResponse } from "@/types/story";
 
-const API_BASE_URL =
-  process.env.EXPO_PUBLIC_API_BASE_URL || "https://your-vaiform-backend.com";
+// Normalize base URL to remove trailing slash (prevents double slashes in paths)
+const API_BASE_URL = (
+  process.env.EXPO_PUBLIC_API_BASE_URL || "https://your-vaiform-backend.com"
+).replace(/\/$/, "");
 
 let cachedIdToken: string | null = null;
 let tokenExpirationTime: number = 0;
@@ -350,4 +353,200 @@ export async function getShortDetail(
     method: "GET",
     requireAuth: true,
   });
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Story API functions
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * POST /api/story/start - Create new story session
+ */
+export async function storyStart(body: {
+  input: string;
+  inputType?: "link" | "idea" | "paragraph";
+  styleKey?: string;
+}): Promise<NormalizedResponse<StorySession>> {
+  return apiRequestNormalized<StorySession>("/api/story/start", {
+    method: "POST",
+    body,
+    requireAuth: true,
+  });
+}
+
+/**
+ * POST /api/story/generate - Generate script from input
+ */
+export async function storyGenerate(body: {
+  sessionId: string;
+  input?: string;
+  inputType?: "link" | "idea" | "paragraph";
+}): Promise<NormalizedResponse<StorySession>> {
+  return apiRequestNormalized<StorySession>("/api/story/generate", {
+    method: "POST",
+    body,
+    requireAuth: true,
+  });
+}
+
+/**
+ * POST /api/story/plan - Generate visual shot plan
+ */
+export async function storyPlan(body: {
+  sessionId: string;
+}): Promise<NormalizedResponse<StorySession>> {
+  return apiRequestNormalized<StorySession>("/api/story/plan", {
+    method: "POST",
+    body,
+    requireAuth: true,
+  });
+}
+
+/**
+ * POST /api/story/search - Search clips for all shots
+ */
+export async function storySearchAll(body: {
+  sessionId: string;
+}): Promise<NormalizedResponse<StorySession>> {
+  return apiRequestNormalized<StorySession>("/api/story/search", {
+    method: "POST",
+    body,
+    requireAuth: true,
+  });
+}
+
+/**
+ * GET /api/story/:sessionId - Get session state
+ */
+export async function storyGet(
+  sessionId: string
+): Promise<NormalizedResponse<StorySession>> {
+  return apiRequestNormalized<StorySession>(`/api/story/${sessionId}`, {
+    method: "GET",
+    requireAuth: true,
+  });
+}
+
+/**
+ * POST /api/story/update-beat-text - Edit single beat text
+ */
+export async function storyUpdateBeatText(body: {
+  sessionId: string;
+  sentenceIndex: number;
+  text: string;
+}): Promise<NormalizedResponse<StorySession>> {
+  return apiRequestNormalized<StorySession>("/api/story/update-beat-text", {
+    method: "POST",
+    body,
+    requireAuth: true,
+  });
+}
+
+/**
+ * POST /api/story/search-shot - Search clips for single shot
+ */
+export async function storySearchShot(body: {
+  sessionId: string;
+  sentenceIndex: number;
+  query?: string;
+  page?: number;
+}): Promise<NormalizedResponse<StorySession>> {
+  return apiRequestNormalized<StorySession>("/api/story/search-shot", {
+    method: "POST",
+    body,
+    requireAuth: true,
+  });
+}
+
+/**
+ * POST /api/story/update-shot - Swap selected clip for shot
+ */
+export async function storyUpdateShot(body: {
+  sessionId: string;
+  sentenceIndex: number;
+  clipId: string;
+}): Promise<NormalizedResponse<StorySession>> {
+  return apiRequestNormalized<StorySession>("/api/story/update-shot", {
+    method: "POST",
+    body,
+    requireAuth: true,
+  });
+}
+
+/**
+ * POST /api/story/finalize - Render final video (blocking, 2-10 minutes)
+ * Special handling: extracts shortId from top-level response and retryAfter from 503 headers
+ */
+export async function storyFinalize(body: {
+  sessionId: string;
+}): Promise<NormalizedResponse<StorySession> & { shortId?: string | null; retryAfter?: number }> {
+  const url = `${API_BASE_URL}/api/story/finalize`;
+
+  const requestHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
+    "x-client": "mobile",
+  };
+
+  const idToken = await getIdToken();
+  if (idToken) {
+    requestHeaders["Authorization"] = `Bearer ${idToken}`;
+  }
+
+  try {
+    const response = await fetch(url, {
+      method: "POST",
+      headers: requestHeaders,
+      body: JSON.stringify(body),
+    });
+
+    console.log(`[api] POST /api/story/finalize ${response.status}`);
+
+    const contentType = response.headers.get("content-type");
+    let json: unknown = null;
+    if (contentType && contentType.includes("application/json")) {
+      json = await response.json();
+    } else {
+      const text = await response.text();
+      json = { message: text };
+    }
+
+    // Extract retryAfter from header if 503
+    let retryAfter: number | undefined;
+    if (response.status === 503) {
+      const retryAfterHeader = response.headers.get("Retry-After");
+      if (retryAfterHeader) {
+        retryAfter = parseInt(retryAfterHeader, 10);
+      }
+    }
+
+    // Normalize response using existing function
+    const normalized = normalizeResponse<StorySession>(json, response.status);
+
+    // Extract shortId from raw response if success
+    let shortId: string | null | undefined;
+    if (typeof json === "object" && json !== null) {
+      const rawResponse = json as StoryFinalizeResponse;
+      if (rawResponse.success === true && rawResponse.shortId !== undefined) {
+        shortId = rawResponse.shortId;
+      }
+      // Also check body.retryAfter if header wasn't available
+      if (retryAfter === undefined && rawResponse.retryAfter !== undefined) {
+        retryAfter = rawResponse.retryAfter;
+      }
+    }
+
+    return {
+      ...normalized,
+      shortId,
+      retryAfter,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Network error";
+    return {
+      ok: false,
+      status: 0,
+      code: "NETWORK_ERROR",
+      message,
+    };
+  }
 }
