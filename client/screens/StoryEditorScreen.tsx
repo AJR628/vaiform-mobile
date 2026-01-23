@@ -5,7 +5,9 @@ import {
   FlatList,
   TextInput,
   ActivityIndicator,
+  Image,
 } from "react-native";
+import { Feather } from "@expo/vector-icons";
 import { useRoute, RouteProp } from "@react-navigation/native";
 import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
@@ -64,6 +66,25 @@ function extractBeats(session: any): Beat[] {
   }
 
   return [];
+}
+
+/**
+ * Get shot for a given sentenceIndex from session
+ */
+function getSelectedShot(session: any, sentenceIndex: number): any | null {
+  if (!session?.shots) return null;
+
+  // If shots is an array, find by sentenceIndex property
+  if (Array.isArray(session.shots)) {
+    return session.shots.find((s: any) => s?.sentenceIndex === sentenceIndex) || null;
+  }
+
+  // If shots is an object/map, try accessing by key
+  if (typeof session.shots === "object") {
+    return session.shots[String(sentenceIndex)] || session.shots[sentenceIndex] || null;
+  }
+
+  return null;
 }
 
 export default function StoryEditorScreen() {
@@ -129,6 +150,10 @@ export default function StoryEditorScreen() {
           } else {
             console.log("[story] no beats found in session");
           }
+          // Log shots structure
+          if (unwrappedSession?.shots?.[0]) {
+            console.log("[story] shots[0] sample:", unwrappedSession.shots[0]);
+          }
         }
       } catch (error) {
         console.error("[story] load error:", error);
@@ -180,6 +205,10 @@ export default function StoryEditorScreen() {
     const isSaving = savingByIndex[item.sentenceIndex] || false;
     const displayText = beatTexts[item.sentenceIndex] ?? item.text;
 
+    // Get shot for this beat
+    const shot = session ? getSelectedShot(session, item.sentenceIndex) : null;
+    const selectedClip = shot?.selectedClip || null;
+
     return (
       <Card elevation={1} style={styles.beatCard}>
         <ThemedText style={styles.beatLabel}>
@@ -209,6 +238,46 @@ export default function StoryEditorScreen() {
           {isSaving && (
             <View style={styles.savingIndicator}>
               <ActivityIndicator size="small" color={theme.primary} />
+            </View>
+          )}
+        </View>
+
+        {/* Clip preview */}
+        <View style={styles.clipPreviewContainer}>
+          {selectedClip?.thumbUrl ? (
+            <View style={styles.thumbnailContainer}>
+              <Image
+                source={{ uri: selectedClip.thumbUrl }}
+                style={[
+                  styles.thumbnail,
+                  { backgroundColor: theme.backgroundSecondary },
+                ]}
+                resizeMode="cover"
+              />
+              {selectedClip.provider && (
+                <ThemedText style={styles.providerLabel}>
+                  {selectedClip.provider}
+                </ThemedText>
+              )}
+            </View>
+          ) : selectedClip ? (
+            <View
+              style={[
+                styles.fallbackContainer,
+                { backgroundColor: theme.backgroundSecondary },
+              ]}
+            >
+              <Feather name="video" size={24} color={theme.textTertiary} />
+              <ThemedText style={styles.fallbackText}>Video selected</ThemedText>
+            </View>
+          ) : (
+            <View
+              style={[
+                styles.placeholderContainer,
+                { backgroundColor: theme.backgroundDefault },
+              ]}
+            >
+              <ThemedText style={styles.placeholderText}>No clip selected</ThemedText>
             </View>
           )}
         </View>
@@ -304,5 +373,41 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: Spacing.sm,
     right: Spacing.sm,
+  },
+  clipPreviewContainer: {
+    marginTop: Spacing.md,
+  },
+  thumbnailContainer: {
+    gap: Spacing.xs,
+  },
+  thumbnail: {
+    width: "100%",
+    aspectRatio: 16 / 9,
+    borderRadius: 8,
+  },
+  providerLabel: {
+    fontSize: 12,
+    opacity: 0.7,
+    textTransform: "capitalize",
+  },
+  fallbackContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+    padding: Spacing.md,
+    borderRadius: 8,
+  },
+  fallbackText: {
+    fontSize: 14,
+    opacity: 0.7,
+  },
+  placeholderContainer: {
+    padding: Spacing.md,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  placeholderText: {
+    fontSize: 14,
+    opacity: 0.6,
   },
 });
