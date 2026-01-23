@@ -16,6 +16,7 @@ import {
   RouteProp,
   useFocusEffect,
 } from "@react-navigation/native";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
@@ -106,6 +107,7 @@ export default function StoryEditorScreen() {
   const { sessionId } = route.params;
   const { theme } = useTheme();
   const { showError } = useToast();
+  const tabBarHeight = useBottomTabBarHeight();
 
   const [session, setSession] = useState<StorySession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -458,7 +460,10 @@ export default function StoryEditorScreen() {
       </View>
 
       {/* Timeline section */}
-      <View style={[styles.timelineSection, { borderTopColor: theme.backgroundTertiary }]}>
+      <View style={[styles.timelineSection, { 
+        borderTopColor: theme.backgroundTertiary,
+        paddingBottom: tabBarHeight 
+      }]}>
         <FlatList
           data={beats}
           renderItem={renderTimelineItem}
@@ -557,30 +562,32 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   previewThumbnailContainer: {
+    width: "100%",
+    aspectRatio: 16 / 9,
+    borderRadius: 12,
+    overflow: "hidden",
     gap: Spacing.xs,
   },
   previewThumbnail: {
     width: "100%",
-    flex: 1,
-    maxHeight: 400,
-    borderRadius: 12,
+    height: "100%",
   },
   previewFallback: {
-    flex: 1,
+    width: "100%",
+    aspectRatio: 16 / 9,
     justifyContent: "center",
     alignItems: "center",
     gap: Spacing.sm,
     padding: Spacing.xl,
     borderRadius: 12,
-    minHeight: 200,
   },
   previewPlaceholder: {
-    flex: 1,
+    width: "100%",
+    aspectRatio: 16 / 9,
     justifyContent: "center",
     alignItems: "center",
     padding: Spacing.xl,
     borderRadius: 12,
-    minHeight: 200,
   },
   providerLabel: {
     fontSize: 12,
@@ -617,7 +624,6 @@ const styles = StyleSheet.create({
     right: Spacing.sm,
   },
   timelineSection: {
-    height: 120,
     borderTopWidth: 1,
   },
   timelineContent: {
