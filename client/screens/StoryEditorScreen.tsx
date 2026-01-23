@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
   StyleSheet,
@@ -6,9 +6,16 @@ import {
   TextInput,
   ActivityIndicator,
   Image,
+  Pressable,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
-import { useRoute, RouteProp } from "@react-navigation/native";
+import {
+  useRoute,
+  useNavigation,
+  RouteProp,
+  useFocusEffect,
+} from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
 import { Card } from "@/components/Card";
@@ -87,8 +94,14 @@ function getSelectedShot(session: any, sentenceIndex: number): any | null {
   return null;
 }
 
+type StoryEditorNavProp = NativeStackNavigationProp<
+  HomeStackParamList,
+  "StoryEditor"
+>;
+
 export default function StoryEditorScreen() {
   const route = useRoute<StoryEditorRouteProp>();
+  const navigation = useNavigation<StoryEditorNavProp>();
   const { sessionId } = route.params;
   const { theme } = useTheme();
   const { showError } = useToast();
@@ -165,6 +178,28 @@ export default function StoryEditorScreen() {
 
     loadSession();
   }, [sessionId, showError]);
+
+  // Refresh session when screen comes into focus (e.g., after modal closes)
+  useFocusEffect(
+    useCallback(() => {
+      // Only refresh if we have an existing session (not on initial load)
+      if (session && !isLoading) {
+        const refreshSession = async () => {
+          try {
+            const res = await storyGet(sessionId);
+            if (res?.ok || res?.success === true) {
+              const unwrappedSession = unwrapSession(res);
+              setSession(unwrappedSession);
+            }
+          } catch (error) {
+            // Silently fail - session will refresh on next manual action
+            console.error("[story] refresh error:", error);
+          }
+        };
+        refreshSession();
+      }
+    }, [session, sessionId, isLoading])
+  );
 
   const beats = session ? extractBeats(session) : [];
 
@@ -279,6 +314,29 @@ export default function StoryEditorScreen() {
             >
               <ThemedText style={styles.placeholderText}>No clip selected</ThemedText>
             </View>
+          )}
+          {/* Replace clip button - show if shot exists (even if no selectedClip) */}
+          {shot && (
+            <Pressable
+              style={({ pressed }) => [
+                styles.replaceButton,
+                {
+                  backgroundColor: theme.backgroundSecondary,
+                  opacity: pressed ? 0.7 : 1,
+                },
+              ]}
+              onPress={() =>
+                navigation.navigate("ClipSearch", {
+                  sessionId,
+                  sentenceIndex: item.sentenceIndex,
+                })
+              }
+            >
+              <Feather name="refresh-cw" size={16} color={theme.textPrimary} />
+              <ThemedText style={styles.replaceButtonText}>
+                Replace clip
+              </ThemedText>
+            </Pressable>
           )}
         </View>
       </Card>
@@ -409,5 +467,19 @@ const styles = StyleSheet.create({
   placeholderText: {
     fontSize: 14,
     opacity: 0.6,
+  },
+  replaceButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: Spacing.xs,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    borderRadius: 8,
+    marginTop: Spacing.sm,
+  },
+  replaceButtonText: {
+    fontSize: 14,
+    fontWeight: "500",
   },
 });
