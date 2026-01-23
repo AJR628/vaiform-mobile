@@ -9,7 +9,11 @@ import { useScreenOptions } from "@/hooks/useScreenOptions";
 export type HomeStackParamList = {
   Home: undefined;
   StoryEditor: { sessionId: string };
-  ClipSearch: { sessionId: string; sentenceIndex: number };
+  ClipSearch: { 
+    sessionId: string; 
+    sentenceIndex: number;
+    initialQuery?: string;
+  };
 };
 
 const Stack = createNativeStackNavigator<HomeStackParamList>();

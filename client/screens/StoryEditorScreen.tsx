@@ -114,6 +114,7 @@ export default function StoryEditorScreen() {
   const [beatTexts, setBeatTexts] = useState<Record<number, string>>({});
 
   const loggedRef = useRef(false);
+  const shouldRefreshRef = useRef(false);
 
   // Load session on mount
   useEffect(() => {
@@ -182,23 +183,22 @@ export default function StoryEditorScreen() {
   // Refresh session when screen comes into focus (e.g., after modal closes)
   useFocusEffect(
     useCallback(() => {
-      // Only refresh if we have an existing session (not on initial load)
-      if (session && !isLoading) {
-        const refreshSession = async () => {
-          try {
-            const res = await storyGet(sessionId);
-            if (res?.ok || res?.success === true) {
-              const unwrappedSession = unwrapSession(res);
-              setSession(unwrappedSession);
-            }
-          } catch (error) {
-            // Silently fail - session will refresh on next manual action
-            console.error("[story] refresh error:", error);
+      if (!shouldRefreshRef.current || isLoading) return;
+      shouldRefreshRef.current = false; // clear BEFORE awaiting
+      const refreshSession = async () => {
+        try {
+          const res = await storyGet(sessionId);
+          if (res?.ok || res?.success === true) {
+            const unwrappedSession = unwrapSession(res);
+            setSession(unwrappedSession);
           }
-        };
-        refreshSession();
-      }
-    }, [session, sessionId, isLoading])
+        } catch (error) {
+          // Silently fail - session will refresh on next manual action
+          console.error("[story] refresh error:", error);
+        }
+      };
+      refreshSession();
+    }, [sessionId, isLoading]) // deps exclude session
   );
 
   const beats = session ? extractBeats(session) : [];
@@ -325,12 +325,14 @@ export default function StoryEditorScreen() {
                   opacity: pressed ? 0.7 : 1,
                 },
               ]}
-              onPress={() =>
+              onPress={() => {
+                shouldRefreshRef.current = true; // set flag BEFORE navigating
                 navigation.navigate("ClipSearch", {
                   sessionId,
                   sentenceIndex: item.sentenceIndex,
-                })
-              }
+                  initialQuery: shot?.searchQuery ?? "",
+                });
+              }}
             >
               <Feather name="refresh-cw" size={16} color={theme.textPrimary} />
               <ThemedText style={styles.replaceButtonText}>

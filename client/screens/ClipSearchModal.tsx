@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   StyleSheet,
@@ -43,7 +43,7 @@ function unwrapSession(res: any): any {
 export default function ClipSearchModal() {
   const route = useRoute<ClipSearchRouteProp>();
   const navigation = useNavigation();
-  const { sessionId, sentenceIndex } = route.params;
+  const { sessionId, sentenceIndex, initialQuery } = route.params;
   const { theme } = useTheme();
   const { showError } = useToast();
 
@@ -53,14 +53,17 @@ export default function ClipSearchModal() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [selectingClipId, setSelectingClipId] = useState<string | null>(null);
+  const autoSearchedRef = useRef(false);
 
-  const handleSearch = async () => {
+  const handleSearch = async (qOverride?: string) => {
+    const q = (qOverride ?? query).trim();
+    if (!q) return;
     setIsSearching(true);
     try {
       const res = await storySearchShot({
         sessionId,
         sentenceIndex,
-        query: query.trim() || undefined,
+        query: q || undefined,
         page: 1,
       });
 
@@ -109,6 +112,16 @@ export default function ClipSearchModal() {
       setSelectingClipId(null);
     }
   };
+
+  // Auto-search on mount if initialQuery is provided
+  useEffect(() => {
+    const initial = initialQuery;
+    if (initial && !autoSearchedRef.current) {
+      autoSearchedRef.current = true;
+      setQuery(initial);
+      handleSearch(initial);
+    }
+  }, []); // mount-only; do not add route.params or handleSearch to deps
 
   const renderCandidate = ({ item }: { item: Clip }) => {
     const isSelecting = selectingClipId === item.id;
