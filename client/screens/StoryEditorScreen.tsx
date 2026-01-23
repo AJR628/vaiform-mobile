@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useLayoutEffect } from "react";
 import {
   View,
   StyleSheet,
@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Image,
   Pressable,
+  Modal,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import {
@@ -112,6 +113,8 @@ export default function StoryEditorScreen() {
     {}
   );
   const [beatTexts, setBeatTexts] = useState<Record<number, string>>({});
+  const [selectedSentenceIndex, setSelectedSentenceIndex] = useState<number | null>(null);
+  const [replaceModalForIndex, setReplaceModalForIndex] = useState<number | null>(null);
 
   const loggedRef = useRef(false);
   const shouldRefreshRef = useRef(false);
@@ -203,6 +206,45 @@ export default function StoryEditorScreen() {
 
   const beats = session ? extractBeats(session) : [];
 
+  // Clamp selectedSentenceIndex by membership (not numeric range)
+  useEffect(() => {
+    if (beats.length === 0) {
+      setSelectedSentenceIndex(null);
+      return;
+    }
+
+    // If no selection yet, set to first beat's sentenceIndex
+    if (selectedSentenceIndex === null) {
+      setSelectedSentenceIndex(beats[0].sentenceIndex);
+      return;
+    }
+
+    // Check if selectedSentenceIndex exists in beats
+    const exists = beats.some((beat) => beat.sentenceIndex === selectedSentenceIndex);
+    if (!exists) {
+      // Set to first beat's sentenceIndex if current selection is invalid
+      setSelectedSentenceIndex(beats[0].sentenceIndex);
+    }
+  }, [session, beats, selectedSentenceIndex]);
+
+  // Set header right button
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <Pressable
+          onPress={() => {
+            if (selectedSentenceIndex !== null) {
+              setReplaceModalForIndex(selectedSentenceIndex);
+            }
+          }}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Feather name="more-horizontal" size={22} color={theme.text} />
+        </Pressable>
+      ),
+    });
+  }, [navigation, theme.text, selectedSentenceIndex]);
+
   const handleSaveBeat = async (sentenceIndex: number) => {
     const text = beatTexts[sentenceIndex];
     if (!text || text.trim() === "") {
@@ -236,112 +278,55 @@ export default function StoryEditorScreen() {
     }
   };
 
-  const renderBeat = ({ item }: { item: Beat }) => {
-    const isSaving = savingByIndex[item.sentenceIndex] || false;
-    const displayText = beatTexts[item.sentenceIndex] ?? item.text;
+  const handleReplaceClip = (sentenceIndex: number) => {
+    const shot = session ? getSelectedShot(session, sentenceIndex) : null;
+    setReplaceModalForIndex(null); // Close modal before navigating
+    shouldRefreshRef.current = true;
+    navigation.navigate("ClipSearch", {
+      sessionId,
+      sentenceIndex,
+      initialQuery: shot?.searchQuery ?? "",
+    });
+  };
 
-    // Get shot for this beat
+  const renderTimelineItem = ({ item }: { item: Beat }) => {
+    const isSelected = selectedSentenceIndex === item.sentenceIndex;
     const shot = session ? getSelectedShot(session, item.sentenceIndex) : null;
     const selectedClip = shot?.selectedClip || null;
 
     return (
-      <Card elevation={1} style={styles.beatCard}>
-        <ThemedText style={styles.beatLabel}>
-          Beat {item.sentenceIndex + 1}
-        </ThemedText>
-        <View style={styles.inputContainer}>
-          <TextInput
+      <Pressable
+        style={[
+          styles.timelineItem,
+          isSelected && {
+            borderColor: theme.link,
+            borderWidth: 2,
+          },
+        ]}
+        onPress={() => setSelectedSentenceIndex(item.sentenceIndex)}
+        onLongPress={() => setReplaceModalForIndex(item.sentenceIndex)}
+      >
+        {selectedClip?.thumbUrl ? (
+          <Image
+            source={{ uri: selectedClip.thumbUrl }}
             style={[
-              styles.textInput,
-              {
-                color: theme.textPrimary,
-                backgroundColor: theme.backgroundSecondary,
-              },
+              styles.timelineThumbnail,
+              { backgroundColor: theme.backgroundSecondary },
             ]}
-            value={displayText}
-            onChangeText={(text) => {
-              setBeatTexts((prev) => ({
-                ...prev,
-                [item.sentenceIndex]: text,
-              }));
-            }}
-            onBlur={() => handleSaveBeat(item.sentenceIndex)}
-            multiline
-            editable={!isSaving}
-            placeholderTextColor={theme.textTertiary}
+            resizeMode="cover"
           />
-          {isSaving && (
-            <View style={styles.savingIndicator}>
-              <ActivityIndicator size="small" color={theme.primary} />
-            </View>
-          )}
-        </View>
-
-        {/* Clip preview */}
-        <View style={styles.clipPreviewContainer}>
-          {selectedClip?.thumbUrl ? (
-            <View style={styles.thumbnailContainer}>
-              <Image
-                source={{ uri: selectedClip.thumbUrl }}
-                style={[
-                  styles.thumbnail,
-                  { backgroundColor: theme.backgroundSecondary },
-                ]}
-                resizeMode="cover"
-              />
-              {selectedClip.provider && (
-                <ThemedText style={styles.providerLabel}>
-                  {selectedClip.provider}
-                </ThemedText>
-              )}
-            </View>
-          ) : selectedClip ? (
-            <View
-              style={[
-                styles.fallbackContainer,
-                { backgroundColor: theme.backgroundSecondary },
-              ]}
-            >
-              <Feather name="video" size={24} color={theme.textTertiary} />
-              <ThemedText style={styles.fallbackText}>Video selected</ThemedText>
-            </View>
-          ) : (
-            <View
-              style={[
-                styles.placeholderContainer,
-                { backgroundColor: theme.backgroundDefault },
-              ]}
-            >
-              <ThemedText style={styles.placeholderText}>No clip selected</ThemedText>
-            </View>
-          )}
-          {/* Replace clip button - show if shot exists (even if no selectedClip) */}
-          {shot && (
-            <Pressable
-              style={({ pressed }) => [
-                styles.replaceButton,
-                {
-                  backgroundColor: theme.backgroundSecondary,
-                  opacity: pressed ? 0.7 : 1,
-                },
-              ]}
-              onPress={() => {
-                shouldRefreshRef.current = true; // set flag BEFORE navigating
-                navigation.navigate("ClipSearch", {
-                  sessionId,
-                  sentenceIndex: item.sentenceIndex,
-                  initialQuery: shot?.searchQuery ?? "",
-                });
-              }}
-            >
-              <Feather name="refresh-cw" size={16} color={theme.textPrimary} />
-              <ThemedText style={styles.replaceButtonText}>
-                Replace clip
-              </ThemedText>
-            </Pressable>
-          )}
-        </View>
-      </Card>
+        ) : (
+          <View
+            style={[
+              styles.timelineThumbnail,
+              styles.timelinePlaceholder,
+              { backgroundColor: theme.backgroundSecondary },
+            ]}
+          >
+              <Feather name="video" size={16} color={theme.tabIconDefault} />
+          </View>
+        )}
+      </Pressable>
     );
   };
 
@@ -349,7 +334,7 @@ export default function StoryEditorScreen() {
     return (
       <ThemedView style={styles.container}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={theme.primary} />
+          <ActivityIndicator size="large" color={theme.link} />
           <ThemedText style={styles.loadingText}>Loading storyboard...</ThemedText>
         </View>
       </ThemedView>
@@ -368,15 +353,171 @@ export default function StoryEditorScreen() {
     );
   }
 
+  // Get selected shot and beat
+  const selectedShot =
+    selectedSentenceIndex !== null
+      ? getSelectedShot(session, selectedSentenceIndex)
+      : null;
+  const selectedClip = selectedShot?.selectedClip || null;
+  const selectedBeat =
+    selectedSentenceIndex !== null
+      ? beats.find((b) => b.sentenceIndex === selectedSentenceIndex)
+      : null;
+  const isSaving =
+    selectedSentenceIndex !== null
+      ? savingByIndex[selectedSentenceIndex] || false
+      : false;
+  const displayText =
+    selectedSentenceIndex !== null
+      ? beatTexts[selectedSentenceIndex] ?? selectedBeat?.text ?? ""
+      : "";
+
   return (
     <ThemedView style={styles.container}>
-      <FlatList
-        data={beats}
-        renderItem={renderBeat}
-        keyExtractor={(item) => `beat-${item.sentenceIndex}`}
-        contentContainerStyle={styles.listContent}
-        keyboardShouldPersistTaps="handled"
-      />
+      {/* Preview section */}
+      <View style={styles.previewSection}>
+        {/* Big preview of selected shot */}
+        <View style={styles.previewContainer}>
+          {selectedClip?.thumbUrl ? (
+            <View style={styles.previewThumbnailContainer}>
+              <Image
+                source={{ uri: selectedClip.thumbUrl }}
+                style={[
+                  styles.previewThumbnail,
+                  { backgroundColor: theme.backgroundSecondary },
+                ]}
+                resizeMode="cover"
+              />
+              {selectedClip.provider && (
+                <ThemedText style={styles.providerLabel}>
+                  {selectedClip.provider}
+                </ThemedText>
+              )}
+            </View>
+          ) : selectedClip ? (
+            <View
+              style={[
+                styles.previewFallback,
+                { backgroundColor: theme.backgroundSecondary },
+              ]}
+            >
+              <Feather name="video" size={32} color={theme.tabIconDefault} />
+              <ThemedText style={styles.fallbackText}>Video selected</ThemedText>
+            </View>
+          ) : (
+            <View
+              style={[
+                styles.previewPlaceholder,
+                { backgroundColor: theme.backgroundDefault },
+              ]}
+            >
+              <ThemedText style={styles.placeholderText}>No clip selected</ThemedText>
+            </View>
+          )}
+        </View>
+
+        {/* Selected beat text input */}
+        {selectedBeat && (
+          <View style={styles.inputContainer}>
+            <ThemedText style={styles.beatLabel}>
+              Beat {selectedBeat.sentenceIndex + 1}
+            </ThemedText>
+            <TextInput
+              style={[
+                styles.textInput,
+                {
+                  color: theme.text,
+                  backgroundColor: theme.backgroundSecondary,
+                },
+              ]}
+              value={displayText}
+              onChangeText={(text) => {
+                if (selectedSentenceIndex !== null) {
+                  setBeatTexts((prev) => ({
+                    ...prev,
+                    [selectedSentenceIndex]: text,
+                  }));
+                }
+              }}
+              onBlur={() => {
+                if (selectedSentenceIndex !== null) {
+                  handleSaveBeat(selectedSentenceIndex);
+                }
+              }}
+              multiline
+              editable={!isSaving}
+              placeholderTextColor={theme.tabIconDefault}
+            />
+            {isSaving && (
+              <View style={styles.savingIndicator}>
+                <ActivityIndicator size="small" color={theme.link} />
+              </View>
+            )}
+          </View>
+        )}
+      </View>
+
+      {/* Timeline section */}
+      <View style={[styles.timelineSection, { borderTopColor: theme.backgroundTertiary }]}>
+        <FlatList
+          data={beats}
+          renderItem={renderTimelineItem}
+          keyExtractor={(item) => `beat-${item.sentenceIndex}`}
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.timelineContent}
+        />
+      </View>
+
+      {/* Replace Clip Modal */}
+      <Modal
+        visible={replaceModalForIndex !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setReplaceModalForIndex(null)}
+      >
+        <Pressable
+          style={styles.modalOverlay}
+          onPress={() => setReplaceModalForIndex(null)}
+        >
+          <Pressable
+            style={[styles.modalContent, { backgroundColor: theme.backgroundDefault }]}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <ThemedText style={styles.modalTitle}>Replace Clip</ThemedText>
+            <View style={styles.modalButtons}>
+              <Pressable
+                style={[
+                  styles.modalButton,
+                  styles.modalButtonCancel,
+                  { backgroundColor: theme.backgroundSecondary },
+                ]}
+                onPress={() => setReplaceModalForIndex(null)}
+              >
+                <ThemedText style={styles.modalButtonText}>Cancel</ThemedText>
+              </Pressable>
+              <Pressable
+                style={[
+                  styles.modalButton,
+                  styles.modalButtonPrimary,
+                  { backgroundColor: theme.link },
+                ]}
+                onPress={() => {
+                  if (replaceModalForIndex !== null) {
+                    handleReplaceClip(replaceModalForIndex);
+                  }
+                }}
+              >
+                <ThemedText
+                  style={[styles.modalButtonText, { color: theme.buttonText }]}
+                >
+                  Replace Clip
+                </ThemedText>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </ThemedView>
   );
 }
@@ -384,10 +525,6 @@ export default function StoryEditorScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  listContent: {
-    padding: Spacing.lg,
-    gap: Spacing.md,
   },
   loadingContainer: {
     flex: 1,
@@ -410,8 +547,53 @@ const styles = StyleSheet.create({
     opacity: 0.7,
     textAlign: "center",
   },
-  beatCard: {
-    marginBottom: Spacing.md,
+  previewSection: {
+    flex: 1,
+    padding: Spacing.lg,
+    gap: Spacing.md,
+  },
+  previewContainer: {
+    flex: 1,
+    justifyContent: "center",
+  },
+  previewThumbnailContainer: {
+    gap: Spacing.xs,
+  },
+  previewThumbnail: {
+    width: "100%",
+    flex: 1,
+    maxHeight: 400,
+    borderRadius: 12,
+  },
+  previewFallback: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: Spacing.sm,
+    padding: Spacing.xl,
+    borderRadius: 12,
+    minHeight: 200,
+  },
+  previewPlaceholder: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: Spacing.xl,
+    borderRadius: 12,
+    minHeight: 200,
+  },
+  providerLabel: {
+    fontSize: 12,
+    opacity: 0.7,
+    textTransform: "capitalize",
+  },
+  fallbackText: {
+    fontSize: 14,
+    opacity: 0.7,
+  },
+  placeholderText: {
+    fontSize: 14,
+    opacity: 0.6,
   },
   beatLabel: {
     fontSize: 14,
@@ -434,54 +616,64 @@ const styles = StyleSheet.create({
     top: Spacing.sm,
     right: Spacing.sm,
   },
-  clipPreviewContainer: {
-    marginTop: Spacing.md,
+  timelineSection: {
+    height: 120,
+    borderTopWidth: 1,
   },
-  thumbnailContainer: {
-    gap: Spacing.xs,
-  },
-  thumbnail: {
-    width: "100%",
-    aspectRatio: 16 / 9,
-    borderRadius: 8,
-  },
-  providerLabel: {
-    fontSize: 12,
-    opacity: 0.7,
-    textTransform: "capitalize",
-  },
-  fallbackContainer: {
-    flexDirection: "row",
-    alignItems: "center",
+  timelineContent: {
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
     gap: Spacing.sm,
-    padding: Spacing.md,
+  },
+  timelineItem: {
+    width: 100,
+    height: 100,
+    borderRadius: 8,
+    overflow: "hidden",
+    marginRight: Spacing.sm,
+  },
+  timelineThumbnail: {
+    width: "100%",
+    height: "100%",
     borderRadius: 8,
   },
-  fallbackText: {
-    fontSize: 14,
-    opacity: 0.7,
-  },
-  placeholderContainer: {
-    padding: Spacing.md,
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  placeholderText: {
-    fontSize: 14,
-    opacity: 0.6,
-  },
-  replaceButton: {
-    flexDirection: "row",
+  timelinePlaceholder: {
     alignItems: "center",
     justifyContent: "center",
-    gap: Spacing.xs,
-    paddingVertical: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    borderRadius: 8,
-    marginTop: Spacing.sm,
   },
-  replaceButtonText: {
-    fontSize: 14,
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  modalContent: {
+    borderRadius: 12,
+    padding: Spacing.xl,
+    minWidth: 280,
+    maxWidth: "80%",
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    marginBottom: Spacing.lg,
+    textAlign: "center",
+  },
+  modalButtons: {
+    flexDirection: "row",
+    gap: Spacing.md,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.lg,
+    borderRadius: 8,
+    alignItems: "center",
+  },
+  modalButtonCancel: {},
+  modalButtonPrimary: {},
+  modalButtonText: {
+    fontSize: 16,
     fontWeight: "500",
   },
 });
