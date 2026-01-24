@@ -108,7 +108,8 @@ export default function StoryEditorScreen() {
   const navigation = useNavigation<StoryEditorNavProp>();
   const { sessionId } = route.params;
   const { theme } = useTheme();
-  const { showError } = useToast();
+  const { showError, showWarning, showSuccess } = useToast();
+  const { userProfile } = useAuth();
   const tabBarHeight = useBottomTabBarHeight();
 
   const [session, setSession] = useState<StorySession | null>(null);
