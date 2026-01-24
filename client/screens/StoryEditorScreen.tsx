@@ -110,6 +110,8 @@ export default function StoryEditorScreen() {
   const { theme } = useTheme();
   const { showError, showWarning, showSuccess } = useToast();
   const { userProfile } = useAuth();
+  const credits = userProfile?.credits ?? 0;
+  const canRender = credits >= 20;
   const tabBarHeight = useBottomTabBarHeight();
 
   const [session, setSession] = useState<StorySession | null>(null);
@@ -298,7 +300,6 @@ export default function StoryEditorScreen() {
 
   const handleRender = async () => {
     // Credit check: verify cost is 20 credits (from spec verification)
-    const credits = userProfile?.credits ?? 0;
     if (credits < 20) {
       showError("Not enough credits. You need 20 credits to render.");
       Linking.openURL("https://vaiform.com/pricing");
@@ -553,17 +554,17 @@ export default function StoryEditorScreen() {
           style={[
             styles.renderButton,
             {
-              backgroundColor: (userProfile?.credits ?? 0) >= 20 && !isRendering ? theme.link : theme.backgroundTertiary,
-              opacity: (userProfile?.credits ?? 0) >= 20 && !isRendering ? 1 : 0.5,
+              backgroundColor: canRender && !isRendering ? theme.link : theme.backgroundTertiary,
+              opacity: canRender && !isRendering ? 1 : 0.5,
             },
           ]}
           onPress={handleRender}
-          disabled={isRendering || (userProfile?.credits ?? 0) < 20}
+          disabled={isRendering || !canRender}
         >
           <ThemedText
             style={[
               styles.renderButtonText,
-              { color: (userProfile?.credits ?? 0) >= 20 && !isRendering ? theme.buttonText : theme.text },
+              { color: canRender && !isRendering ? theme.buttonText : theme.text },
             ]}
           >
             {isRendering ? "Rendering..." : "Render"}
