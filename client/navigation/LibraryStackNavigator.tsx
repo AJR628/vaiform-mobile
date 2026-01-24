@@ -11,7 +11,7 @@ import { ShortItem } from "@/api/client";
 
 export type LibraryStackParamList = {
   Library: undefined;
-  ShortDetail: { short: ShortItem };
+  ShortDetail: { short?: ShortItem; shortId?: string };
 };
 
 const Stack = createNativeStackNavigator<LibraryStackParamList>();

@@ -24,8 +24,10 @@ import { Card } from "@/components/Card";
 import { HomeStackParamList } from "@/navigation/HomeStackNavigator";
 import { useTheme } from "@/hooks/useTheme";
 import { useToast } from "@/contexts/ToastContext";
+import { useAuth } from "@/contexts/AuthContext";
 import { Spacing } from "@/constants/theme";
-import { storyGet, storyUpdateBeatText } from "@/api/client";
+import { storyGet, storyUpdateBeatText, storyFinalize } from "@/api/client";
+import { Linking } from "react-native";
 import type { StorySession } from "@/types/story";
 
 type StoryEditorRouteProp = RouteProp<HomeStackParamList, "StoryEditor">;
@@ -117,6 +119,8 @@ export default function StoryEditorScreen() {
   const [beatTexts, setBeatTexts] = useState<Record<number, string>>({});
   const [selectedSentenceIndex, setSelectedSentenceIndex] = useState<number | null>(null);
   const [replaceModalForIndex, setReplaceModalForIndex] = useState<number | null>(null);
+  const [isRendering, setIsRendering] = useState(false);
+  const [showRenderingModal, setShowRenderingModal] = useState(false);
 
   const loggedRef = useRef(false);
   const shouldRefreshRef = useRef(false);
@@ -291,6 +295,75 @@ export default function StoryEditorScreen() {
     });
   };
 
+  const handleRender = async () => {
+    // Credit check: verify cost is 20 credits (from spec verification)
+    const credits = userProfile?.credits ?? 0;
+    if (credits < 20) {
+      showError("Not enough credits. You need 20 credits to render.");
+      Linking.openURL("https://vaiform.com/pricing");
+      return;
+    }
+
+    setIsRendering(true);
+    setShowRenderingModal(true);
+
+    try {
+      let result = await storyFinalize({ sessionId });
+      let retryCount = 0;
+      const maxRetries = 1;
+
+      // Handle 503 retry logic
+      while (!result.ok && result.retryAfter && retryCount < maxRetries) {
+        showWarning(`Server busy. Retrying in ${result.retryAfter}s...`);
+        await new Promise((resolve) => setTimeout(resolve, result.retryAfter! * 1000));
+        result = await storyFinalize({ sessionId });
+        retryCount++;
+      }
+
+      if (!result.ok) {
+        // Handle different error cases
+        if (result.code === "INSUFFICIENT_CREDITS" || result.status === 402) {
+          showError("Not enough credits. You need 20 credits to render.");
+          Linking.openURL("https://vaiform.com/pricing");
+        } else if (result.code === "NOT_FOUND" || result.status === 404) {
+          showError("Session not found. Please start a new video.");
+          navigation.goBack();
+        } else if (result.code === "TIMEOUT") {
+          showError("Request timed out. Please try again.");
+        } else if (result.code === "NETWORK_ERROR" || result.status === 0) {
+          showError("Network error. Please check your connection and try again.");
+        } else {
+          showError(result.message || "Render failed. Please try again.");
+        }
+        setShowRenderingModal(false);
+        return;
+      }
+
+      // Success: navigate to ShortDetail
+      if (result.ok && result.shortId) {
+        setShowRenderingModal(false);
+        showSuccess("Video rendered successfully!");
+        
+        const tabNavigator = navigation.getParent()?.getParent();
+        if (tabNavigator) {
+          tabNavigator.navigate("LibraryTab", {
+            screen: "ShortDetail",
+            params: { shortId: result.shortId },
+          });
+        } else {
+          console.warn("[story] Could not access tab navigator for cross-stack navigation");
+          showError("Render succeeded, but navigation failed. Please check your Library.");
+        }
+      }
+    } catch (error) {
+      console.error("[story] render error:", error);
+      showError("An unexpected error occurred. Please try again.");
+      setShowRenderingModal(false);
+    } finally {
+      setIsRendering(false);
+    }
+  };
+
   const renderTimelineItem = ({ item }: { item: Beat }) => {
     const isSelected = selectedSentenceIndex === item.sentenceIndex;
     const shot = session ? getSelectedShot(session, item.sentenceIndex) : null;
@@ -462,7 +535,6 @@ export default function StoryEditorScreen() {
       {/* Timeline section */}
       <View style={[styles.timelineSection, { 
         borderTopColor: theme.backgroundTertiary,
-        paddingBottom: tabBarHeight 
       }]}>
         <FlatList
           data={beats}
@@ -473,6 +545,53 @@ export default function StoryEditorScreen() {
           contentContainerStyle={styles.timelineContent}
         />
       </View>
+
+      {/* Render Button */}
+      <View style={[styles.renderButtonContainer, { paddingBottom: tabBarHeight }]}>
+        <Pressable
+          style={[
+            styles.renderButton,
+            {
+              backgroundColor: (userProfile?.credits ?? 0) >= 20 && !isRendering ? theme.link : theme.backgroundTertiary,
+              opacity: (userProfile?.credits ?? 0) >= 20 && !isRendering ? 1 : 0.5,
+            },
+          ]}
+          onPress={handleRender}
+          disabled={isRendering || (userProfile?.credits ?? 0) < 20}
+        >
+          <ThemedText
+            style={[
+              styles.renderButtonText,
+              { color: (userProfile?.credits ?? 0) >= 20 && !isRendering ? theme.buttonText : theme.text },
+            ]}
+          >
+            {isRendering ? "Rendering..." : "Render"}
+          </ThemedText>
+        </Pressable>
+      </View>
+
+      {/* Rendering Modal */}
+      <Modal
+        visible={showRenderingModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => {
+          // Don't allow closing during render
+          if (!isRendering) {
+            setShowRenderingModal(false);
+          }
+        }}
+      >
+        <View style={styles.renderingModalOverlay}>
+          <View style={[styles.renderingModalContent, { backgroundColor: theme.backgroundDefault }]}>
+            <ActivityIndicator size="large" color={theme.link} />
+            <ThemedText style={styles.renderingModalTitle}>Rendering your video...</ThemedText>
+            <ThemedText style={[styles.renderingModalSubtext, { color: theme.tabIconDefault }]}>
+              This usually takes 2-5 minutes
+            </ThemedText>
+          </View>
+        </View>
+      </Modal>
 
       {/* Replace Clip Modal */}
       <Modal
@@ -678,5 +797,46 @@ const styles = StyleSheet.create({
   modalButtonText: {
     fontSize: 16,
     fontWeight: "500",
+  },
+  renderButtonContainer: {
+    paddingHorizontal: Spacing.lg,
+    paddingVertical: Spacing.md,
+    borderTopWidth: 1,
+    borderTopColor: "transparent",
+  },
+  renderButton: {
+    paddingVertical: Spacing.md,
+    paddingHorizontal: Spacing.xl,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  renderButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  renderingModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  renderingModalContent: {
+    borderRadius: 12,
+    padding: Spacing.xl,
+    minWidth: 280,
+    maxWidth: "80%",
+    alignItems: "center",
+    gap: Spacing.md,
+  },
+  renderingModalTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  renderingModalSubtext: {
+    fontSize: 14,
+    textAlign: "center",
+    opacity: 0.7,
   },
 });

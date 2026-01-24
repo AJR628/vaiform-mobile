@@ -1,161 +1,282 @@
-# Phase 0: Preflight Wiring Audit Report
+# Phase 0 Audit: SSOT Wiring & Guardrails
 
-**Date**: January 2026  
-**Status**: ✅ **VERIFIED** - All wiring correct, ready for Phase 1
+**Date:** 2026-01-23  
+**Purpose:** Lock semantics and prevent drift before adding new endpoints/UI  
+**Status:** ✅ Audit Complete
 
 ---
 
 ## Executive Summary
 
-All critical wiring components have been audited and verified:
-- ✅ API base URL composition is correct
-- ✅ Bearer token injection works properly
-- ✅ Navigation route names and param types match usage
-- ✅ Minor improvement: Added trailing slash normalization
+This audit verifies Single Source of Truth (SSOT) patterns, confirms guardrails are in place, and documents which functions/files are canonical to prevent duplication in future phases.
+
+**Key Findings:**
+- ✅ `x-client: mobile` header attached to all API calls
+- ⚠️ `unwrapSession` duplicated (needs consolidation in future phase)
+- ✅ `getShortDetail` and `storyFinalize` exist but are not yet called (as expected per spec)
+- ✅ Core API wrapper (`client/api/client.ts`) is SSOT for all requests
 
 ---
 
-## 1. API Base URL & Path Composition
+## 1. SSOT Functions & Files (DO NOT DUPLICATE)
 
-### Current Implementation
-- **Location**: `client/api/client.ts` (lines 3-5)
-- **Base URL Source**: `process.env.EXPO_PUBLIC_API_BASE_URL` with fallback
-- **Path Construction**: `${API_BASE_URL}${endpoint}` (endpoints start with `/`)
+### 1.1 API Request Layer (SSOT)
 
-### Verification Results
+**File:** `client/api/client.ts`
 
-✅ **Base URL Handling**
-- Reads from `EXPO_PUBLIC_API_BASE_URL` environment variable
-- Fallback: `"https://your-vaiform-backend.com"`
-- **Fixed**: Added trailing slash normalization to prevent double slashes
+**Functions:**
+- `apiRequest<T>()` - Base request wrapper (throws on HTTP errors)
+- `apiRequestNormalized<T>()` - Normalized response wrapper (returns `{ ok, data }` or `{ ok: false, ... }`)
+- `getIdToken()` - Token fetch and cache (SSOT for auth token)
+- `normalizeResponse<T>()` - Response normalization (handles both `{ success: true, data }` and `{ ok: true, data }`)
 
-✅ **Path Construction**
-- Endpoints passed with leading `/` (e.g., `/api/story/start`, `/credits`)
-- No `/api/api/` duplication possible
-- `/credits` endpoint correctly uses no `/api/` prefix
+**Guardrails:**
+- ✅ All requests include `x-client: mobile` header (lines 129, 184, 487)
+- ✅ All authed requests use `getIdToken()` → `Authorization: Bearer <token>`
+- ✅ Base URL: `EXPO_PUBLIC_API_BASE_URL` with fallback (line 5-7)
 
-✅ **Example Paths**
-- `/api/users/ensure` → `${API_BASE_URL}/api/users/ensure`
-- `/credits` → `${API_BASE_URL}/credits`
-- `/api/shorts/mine` → `${API_BASE_URL}/api/shorts/mine`
-
-### Change Made
-- Added `.replace(/\/$/, "")` to normalize base URL (removes trailing slash if present)
+**Rule:** Do not create duplicate API wrappers. All API calls must go through `apiRequest` or `apiRequestNormalized`.
 
 ---
 
-## 2. Bearer Token Injection
+### 1.2 Session Unwrap Logic (DUPLICATED - Needs Consolidation)
 
-### Current Implementation
-- **Location**: `client/api/client.ts` (lines 185-192 in `apiRequestNormalized`)
-- **Token Source**: Firebase ID token via `getIdToken()`
-- **Header Format**: `Authorization: Bearer ${idToken}`
-- **Default**: `requireAuth: true` for all `/api/*` endpoints
+**Current State:** `unwrapSession` exists in two places with identical logic:
+- `client/screens/StoryEditorScreen.tsx` (lines 41-46)
+- `client/screens/ClipSearchModal.tsx` (lines 36-41)
 
-### Verification Results
-
-✅ **Token Management**
-- Token fetched from Firebase Auth via `getIdToken()`
-- Token caching implemented (1-hour expiration, 1-minute buffer)
-- Cache cleared on auth state change
-
-✅ **Header Injection**
-- Format: `Authorization: Bearer <token>` ✅
-- `x-client: mobile` header included ✅
-- `Content-Type: application/json` header included ✅
-
-✅ **Endpoints Using Token**
-- `/api/users/ensure` - `requireAuth: true` ✅
-- `/credits` - `requireAuth: true` ✅
-- `/api/shorts/mine` - `requireAuth: true` ✅
-- `/api/shorts/:id` - `requireAuth: true` ✅
-
-### Token Flow
-```
-Firebase Auth → getIdToken() → Authorization: Bearer <token> → API Request
+**Logic:**
+```typescript
+function unwrapSession(res: any): any {
+  if (res?.data && (res?.ok === true || res?.success === true)) return res.data;
+  return res;
+}
 ```
 
----
+**Action Required (Future Phase):**
+- Extract to shared utility (e.g., `client/lib/session-helpers.ts`)
+- Import in both files
+- Remove local definitions
 
-## 3. Navigation Route Names & Parameters
-
-### Tab Navigator
-- **File**: `client/navigation/MainTabNavigator.tsx`
-- **Tab Routes**:
-  - `HomeTab` → `HomeStackNavigator` ✅
-  - `LibraryTab` → `LibraryStackNavigator` ✅
-  - `SettingsTab` → `SettingsStackNavigator` ✅
-
-### Home Stack Navigator
-- **File**: `client/navigation/HomeStackNavigator.tsx`
-- **Routes**:
-  - `Home` (no params) ✅
-
-### Library Stack Navigator
-- **File**: `client/navigation/LibraryStackNavigator.tsx`
-- **Routes**:
-  - `Library` (no params) ✅
-  - `ShortDetail` (params: `{ short: ShortItem }`) ✅
-
-### Verification Results
-
-✅ **Route Names Match Usage**
-- `LibraryScreen` navigates with: `navigation.navigate("ShortDetail", { short })` ✅
-- `ShortDetailScreen` receives: `route.params.short` ✅
-- Param type matches: `LibraryStackParamList` defines `ShortDetail: { short: ShortItem }` ✅
+**Rule:** Do not add more `unwrapSession` implementations. Use the shared helper once extracted.
 
 ---
 
-## 4. Summary of Changes
+### 1.3 Beat Extraction (SSOT)
 
-### Changes Made
-1. **API Base URL Normalization** (`client/api/client.ts`)
-   - Added `.replace(/\/$/, "")` to remove trailing slash from base URL
-   - Prevents double slashes if env var includes trailing slash
-   - Normalization happens once at constant definition
+**File:** `client/screens/StoryEditorScreen.tsx` (lines 51-78)
 
-### No Changes Needed
-- Token injection: Already correct
-- Navigation routes: Already correct
-- Path construction: Already correct
+**Function:** `extractBeats(session: any): Beat[]`
 
----
+**Logic:**
+- Primary: `session.story.sentences` → map to beats
+- Fallback: `session.sentences` or `session.beats`
 
-## 5. Wiring Verification Checklist
-
-| Component | Status | Location |
-|-----------|--------|----------|
-| API Base URL | ✅ Verified + Fixed | `client/api/client.ts:3-5` |
-| Path Construction | ✅ Verified | `client/api/client.ts:122, 177` |
-| Token Injection | ✅ Verified | `client/api/client.ts:185-192` |
-| Token Caching | ✅ Verified | `client/api/client.ts:9-30` |
-| Navigation Routes | ✅ Verified | `client/navigation/*.tsx` |
-| Header Injection | ✅ Verified | `client/api/client.ts:179-183` |
+**Rule:** This is the canonical beat extraction. Do not duplicate elsewhere.
 
 ---
 
-## 6. Pre-Phase 1 Checklist
+### 1.4 Shot Selection (SSOT)
 
-- [x] API base URL reads from environment variable
-- [x] API base URL normalized (no trailing slash)
-- [x] Endpoints use correct paths (`/api/story/*`, `/credits`)
-- [x] Bearer token injected for all authenticated requests
-- [x] Navigation route names verified
-- [x] Navigation param types verified
+**File:** `client/screens/StoryEditorScreen.tsx` (lines 83-96)
 
----
+**Function:** `getSelectedShot(session: any, sentenceIndex: number): any | null`
 
-## 7. Ready for Phase 1
+**Logic:**
+- Handles both array (`shots[sentenceIndex]`) and map (`shots[sentenceIndex]`) shapes
+- Returns `selectedClip` or first candidate
 
-All wiring has been verified and improved. The codebase is ready to proceed with Phase 1 implementation:
-
-- ✅ API client infrastructure is solid
-- ✅ Token management works correctly
-- ✅ Navigation structure is correct
-- ✅ No blocking issues found
-
-**Next Steps**: Begin Phase 1 - Core Story Pipeline implementation.
+**Rule:** This is the canonical shot lookup. Do not duplicate elsewhere.
 
 ---
 
-**End of Phase 0 Audit Report**
+## 2. Header Verification
+
+### 2.1 `x-client: mobile` Header
+
+**Status:** ✅ Verified
+
+**Locations:**
+- `apiRequest()` - line 129
+- `apiRequestNormalized()` - line 184
+- `storyFinalize()` - line 487 (custom fetch)
+
+**Verification:**
+```bash
+rg "x-client" client/
+# Found 3 matching lines - all set to "mobile"
+```
+
+**Rule:** All API requests must include `x-client: mobile`. The core wrappers already enforce this.
+
+---
+
+### 2.2 Authorization Header
+
+**Status:** ✅ Verified
+
+**Implementation:**
+- `getIdToken()` fetches and caches Firebase ID token
+- All authed requests call `getIdToken()` and inject `Authorization: Bearer <token>`
+- `requireAuth: true` is default in both `apiRequest` and `apiRequestNormalized`
+
+**Rule:** Do not bypass `getIdToken()`. Do not add custom token fetch logic.
+
+---
+
+## 3. Unused Endpoints (As Expected)
+
+### 3.1 `getShortDetail(id: string)`
+
+**Status:** ✅ Exists but not called (per spec)
+
+**Location:** `client/api/client.ts` (lines 349-356)
+
+**Verification:**
+```bash
+rg "getShortDetail\(" client/
+# Only found function definition, no callsites
+```
+
+**Current Usage:**
+- `ShortDetailScreen` receives `short` from route params (list item)
+- No server fetch on mount
+
+**Future Phase:** Will be called when navigating from `storyFinalize` success with `shortId`.
+
+---
+
+### 3.2 `storyFinalize(body: { sessionId: string })`
+
+**Status:** ✅ Exists but not called (per spec)
+
+**Location:** `client/api/client.ts` (lines 480-552)
+
+**Verification:**
+```bash
+rg "storyFinalize\(" client/
+# Only found function definition, no callsites
+```
+
+**Current Usage:**
+- No Render button in `StoryEditorScreen`
+- No rendering modal
+- No credit check before render
+
+**Future Phase:** Will be called when Render button is implemented.
+
+**Special Handling:**
+- Custom fetch (not using `apiRequestNormalized`) to extract `shortId` and `retryAfter`
+- Includes 15-minute timeout support (not yet implemented)
+- Handles 503 `Retry-After` header
+
+---
+
+## 4. SSOT Semantics Table
+
+| Concept | Exact Term | SSOT Location | Notes |
+|---------|------------|--------------|-------|
+| Session ID | `sessionId` | Route params, API bodies | Used consistently across all story endpoints |
+| Beat/Shot index | `sentenceIndex` | StoryEditorScreen, ClipSearchModal, API bodies | Do not rename to `beatIndex` or `shotIndex` |
+| Clip ID | `clipId` | `storyUpdateShot` body | Used in clip selection |
+| API base URL | `EXPO_PUBLIC_API_BASE_URL` | `client/api/client.ts` | Single env var, fallback to placeholder |
+| Auth token | `getIdToken()` | `client/api/client.ts` | Cached, refreshed on expiry |
+| Response normalization | `normalizeResponse()` | `client/api/client.ts` | Handles `{ success, data }` and `{ ok, data }` |
+
+---
+
+## 5. Guardrails Checklist
+
+### ✅ Implemented
+
+- [x] `x-client: mobile` header on all requests
+- [x] `Authorization: Bearer <token>` on all authed requests
+- [x] Response normalization handles both envelope shapes
+- [x] Base URL from env var with fallback
+- [x] Token caching and refresh logic
+
+### ⚠️ Needs Attention (Future Phases)
+
+- [ ] Extract `unwrapSession` to shared utility
+- [ ] Add 15-minute timeout to `storyFinalize` fetch
+- [ ] Implement error code → UI mapping (402, 429, 503 per spec)
+- [ ] Add credit check before render (gate on `userProfile.credits >= 20`)
+
+---
+
+## 6. Verification Commands
+
+### Grep Checks
+
+```bash
+# Verify x-client header
+rg "x-client" client/
+
+# Verify unwrapSession locations
+rg "unwrapSession" client/
+
+# Verify getShortDetail callsites (should be none)
+rg "getShortDetail\(" client/
+
+# Verify storyFinalize callsites (should be none)
+rg "storyFinalize\(" client/
+
+# Verify Authorization header usage
+rg "Authorization.*Bearer" client/
+
+# Verify API base URL usage
+rg "EXPO_PUBLIC_API_BASE_URL|API_BASE_URL" client/
+```
+
+### Expected Results
+
+- `x-client`: 3 matches (all set to "mobile")
+- `unwrapSession`: 5 matches (2 definitions + 3 usages)
+- `getShortDetail(`: 1 match (definition only)
+- `storyFinalize(`: 1 match (definition only)
+- `Authorization.*Bearer`: Multiple matches (all via `getIdToken()`)
+- `API_BASE_URL`: 1 match (single source in `client.ts`)
+
+---
+
+## 7. Rules for Future Phases
+
+### Do Not:
+
+1. ❌ Create duplicate API wrappers (use `apiRequest` / `apiRequestNormalized`)
+2. ❌ Add new `unwrapSession` implementations (extract to shared helper first)
+3. ❌ Rename `sessionId` → `storyId` or `sentenceIndex` → `beatIndex`
+4. ❌ Bypass `getIdToken()` for auth tokens
+5. ❌ Hardcode API base URL (use `EXPO_PUBLIC_API_BASE_URL`)
+6. ❌ Create duplicate beat extraction or shot selection logic
+
+### Do:
+
+1. ✅ Use `apiRequestNormalized` for all new API calls
+2. ✅ Reuse `extractBeats` and `getSelectedShot` from StoryEditorScreen
+3. ✅ Follow exact spec semantics (`sessionId`, `sentenceIndex`, `clipId`)
+4. ✅ Include `x-client: mobile` (already enforced by wrappers)
+5. ✅ Use `normalizeResponse` pattern for response handling
+
+---
+
+## 8. Next Steps (Post-Audit)
+
+**Phase 1:** Render Flow
+- Add Render button with credit check
+- Implement rendering modal
+- Call `storyFinalize` on button tap
+- Navigate to ShortDetail with `shortId` (will require `getShortDetail` call)
+
+**Phase 2:** Consolidation
+- Extract `unwrapSession` to shared utility
+- Update StoryEditorScreen and ClipSearchModal to import shared helper
+
+**Phase 3:** Error Handling
+- Implement error code → UI mapping (402, 429, 503)
+- Add retry logic for 503 responses
+- Add "Buy Credits" CTA for 402 errors
+
+---
+
+**End of Phase 0 Audit**

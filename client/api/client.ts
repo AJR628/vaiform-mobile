@@ -493,11 +493,31 @@ export async function storyFinalize(body: {
   }
 
   try {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: requestHeaders,
-      body: JSON.stringify(body),
-    });
+    // 15-minute timeout using AbortController (works consistently across platforms)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 900_000); // 15 minutes
+
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: "POST",
+        headers: requestHeaders,
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      if (fetchError instanceof Error && fetchError.name === "AbortError") {
+        return {
+          ok: false,
+          status: 0,
+          code: "TIMEOUT",
+          message: "Request timed out after 15 minutes",
+        };
+      }
+      throw fetchError;
+    }
 
     console.log(`[api] POST /api/story/finalize ${response.status}`);
 

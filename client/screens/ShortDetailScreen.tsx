@@ -25,6 +25,8 @@ import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollV
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import { LibraryStackParamList } from "@/navigation/LibraryStackNavigator";
+import { getShortDetail, ShortDetail, ShortItem } from "@/api/client";
+import { useToast } from "@/contexts/ToastContext";
 
 const COLORS = {
   primary: "#4A5FFF",
@@ -84,13 +86,69 @@ export default function ShortDetailScreen() {
   const headerHeight = useHeaderHeight();
   const route = useRoute<ShortDetailRouteProp>();
   const { theme } = useTheme();
+  const { showError } = useToast();
 
-  const { short } = route.params;
+  const { short: shortParam, shortId } = route.params;
 
   const videoRef = useRef<Video>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [videoError, setVideoError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [shortDetail, setShortDetail] = useState<ShortDetail | null>(null);
+  const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+
+  // Runtime check: at least one of short or shortId must be provided
+  if (!shortParam && !shortId) {
+    console.error("[shorts] ShortDetail requires either short or shortId param");
+  }
+
+  // Fetch short detail from server if shortId provided and short not provided
+  useEffect(() => {
+    if (shortId && !shortParam) {
+      setIsLoadingDetail(true);
+      getShortDetail(shortId)
+        .then((result) => {
+          if (result.ok && result.data) {
+            setShortDetail(result.data);
+          } else {
+            showError(result.message || "Failed to load short details");
+          }
+        })
+        .catch((error) => {
+          console.error("[shorts] fetch detail error:", error);
+          showError("Failed to load short details");
+        })
+        .finally(() => {
+          setIsLoadingDetail(false);
+        });
+    }
+  }, [shortId, shortParam, showError]);
+
+  // Use shortDetail if fetched, otherwise use shortParam (backward compatible)
+  const short: ShortItem | null = shortParam
+    ? shortParam
+    : shortDetail
+    ? {
+        // Adapter: convert ShortDetail to ShortItem-like shape for display
+        id: shortDetail.id,
+        ownerId: "", // Not in ShortDetail
+        status: "ready", // Assume ready if fetched
+        videoUrl: shortDetail.videoUrl,
+        thumbUrl: shortDetail.coverImageUrl,
+        coverImageUrl: shortDetail.coverImageUrl,
+        durationSec: shortDetail.durationSec,
+        quoteText: shortDetail.usedQuote?.text,
+        template: shortDetail.usedTemplate,
+        mode: undefined,
+        voiceover: undefined,
+        captionMode: undefined,
+        watermark: undefined,
+        createdAt: shortDetail.createdAt,
+        completedAt: undefined,
+        failedAt: undefined,
+        errorMessage: undefined,
+      }
+    : null;
 
   const mediaUrl = short.videoUrl;
   const isVideo = mediaUrl ? isVideoUrl(mediaUrl) : false;
@@ -98,8 +156,10 @@ export default function ShortDetailScreen() {
 
   // Log media type detection
   useEffect(() => {
-    console.log(`[shorts] detail id=${short.id} mediaUrl=${mediaUrl?.substring(0, 60)}... isVideo=${isVideo} isImage=${isImage}`);
-  }, [short.id, mediaUrl, isVideo, isImage]);
+    if (short) {
+      console.log(`[shorts] detail id=${short.id} mediaUrl=${mediaUrl?.substring(0, 60)}... isVideo=${isVideo} isImage=${isImage}`);
+    }
+  }, [short?.id, mediaUrl, isVideo, isImage]);
 
   // Native-only reachability check
   useEffect(() => {
@@ -234,7 +294,21 @@ export default function ShortDetailScreen() {
           },
         ]}
       >
-        {isVideo && mediaUrl && !videoError ? (
+        {isLoadingDetail ? (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <ThemedText style={styles.loadingText}>Loading short details...</ThemedText>
+          </View>
+        ) : !short ? (
+          <View style={styles.noVideoContainer}>
+            <Feather name="alert-circle" size={48} color={COLORS.textTertiary} />
+            <ThemedText style={styles.noVideoText}>
+              Short not found
+            </ThemedText>
+          </View>
+        ) : (
+          <>
+            {isVideo && mediaUrl && !videoError ? (
           <View style={styles.videoContainer}>
             <Video
               ref={videoRef}
@@ -298,57 +372,59 @@ export default function ShortDetailScreen() {
           </Pressable>
         ) : null}
 
-        {short.quoteText ? (
-          <Card style={styles.quoteCard}>
-            <ThemedText style={styles.quoteText}>"{short.quoteText}"</ThemedText>
-          </Card>
-        ) : null}
+            {short.quoteText ? (
+              <Card style={styles.quoteCard}>
+                <ThemedText style={styles.quoteText}>"{short.quoteText}"</ThemedText>
+              </Card>
+            ) : null}
 
-        <Card style={styles.metaCard}>
-          <ThemedText style={styles.sectionTitle}>Details</ThemedText>
+            <Card style={styles.metaCard}>
+              <ThemedText style={styles.sectionTitle}>Details</ThemedText>
 
-          <View style={styles.metaRow}>
-            <ThemedText style={styles.metaLabel}>ID</ThemedText>
-            <ThemedText style={styles.metaValue} numberOfLines={1}>
-              {short.id}
-            </ThemedText>
-          </View>
+              <View style={styles.metaRow}>
+                <ThemedText style={styles.metaLabel}>ID</ThemedText>
+                <ThemedText style={styles.metaValue} numberOfLines={1}>
+                  {short.id}
+                </ThemedText>
+              </View>
 
-          {short.durationSec ? (
-            <View style={styles.metaRow}>
-              <ThemedText style={styles.metaLabel}>Duration</ThemedText>
-              <ThemedText style={styles.metaValue}>
-                {Math.round(short.durationSec)} seconds
-              </ThemedText>
-            </View>
-          ) : null}
+              {short.durationSec ? (
+                <View style={styles.metaRow}>
+                  <ThemedText style={styles.metaLabel}>Duration</ThemedText>
+                  <ThemedText style={styles.metaValue}>
+                    {Math.round(short.durationSec)} seconds
+                  </ThemedText>
+                </View>
+              ) : null}
 
-          {short.template ? (
-            <View style={styles.metaRow}>
-              <ThemedText style={styles.metaLabel}>Template</ThemedText>
-              <ThemedText style={styles.metaValue}>{short.template}</ThemedText>
-            </View>
-          ) : null}
+              {short.template ? (
+                <View style={styles.metaRow}>
+                  <ThemedText style={styles.metaLabel}>Template</ThemedText>
+                  <ThemedText style={styles.metaValue}>{short.template}</ThemedText>
+                </View>
+              ) : null}
 
-          {short.mode ? (
-            <View style={styles.metaRow}>
-              <ThemedText style={styles.metaLabel}>Mode</ThemedText>
-              <ThemedText style={styles.metaValue}>{short.mode}</ThemedText>
-            </View>
-          ) : null}
+              {short.mode ? (
+                <View style={styles.metaRow}>
+                  <ThemedText style={styles.metaLabel}>Mode</ThemedText>
+                  <ThemedText style={styles.metaValue}>{short.mode}</ThemedText>
+                </View>
+              ) : null}
 
-          <View style={styles.metaRow}>
-            <ThemedText style={styles.metaLabel}>Status</ThemedText>
-            <ThemedText style={styles.metaValue}>{short.status}</ThemedText>
-          </View>
+              <View style={styles.metaRow}>
+                <ThemedText style={styles.metaLabel}>Status</ThemedText>
+                <ThemedText style={styles.metaValue}>{short.status}</ThemedText>
+              </View>
 
-          <View style={[styles.metaRow, { borderBottomWidth: 0 }]}>
-            <ThemedText style={styles.metaLabel}>Created</ThemedText>
-            <ThemedText style={styles.metaValue}>
-              {formatDate(short.createdAt)}
-            </ThemedText>
-          </View>
-        </Card>
+              <View style={[styles.metaRow, { borderBottomWidth: 0 }]}>
+                <ThemedText style={styles.metaLabel}>Created</ThemedText>
+                <ThemedText style={styles.metaValue}>
+                  {formatDate(short.createdAt)}
+                </ThemedText>
+              </View>
+            </Card>
+          </>
+        )}
         </KeyboardAwareScrollViewCompat>
       </ThemedView>
     </SafeAreaView>
@@ -479,5 +555,16 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "#000",
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: Spacing.md,
+    minHeight: 200,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: COLORS.textSecondary,
   },
 });
