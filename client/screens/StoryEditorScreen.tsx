@@ -109,7 +109,7 @@ export default function StoryEditorScreen() {
   const { sessionId } = route.params;
   const { theme } = useTheme();
   const { showError, showWarning, showSuccess } = useToast();
-  const { userProfile } = useAuth();
+  const { userProfile, refreshCredits } = useAuth();
   const credits = userProfile?.credits ?? 0;
   const canRender = credits >= 20;
   const tabBarHeight = useBottomTabBarHeight();
@@ -346,7 +346,18 @@ export default function StoryEditorScreen() {
         setShowRenderingModal(false);
         showSuccess("Video rendered successfully!");
         
-        const tabNavigator = navigation.getParent()?.getParent();
+        // Refresh credits to show updated balance
+        try {
+          await refreshCredits();
+        } catch (err) {
+          console.warn("[story] Failed to refresh credits after render:", err);
+          // Don't block navigation on credit refresh failure
+        }
+        
+        const tabNavigator = navigation.getParent();
+        if (__DEV__) {
+          console.log("[nav-verify] parent routeNames:", tabNavigator?.getState()?.routeNames);
+        }
         if (tabNavigator) {
           tabNavigator.navigate("LibraryTab", {
             screen: "ShortDetail",

@@ -316,6 +316,7 @@ export default function ShortDetailScreen() {
               style={styles.video}
               resizeMode={ResizeMode.CONTAIN}
               useNativeControls={true}
+              shouldPlay={true}
               onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
               onError={handleVideoError}
               onLoad={handleVideoLoad}
@@ -357,7 +358,7 @@ export default function ShortDetailScreen() {
           </View>
         )}
 
-        {mediaUrl ? (
+        {mediaUrl && videoError ? (
           <Pressable
             style={({ pressed }) => [
               styles.browserButton,
