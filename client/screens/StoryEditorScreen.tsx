@@ -8,9 +8,6 @@ import {
   Image,
   Pressable,
   Modal,
-  Keyboard,
-  KeyboardAvoidingView,
-  Platform,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import {
@@ -130,7 +127,6 @@ export default function StoryEditorScreen() {
 
   const loggedRef = useRef(false);
   const shouldRefreshRef = useRef(false);
-  const textInputRef = useRef<TextInput>(null);
 
   // Load session on mount
   useEffect(() => {
@@ -281,9 +277,8 @@ export default function StoryEditorScreen() {
         return;
       }
 
-      textInputRef.current?.blur();
-      Keyboard.dismiss();
-      setSelectedSentenceIndex(null);
+      // Optimistic update: beatTexts already has the updated text, so no action needed
+      // The UI will continue showing the edited text
     } catch (error) {
       console.error("[story] save beat error:", error);
       showError("Failed to update beat text. Please try again.");
@@ -466,15 +461,11 @@ export default function StoryEditorScreen() {
       : "";
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1 }}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <ThemedView style={styles.container}>
-        {/* Preview section */}
-        <View style={styles.previewSection}>
-          {/* Big preview of selected shot */}
-          <View style={styles.previewContainer}>
+    <ThemedView style={styles.container}>
+      {/* Preview section */}
+      <View style={styles.previewSection}>
+        {/* Big preview of selected shot */}
+        <View style={styles.previewContainer}>
           {selectedClip?.thumbUrl ? (
             <View style={styles.previewThumbnailContainer}>
               <Image
@@ -520,7 +511,6 @@ export default function StoryEditorScreen() {
               Beat {selectedBeat.sentenceIndex + 1}
             </ThemedText>
             <TextInput
-              ref={textInputRef}
               style={[
                 styles.textInput,
                 {
@@ -553,9 +543,9 @@ export default function StoryEditorScreen() {
             )}
           </View>
         )}
-        </View>
+      </View>
 
-        {/* Timeline section */}
+      {/* Timeline section */}
       <View style={[styles.timelineSection, { 
         borderTopColor: theme.backgroundTertiary,
       }]}>
@@ -566,8 +556,6 @@ export default function StoryEditorScreen() {
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.timelineContent}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
         />
       </View>
 
@@ -667,8 +655,7 @@ export default function StoryEditorScreen() {
           </Pressable>
         </Pressable>
       </Modal>
-      </ThemedView>
-    </KeyboardAvoidingView>
+    </ThemedView>
   );
 }
 
