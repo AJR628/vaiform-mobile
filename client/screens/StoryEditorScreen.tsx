@@ -8,6 +8,8 @@ import {
   Image,
   Pressable,
   Modal,
+  Keyboard,
+  Platform,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import {
@@ -124,9 +126,28 @@ export default function StoryEditorScreen() {
   const [replaceModalForIndex, setReplaceModalForIndex] = useState<number | null>(null);
   const [isRendering, setIsRendering] = useState(false);
   const [showRenderingModal, setShowRenderingModal] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
 
   const loggedRef = useRef(false);
   const shouldRefreshRef = useRef(false);
+  const textInputRef = useRef<TextInput>(null);
+  const savingRef = useRef<number | null>(null);
+
+  // Keyboard listeners
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    
+    const show = Keyboard.addListener(showEvent, (e) =>
+      setKeyboardHeight(e.endCoordinates.height)
+    );
+    const hide = Keyboard.addListener(hideEvent, () => setKeyboardHeight(0));
+    
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
 
   // Load session on mount
   useEffect(() => {
@@ -254,36 +275,55 @@ export default function StoryEditorScreen() {
     });
   }, [navigation, theme.text, selectedSentenceIndex]);
 
-  const handleSaveBeat = async (sentenceIndex: number) => {
-    const text = beatTexts[sentenceIndex];
-    if (!text || text.trim() === "") {
+  const handleSaveBeat = async (
+    sentenceIndex: number,
+    _source?: "submit" | "blur",
+    draftOverride?: string
+  ) => {
+    if (savingRef.current === sentenceIndex) return;
+
+    const draft = (draftOverride ?? beatTexts[sentenceIndex] ?? "").trim();
+    if (!draft) {
       showError("Beat text cannot be empty");
       return;
     }
 
+    const beat = beats.find((b) => b.sentenceIndex === sentenceIndex);
+    const original = beat?.text?.trim() ?? "";
+    if (draft === original) {
+      savingRef.current = sentenceIndex;
+      textInputRef.current?.blur();
+      Keyboard.dismiss();
+      setTimeout(() => {
+        savingRef.current = null;
+      }, 0);
+      return;
+    }
+
+    savingRef.current = sentenceIndex;
     setSavingByIndex((prev) => ({ ...prev, [sentenceIndex]: true }));
 
     try {
       const res = await storyUpdateBeatText({
         sessionId,
         sentenceIndex,
-        text: text.trim(),
+        text: draft,
       });
 
       if (!res?.ok && res?.success !== true) {
         showError(res?.message || "Failed to update beat text");
-        // On error, we could optionally revert the optimistic update
-        // For now, keep the edited text in beatTexts (user can retry)
         return;
       }
 
-      // Optimistic update: beatTexts already has the updated text, so no action needed
-      // The UI will continue showing the edited text
+      textInputRef.current?.blur();
+      Keyboard.dismiss();
+      setSelectedSentenceIndex(null);
     } catch (error) {
       console.error("[story] save beat error:", error);
       showError("Failed to update beat text. Please try again.");
     } finally {
       setSavingByIndex((prev) => ({ ...prev, [sentenceIndex]: false }));
+      savingRef.current = null;
     }
   };
 
@@ -503,47 +543,68 @@ export default function StoryEditorScreen() {
             </View>
           )}
         </View>
-
-        {/* Selected beat text input */}
-        {selectedBeat && (
-          <View style={styles.inputContainer}>
-            <ThemedText style={styles.beatLabel}>
-              Beat {selectedBeat.sentenceIndex + 1}
-            </ThemedText>
-            <TextInput
-              style={[
-                styles.textInput,
-                {
-                  color: theme.text,
-                  backgroundColor: theme.backgroundSecondary,
-                },
-              ]}
-              value={displayText}
-              onChangeText={(text) => {
-                if (selectedSentenceIndex !== null) {
-                  setBeatTexts((prev) => ({
-                    ...prev,
-                    [selectedSentenceIndex]: text,
-                  }));
-                }
-              }}
-              onBlur={() => {
-                if (selectedSentenceIndex !== null) {
-                  handleSaveBeat(selectedSentenceIndex);
-                }
-              }}
-              multiline
-              editable={!isSaving}
-              placeholderTextColor={theme.tabIconDefault}
-            />
-            {isSaving && (
-              <View style={styles.savingIndicator}>
-                <ActivityIndicator size="small" color={theme.link} />
-              </View>
-            )}
-          </View>
-        )}
       </View>
+
+      {/* Beat editor overlay */}
+      {selectedBeat && (
+        <View
+          style={[
+            styles.inputContainer,
+            {
+              position: "absolute",
+              left: Spacing.md,
+              right: Spacing.md,
+              bottom: keyboardHeight > 0 ? keyboardHeight : Spacing.md,
+              zIndex: 1000,
+              backgroundColor: theme.backgroundRoot,
+              paddingVertical: Spacing.sm,
+            },
+          ]}
+        >
+          <ThemedText style={styles.beatLabel}>
+            Beat {selectedBeat.sentenceIndex + 1}
+          </ThemedText>
+          <TextInput
+            ref={textInputRef}
+            style={[
+              styles.textInput,
+              {
+                color: theme.text,
+                backgroundColor: theme.backgroundSecondary,
+              },
+            ]}
+            value={displayText}
+            onChangeText={(text) => {
+              if (selectedSentenceIndex === null) return;
+              
+              if (text.includes("\n")) {
+                const cleaned = text.replace(/\n/g, " ").trim();
+                setBeatTexts((prev) => ({
+                  ...prev,
+                  [selectedSentenceIndex]: cleaned,
+                }));
+                handleSaveBeat(selectedBeat.sentenceIndex, "submit", cleaned);
+                textInputRef.current?.blur();
+                Keyboard.dismiss();
+              } else {
+                setBeatTexts((prev) => ({
+                  ...prev,
+                  [selectedSentenceIndex]: text,
+                }));
+              }
+            }}
+            onBlur={() => handleSaveBeat(selectedBeat.sentenceIndex, "blur")}
+            multiline
+            editable={!isSaving}
+            placeholderTextColor={theme.tabIconDefault}
+          />
+          {isSaving && (
+            <View style={styles.savingIndicator}>
+              <ActivityIndicator size="small" color={theme.link} />
+            </View>
+          )}
+        </View>
+      )}
 
       {/* Timeline section */}
       <View style={[styles.timelineSection, { 
@@ -556,6 +617,8 @@ export default function StoryEditorScreen() {
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.timelineContent}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
         />
       </View>
 
