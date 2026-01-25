@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
-import { useRoute, RouteProp } from "@react-navigation/native";
+import { useRoute, useNavigation, RouteProp } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import { Video, ResizeMode, AVPlaybackStatus } from "expo-av";
 import * as Haptics from "expo-haptics";
@@ -85,10 +85,14 @@ export default function ShortDetailScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
   const route = useRoute<ShortDetailRouteProp>();
+  const navigation = useNavigation();
   const { theme } = useTheme();
   const { showError } = useToast();
 
-  const { short: shortParam, shortId } = route.params;
+  // Safe route params extraction (handles undefined params edge case)
+  const params = route.params ?? {};
+  const shortParam = params.short ?? null;
+  const shortId = params.shortId ?? null;
 
   const videoRef = useRef<Video>(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -96,11 +100,25 @@ export default function ShortDetailScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [shortDetail, setShortDetail] = useState<ShortDetail | null>(null);
   const [isLoadingDetail, setIsLoadingDetail] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
+  const escapeHatchRanRef = useRef(false);
 
-  // Runtime check: at least one of short or shortId must be provided
-  if (!shortParam && !shortId) {
-    console.error("[shorts] ShortDetail requires either short or shortId param");
-  }
+  // Escape hatch: navigate away if neither param exists
+  useEffect(() => {
+    if (!shortParam && !shortId && !escapeHatchRanRef.current) {
+      escapeHatchRanRef.current = true;
+      console.error("[shorts] ShortDetail requires either short or shortId param - navigating back");
+      // Prefer goBack, fallback to Library tab
+      if (navigation.canGoBack()) {
+        navigation.goBack();
+      } else {
+        const tabNavigator = navigation.getParent();
+        if (tabNavigator) {
+          tabNavigator.navigate("LibraryTab", { screen: "Library" });
+        }
+      }
+    }
+  }, [shortParam, shortId, navigation]);
 
   // Fetch short detail from server if shortId provided and short not provided
   useEffect(() => {
@@ -110,19 +128,41 @@ export default function ShortDetailScreen() {
         .then((result) => {
           if (result.ok && result.data) {
             setShortDetail(result.data);
+            // Reset retry count on successful fetch
+            setRetryCount(0);
           } else {
             showError(result.message || "Failed to load short details");
+            setIsLoadingDetail(false);
           }
         })
         .catch((error) => {
           console.error("[shorts] fetch detail error:", error);
           showError("Failed to load short details");
-        })
-        .finally(() => {
           setIsLoadingDetail(false);
         });
     }
   }, [shortId, shortParam, showError]);
+
+  // Auto-retry if fetch succeeded but videoUrl is missing (max 2 retries with backoff)
+  useEffect(() => {
+    if (shortDetail && !shortDetail.videoUrl && shortId && retryCount < 2) {
+      const delays = [600, 1200]; // ms
+      const timeoutId = setTimeout(() => {
+        console.log(`[shorts] Auto-retry ${retryCount + 1}/2 for missing videoUrl`);
+        setRetryCount((prev) => prev + 1);
+        getShortDetail(shortId)
+          .then((result) => {
+            if (result.ok && result.data) {
+              setShortDetail(result.data);
+            }
+          })
+          .catch((error) => {
+            console.error("[shorts] retry fetch error:", error);
+          });
+      }, delays[retryCount]);
+      return () => clearTimeout(timeoutId);
+    }
+  }, [shortDetail, shortId, retryCount]);
 
   // Use shortDetail if fetched, otherwise use shortParam (backward compatible)
   const short: ShortItem | null = shortParam
@@ -150,7 +190,8 @@ export default function ShortDetailScreen() {
       }
     : null;
 
-  const mediaUrl = short.videoUrl;
+  // Null-safe mediaUrl access (prevents crash when short is null)
+  const mediaUrl = short?.videoUrl ?? null;
   const isVideo = mediaUrl ? isVideoUrl(mediaUrl) : false;
   const isImage = mediaUrl ? isImageUrl(mediaUrl) : false;
 
@@ -159,7 +200,10 @@ export default function ShortDetailScreen() {
     if (short) {
       console.log(`[shorts] detail id=${short.id} mediaUrl=${mediaUrl?.substring(0, 60)}... isVideo=${isVideo} isImage=${isImage}`);
     }
-  }, [short?.id, mediaUrl, isVideo, isImage]);
+    if (__DEV__) {
+      console.log(`[ShortDetail] params short? ${!!shortParam} shortId? ${!!shortId} short=${!!short} mediaUrl=${!!mediaUrl}`);
+    }
+  }, [short?.id, mediaUrl, isVideo, isImage, shortParam, shortId, short]);
 
   // Native-only reachability check
   useEffect(() => {
@@ -277,6 +321,25 @@ export default function ShortDetailScreen() {
     }
   };
 
+  const handleRetryFetch = async () => {
+    if (!shortId) return;
+    setIsLoadingDetail(true);
+    setRetryCount((prev) => prev + 1);
+    try {
+      const result = await getShortDetail(shortId);
+      if (result.ok && result.data) {
+        setShortDetail(result.data);
+      } else {
+        showError(result.message || "Failed to load short details");
+      }
+    } catch (error) {
+      console.error("[shorts] retry fetch error:", error);
+      showError("Failed to load short details");
+    } finally {
+      setIsLoadingDetail(false);
+    }
+  };
+
   const formatDate = (isoString: string): string => {
     return new Date(isoString).toLocaleString();
   };
@@ -300,6 +363,30 @@ export default function ShortDetailScreen() {
             <ThemedText style={styles.loadingText}>Loading short details...</ThemedText>
           </View>
         ) : !short ? (
+          <View style={styles.noVideoContainer}>
+            <Feather name="alert-circle" size={48} color={COLORS.textTertiary} />
+            <ThemedText style={styles.noVideoText}>
+              Short not found
+            </ThemedText>
+          </View>
+        ) : short && !mediaUrl ? (
+          // Finalizing state: fetch succeeded but videoUrl is missing
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <ThemedText style={styles.loadingText}>Finalizing video...</ThemedText>
+            {retryCount < 2 && (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.retryButton,
+                  pressed && styles.retryButtonPressed,
+                ]}
+                onPress={handleRetryFetch}
+              >
+                <ThemedText style={styles.retryButtonText}>Retry</ThemedText>
+              </Pressable>
+            )}
+          </View>
+        ) : (
           <View style={styles.noVideoContainer}>
             <Feather name="alert-circle" size={48} color={COLORS.textTertiary} />
             <ThemedText style={styles.noVideoText}>
@@ -567,5 +654,22 @@ const styles = StyleSheet.create({
   loadingText: {
     fontSize: 14,
     color: COLORS.textSecondary,
+  },
+  retryButton: {
+    marginTop: Spacing.md,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.lg,
+    borderWidth: 1,
+    borderColor: COLORS.primary,
+    borderRadius: BorderRadius.xs,
+    alignItems: "center",
+  },
+  retryButtonPressed: {
+    opacity: 0.7,
+  },
+  retryButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: COLORS.primary,
   },
 });
