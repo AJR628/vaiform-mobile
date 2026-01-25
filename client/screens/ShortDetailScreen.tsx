@@ -25,7 +25,7 @@ import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollV
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import { LibraryStackParamList } from "@/navigation/LibraryStackNavigator";
-import { getShortDetail, ShortDetail, ShortItem } from "@/api/client";
+import { getShortDetail, ShortDetail, ShortItem, getMyShorts } from "@/api/client";
 import { useToast } from "@/contexts/ToastContext";
 
 const COLORS = {
@@ -109,6 +109,7 @@ export default function ShortDetailScreen() {
   const [didRetryTimeout, setDidRetryTimeout] = useState(false);
   const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isMountedRef = useRef(true);
+  const fallbackInFlightRef = useRef(false);
 
   // Unmount cleanup: prevent state updates and clear timers
   useEffect(() => {
@@ -199,11 +200,79 @@ export default function ShortDetailScreen() {
         return;
       }
 
-      // 404 = pending availability (eventual consistency)
+      // 404 = pending availability (eventual consistency) OR backend mismatch
       if (!result.ok && result.status === 404) {
         if (isMountedRef.current) {
           setIsPendingAvailability(true);
           setRetryAttempt(attemptIndex);
+          // Keep isLoadingDetail true while retrying (shows "Finalizing..." UI)
+          setIsLoadingDetail(true);
+        }
+
+        // Try library list fallback on attempts 1, 3, 5 (indices 0, 2, 4)
+        // This catches the short early instead of waiting 30s
+        // attemptIndex: 0, 1, 2, 3, 4, 5, 6
+        // Fallback on: 0, 2, 4 (attempts 1, 3, 5)
+        if (attemptIndex % 2 === 0 && attemptIndex <= 4) {
+          const tryLibraryFallback = async () => {
+            // Prevent overlapping fallback calls
+            if (fallbackInFlightRef.current || cancelled || !isMountedRef.current || !shortId) {
+              return;
+            }
+
+            fallbackInFlightRef.current = true;
+
+            try {
+              // Use higher limit to catch newly created short
+              const listResult = await getMyShorts(undefined, 50);
+              if (cancelled || !isMountedRef.current) return;
+
+              // Verified: getMyShorts returns NormalizedResponse<ShortsListResponse>
+              // ShortsListResponse = { items: ShortItem[], nextCursor?: string, hasMore: boolean }
+              if (listResult.ok && listResult.data?.items) {
+                const foundShort = listResult.data.items.find(
+                  (item) => item.id === shortId && item.status === "ready" && item.videoUrl
+                );
+
+                if (foundShort) {
+                  if (isMountedRef.current) {
+                    // Clear all pending/timeout flags BEFORE setParams
+                    // This ensures UI state updates correctly
+                    setIsPendingAvailability(false);
+                    setDidRetryTimeout(false);
+                    setIsLoadingDetail(false);
+                    setRetryAttempt(0);
+
+                    // Update route params to use { short } instead of { shortId }
+                    // This bypasses detail fetch and uses instant path
+                    navigation.setParams({ short: foundShort, shortId: undefined });
+
+                    if (__DEV__) {
+                      console.log(
+                        `[ShortDetail] fallback success: found short in library list on attempt ${attemptIndex + 1}, id=${shortId}`
+                      );
+                    }
+                  }
+                  return;
+                }
+              }
+
+              if (__DEV__) {
+                console.log(
+                  `[ShortDetail] fallback attempt ${attemptIndex + 1}: short not found in library list yet, shortId=${shortId}`
+                );
+              }
+            } catch (error) {
+              if (__DEV__) {
+                console.error(`[ShortDetail] fallback error on attempt ${attemptIndex + 1}:`, error);
+              }
+            } finally {
+              fallbackInFlightRef.current = false;
+            }
+          };
+
+          // Try fallback in parallel (don't block retry loop)
+          tryLibraryFallback();
         }
 
         // If this was the last attempt, stop retrying but remain "pending"
@@ -221,7 +290,7 @@ export default function ShortDetailScreen() {
           return;
         }
 
-        // Schedule next attempt
+        // Schedule next attempt (continues retry loop as backup)
         const delay = RETRY_DELAYS_MS[attemptIndex];
         retryTimeoutRef.current = setTimeout(() => {
           if (!cancelled && isMountedRef.current) {
@@ -258,8 +327,10 @@ export default function ShortDetailScreen() {
         clearTimeout(retryTimeoutRef.current);
         retryTimeoutRef.current = null;
       }
+      // Reset fallback guard on cleanup
+      fallbackInFlightRef.current = false;
     };
-  }, [shortId, shortParam, showError]);
+  }, [shortId, shortParam, showError, navigation]);
 
   // Auto-retry if fetch succeeded but videoUrl is missing (max 2 retries with backoff)
   useEffect(() => {
