@@ -387,13 +387,6 @@ export default function ShortDetailScreen() {
             )}
           </View>
         ) : (
-          <View style={styles.noVideoContainer}>
-            <Feather name="alert-circle" size={48} color={COLORS.textTertiary} />
-            <ThemedText style={styles.noVideoText}>
-              Short not found
-            </ThemedText>
-          </View>
-        ) : (
           <>
             {isVideo && mediaUrl && !videoError ? (
           <View style={styles.videoContainer}>
