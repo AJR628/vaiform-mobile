@@ -103,6 +103,25 @@ export default function ShortDetailScreen() {
   const [retryCount, setRetryCount] = useState(0);
   const escapeHatchRanRef = useRef(false);
 
+  // Retry state for 404 pending availability
+  const [isPendingAvailability, setIsPendingAvailability] = useState(false);
+  const [retryAttempt, setRetryAttempt] = useState(0);
+  const [didRetryTimeout, setDidRetryTimeout] = useState(false);
+  const retryTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isMountedRef = useRef(true);
+
+  // Unmount cleanup: prevent state updates and clear timers
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
+      }
+    };
+  }, []);
+
   // Escape hatch: navigate away if neither param exists
   useEffect(() => {
     if (!shortParam && !shortId && !escapeHatchRanRef.current) {
@@ -121,26 +140,125 @@ export default function ShortDetailScreen() {
   }, [shortParam, shortId, navigation]);
 
   // Fetch short detail from server if shortId provided and short not provided
+  // Includes retry logic for 404 (pending availability / eventual consistency)
   useEffect(() => {
-    if (shortId && !shortParam) {
+    // Only for the post-render path: shortId present, shortParam absent
+    if (!shortId || shortParam) return;
+
+    // Retry configuration
+    const RETRY_DELAYS_MS = [1000, 2000, 3000, 5000, 8000, 13000, 21000]; // 7 attempts
+    const MAX_ATTEMPTS = RETRY_DELAYS_MS.length;
+
+    // Reset state for new shortId
+    if (isMountedRef.current) {
       setIsLoadingDetail(true);
-      getShortDetail(shortId)
-        .then((result) => {
-          if (result.ok && result.data) {
-            setShortDetail(result.data);
-            // Reset retry count on successful fetch
-            setRetryCount(0);
-          } else {
-            showError(result.message || "Failed to load short details");
+      setIsPendingAvailability(false);
+      setRetryAttempt(0);
+      setDidRetryTimeout(false);
+      setShortDetail(null);
+    }
+
+    // Clear any prior scheduled retry
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = null;
+    }
+
+    let cancelled = false;
+
+    const attemptFetch = async (attemptIndex: number) => {
+      if (cancelled || !isMountedRef.current) return;
+
+      if (__DEV__) {
+        console.log(
+          `[ShortDetail] attempt ${attemptIndex + 1}/${MAX_ATTEMPTS} shortId=${shortId}`
+        );
+      }
+
+      const result = await getShortDetail(shortId);
+
+      if (cancelled || !isMountedRef.current) return;
+
+      // SUCCESS
+      if (result.ok && result.data) {
+        if (isMountedRef.current) {
+          setShortDetail(result.data);
+          setIsPendingAvailability(false);
+          setDidRetryTimeout(false);
+          setIsLoadingDetail(false);
+          setRetryAttempt(0);
+          // Reset retry count on successful fetch
+          setRetryCount(0);
+        }
+
+        if (__DEV__ && attemptIndex > 0) {
+          console.log(
+            `[ShortDetail] available after ${attemptIndex + 1} attempts shortId=${shortId}`
+          );
+        }
+        return;
+      }
+
+      // 404 = pending availability (eventual consistency)
+      if (!result.ok && result.status === 404) {
+        if (isMountedRef.current) {
+          setIsPendingAvailability(true);
+          setRetryAttempt(attemptIndex);
+        }
+
+        // If this was the last attempt, stop retrying but remain "pending"
+        if (attemptIndex >= MAX_ATTEMPTS - 1) {
+          if (isMountedRef.current) {
+            setDidRetryTimeout(true);
             setIsLoadingDetail(false);
           }
-        })
-        .catch((error) => {
-          console.error("[shorts] fetch detail error:", error);
-          showError("Failed to load short details");
-          setIsLoadingDetail(false);
-        });
-    }
+
+          if (__DEV__) {
+            console.log(
+              `[ShortDetail] timeout after ${MAX_ATTEMPTS} attempts shortId=${shortId}`
+            );
+          }
+          return;
+        }
+
+        // Schedule next attempt
+        const delay = RETRY_DELAYS_MS[attemptIndex];
+        retryTimeoutRef.current = setTimeout(() => {
+          if (!cancelled && isMountedRef.current) {
+            attemptFetch(attemptIndex + 1);
+          }
+          retryTimeoutRef.current = null;
+        }, delay);
+
+        return;
+      }
+
+      // NON-404 ERROR = terminal
+      if (isMountedRef.current) {
+        setIsPendingAvailability(false);
+        setDidRetryTimeout(false);
+        setIsLoadingDetail(false);
+        showError(result.message || "Failed to load short details");
+      }
+
+      if (__DEV__) {
+        console.log(
+          `[ShortDetail] terminal error shortId=${shortId} status=${result.status} code=${result.code}`
+        );
+      }
+    };
+
+    // Kick off attempt #0 immediately
+    attemptFetch(0);
+
+    // Cleanup when shortId changes or screen unmounts
+    return () => {
+      cancelled = true;
+      if (retryTimeoutRef.current) {
+        clearTimeout(retryTimeoutRef.current);
+        retryTimeoutRef.current = null;
+      }
+    };
   }, [shortId, shortParam, showError]);
 
   // Auto-retry if fetch succeeded but videoUrl is missing (max 2 retries with backoff)
@@ -357,12 +475,44 @@ export default function ShortDetailScreen() {
           },
         ]}
       >
-        {isLoadingDetail ? (
+        {isLoadingDetail && isPendingAvailability ? (
+          // Pending availability: retrying 404
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color={COLORS.primary} />
+            <ThemedText style={styles.loadingText}>Finalizing your render...</ThemedText>
+          </View>
+        ) : isLoadingDetail ? (
+          // Initial fetch (non-404)
           <View style={styles.loadingContainer}>
             <ActivityIndicator size="large" color={COLORS.primary} />
             <ThemedText style={styles.loadingText}>Loading short details...</ThemedText>
           </View>
+        ) : !short && didRetryTimeout ? (
+          // Retry window exhausted, still pending
+          <View style={styles.noVideoContainer}>
+            <Feather name="clock" size={48} color={COLORS.textTertiary} />
+            <ThemedText style={styles.noVideoText}>
+              Still finalizing. This may take a moment.
+            </ThemedText>
+            <Pressable
+              style={({ pressed }) => [
+                styles.retryButton,
+                pressed && styles.retryButtonPressed,
+              ]}
+              onPress={() => {
+                const tabNavigator = navigation.getParent();
+                if (tabNavigator) {
+                  tabNavigator.navigate("LibraryTab", { screen: "Library" });
+                } else {
+                  navigation.goBack();
+                }
+              }}
+            >
+              <ThemedText style={styles.retryButtonText}>Back to Library</ThemedText>
+            </Pressable>
+          </View>
         ) : !short ? (
+          // Terminal (non-404) missing short
           <View style={styles.noVideoContainer}>
             <Feather name="alert-circle" size={48} color={COLORS.textTertiary} />
             <ThemedText style={styles.noVideoText}>
