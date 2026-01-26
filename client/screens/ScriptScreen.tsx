@@ -2,7 +2,8 @@ import React, { useEffect, useMemo, useState } from "react";
 import { View, StyleSheet, FlatList, ActivityIndicator } from "react-native";
 import { RouteProp, useRoute, useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { useHeaderHeight } from "@react-navigation/elements";
+import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 
 import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
@@ -26,12 +27,14 @@ export default function ScriptScreen() {
 
   const { theme } = useTheme();
   const { showError } = useToast();
-  const insets = useSafeAreaInsets();
+  const headerHeight = useHeaderHeight();
+  const tabBarHeight = useBottomTabBarHeight();
 
   const [session, setSession] = useState<StorySession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isBuilding, setIsBuilding] = useState(false);
   const [buildProgress, setBuildProgress] = useState<string | null>(null);
+  const [ctaHeight, setCtaHeight] = useState(0);
 
   useEffect(() => {
     const load = async () => {
@@ -149,17 +152,30 @@ export default function ScriptScreen() {
             renderItem={renderBeat}
             contentContainerStyle={[
               styles.listContent,
-              !hasShots && { paddingBottom: Spacing.xl + 100 },
+              {
+                paddingBottom: hasShots
+                  ? tabBarHeight + Spacing.lg
+                  : tabBarHeight + ctaHeight + Spacing.lg,
+              },
             ]}
+            scrollIndicatorInsets={{ bottom: tabBarHeight }}
           />
           {!hasShots && (
-            <View style={[
-              styles.ctaContainer,
-              { 
-                borderTopColor: theme.backgroundTertiary,
-                paddingBottom: insets.bottom + Spacing.md,
-              },
-            ]}>
+            <View
+              onLayout={(e) => setCtaHeight(e.nativeEvent.layout.height)}
+              style={[
+                styles.ctaContainer,
+                {
+                  position: "absolute",
+                  left: 0,
+                  right: 0,
+                  bottom: tabBarHeight,
+                  backgroundColor: theme.backgroundSecondary,
+                  borderTopColor: theme.backgroundTertiary,
+                  paddingBottom: Spacing.md,
+                },
+              ]}
+            >
               {buildProgress && (
                 <ThemedText style={[styles.progressText, { color: theme.textSecondary }]}>
                   {buildProgress}
