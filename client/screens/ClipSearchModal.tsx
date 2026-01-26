@@ -18,6 +18,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useToast } from "@/contexts/ToastContext";
 import { Spacing } from "@/constants/theme";
 import { storySearchShot, storyUpdateShot } from "@/api/client";
+import { unwrapNormalized } from "@/lib/storySession";
 
 type ClipSearchRouteProp = RouteProp<HomeStackParamList, "ClipSearch">;
 
@@ -28,16 +29,6 @@ interface Clip {
   duration: number;
   photographer?: string;
   provider: string;
-}
-
-/**
- * Unwrap session from NormalizedResponse shape
- */
-function unwrapSession(res: any): any {
-  // Prefer normalized shape first (apiRequestNormalized returns { ok: true, data: T })
-  if (res?.data && (res?.ok === true || res?.success === true)) return res.data;
-  // Some wrappers return session directly (defensive fallback)
-  return res;
 }
 
 export default function ClipSearchModal() {
@@ -72,7 +63,7 @@ export default function ClipSearchModal() {
         return;
       }
 
-      const unwrapped = unwrapSession(res);
+      const unwrapped = unwrapNormalized(res);
       const shot = unwrapped?.shot;
       const foundCandidates = shot?.candidates || [];
       const pageNum = unwrapped?.page || 1;

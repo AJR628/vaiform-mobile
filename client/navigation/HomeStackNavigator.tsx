@@ -3,6 +3,7 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import HomeScreen from "@/screens/HomeScreen";
 import StoryEditorScreen from "@/screens/StoryEditorScreen";
 import ClipSearchModal from "@/screens/ClipSearchModal";
+import ScriptScreen from "@/screens/ScriptScreen";
 import { HeaderTitle } from "@/components/HeaderTitle";
 import { useScreenOptions } from "@/hooks/useScreenOptions";
 
@@ -14,6 +15,7 @@ export type HomeStackParamList = {
     sentenceIndex: number;
     initialQuery?: string;
   };
+  Script: { sessionId: string };
 };
 
 const Stack = createNativeStackNavigator<HomeStackParamList>();
@@ -43,6 +45,13 @@ export default function HomeStackNavigator() {
         options={{
           presentation: "modal",
           headerTitle: "Replace Clip",
+        }}
+      />
+      <Stack.Screen
+        name="Script"
+        component={ScriptScreen}
+        options={{
+          headerTitle: "Script",
         }}
       />
     </Stack.Navigator>

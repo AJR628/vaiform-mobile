@@ -245,19 +245,29 @@ export default function StoryEditorScreen() {
   useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: () => (
-        <Pressable
-          onPress={() => {
-            if (selectedSentenceIndex !== null) {
-              setReplaceModalForIndex(selectedSentenceIndex);
-            }
-          }}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Feather name="more-horizontal" size={22} color={theme.text} />
-        </Pressable>
+        <View style={{ flexDirection: "row", alignItems: "center" }}>
+          <Pressable
+            onPress={() => navigation.navigate("Script", { sessionId })}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            style={{ marginRight: 12 }}
+          >
+            <Feather name="file-text" size={20} color={theme.text} />
+          </Pressable>
+
+          <Pressable
+            onPress={() => {
+              if (selectedSentenceIndex !== null) {
+                setReplaceModalForIndex(selectedSentenceIndex);
+              }
+            }}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Feather name="more-horizontal" size={22} color={theme.text} />
+          </Pressable>
+        </View>
       ),
     });
-  }, [navigation, theme.text, selectedSentenceIndex]);
+  }, [navigation, theme.text, selectedSentenceIndex, sessionId]);
 
   const handleSaveBeat = async (
     sentenceIndex: number,
