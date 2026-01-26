@@ -17,7 +17,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/contexts/ToastContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius } from "@/constants/theme";
-import { storyStart, storyGenerate, storyPlan, storySearchAll } from "@/api/client";
+import { storyStart, storyGenerate } from "@/api/client";
 import { HomeStackParamList } from "@/navigation/HomeStackNavigator";
 
 const COLORS = {
@@ -96,38 +96,10 @@ export default function HomeScreen() {
         return;
       }
 
-      // Step 3: Plan shots
-      setProgressText("Planning shots…");
-      const planResult = await storyPlan({ sessionId });
-
-      if (!planResult.ok) {
-        const errorMsg = planResult.code
-          ? `Failed to plan shots: ${planResult.code}`
-          : `Failed to plan shots: ${planResult.message}`;
-        showError(errorMsg);
-        setIsCreating(false);
-        setProgressText(null);
-        return;
-      }
-
-      // Step 4: Search clips
-      setProgressText("Finding clips…");
-      const searchResult = await storySearchAll({ sessionId });
-
-      if (!searchResult.ok) {
-        const errorMsg = searchResult.code
-          ? `Failed to find clips: ${searchResult.code}`
-          : `Failed to find clips: ${searchResult.message}`;
-        showError(errorMsg);
-        setIsCreating(false);
-        setProgressText(null);
-        return;
-      }
-
-      // Success - navigate to editor
+      // Success - navigate to script screen
       setIsCreating(false);
       setProgressText(null);
-      navigation.navigate("StoryEditor", { sessionId });
+      navigation.navigate("Script", { sessionId });
 
       if (Platform.OS !== "web") {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -159,7 +131,7 @@ export default function HomeScreen() {
         scrollIndicatorInsets={{ bottom: insets.bottom }}
       >
         <Card style={styles.inputCard}>
-          <ThemedText style={styles.cardTitle}>Create Storyboard</ThemedText>
+          <ThemedText style={styles.cardTitle}>Create Script</ThemedText>
 
           {/* Segmented Control */}
           <View style={styles.segmentedControl}>
@@ -248,7 +220,7 @@ export default function HomeScreen() {
               <ActivityIndicator color={COLORS.white} size="small" />
             ) : (
               <ThemedText style={styles.createButtonText}>
-                Create storyboard
+                Create script
               </ThemedText>
             )}
           </LinearGradient>

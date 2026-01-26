@@ -1,14 +1,17 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { View, StyleSheet, FlatList, ActivityIndicator } from "react-native";
-import { RouteProp, useRoute } from "@react-navigation/native";
+import { RouteProp, useRoute, useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
 import { Card } from "@/components/Card";
+import { Button } from "@/components/Button";
 import { useTheme } from "@/hooks/useTheme";
 import { useToast } from "@/contexts/ToastContext";
 import { Spacing } from "@/constants/theme";
-import { storyGet } from "@/api/client";
+import { storyGet, storyPlan, storySearchAll } from "@/api/client";
 import { unwrapNormalized, extractBeats, StoryBeat } from "@/lib/storySession";
 
 import type { HomeStackParamList } from "@/navigation/HomeStackNavigator";
@@ -18,13 +21,17 @@ type ScriptRouteProp = RouteProp<HomeStackParamList, "Script">;
 
 export default function ScriptScreen() {
   const route = useRoute<ScriptRouteProp>();
+  const navigation = useNavigation<NativeStackNavigationProp<HomeStackParamList, "Script">>();
   const { sessionId } = route.params;
 
   const { theme } = useTheme();
   const { showError } = useToast();
+  const insets = useSafeAreaInsets();
 
   const [session, setSession] = useState<StorySession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isBuilding, setIsBuilding] = useState(false);
+  const [buildProgress, setBuildProgress] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -49,6 +56,49 @@ export default function ScriptScreen() {
   }, [sessionId, showError]);
 
   const beats: StoryBeat[] = useMemo(() => extractBeats(session), [session]);
+
+  const hasShots = useMemo(() => {
+    if (!session) return false;
+    return Array.isArray((session as any)?.shots) 
+      ? (session as any).shots.length > 0 
+      : !!(session as any)?.shots;
+  }, [session]);
+
+  const handleGenerateStoryboard = async () => {
+    setIsBuilding(true);
+    
+    try {
+      // Step 1: Plan shots
+      setBuildProgress("Planning shots…");
+      const planResult = await storyPlan({ sessionId });
+      
+      if (!planResult.ok) {
+        showError(planResult.message || "Failed to plan shots");
+        setIsBuilding(false);
+        setBuildProgress(null);
+        return;
+      }
+      
+      // Step 2: Search clips
+      setBuildProgress("Finding clips…");
+      const searchResult = await storySearchAll({ sessionId });
+      
+      if (!searchResult.ok) {
+        showError(searchResult.message || "Failed to find clips");
+        setIsBuilding(false);
+        setBuildProgress(null);
+        return;
+      }
+      
+      // Success: replace Script with StoryEditor
+      navigation.replace("StoryEditor", { sessionId });
+    } catch (error) {
+      console.error("[script] build error:", error);
+      showError("Failed to generate storyboard. Please try again.");
+      setIsBuilding(false);
+      setBuildProgress(null);
+    }
+  };
 
   const renderBeat = ({ item }: { item: StoryBeat }) => {
     return (
@@ -92,12 +142,39 @@ export default function ScriptScreen() {
           </ThemedText>
         </View>
       ) : (
-        <FlatList
-          data={beats}
-          keyExtractor={(b) => String(b.sentenceIndex)}
-          renderItem={renderBeat}
-          contentContainerStyle={styles.listContent}
-        />
+        <>
+          <FlatList
+            data={beats}
+            keyExtractor={(b) => String(b.sentenceIndex)}
+            renderItem={renderBeat}
+            contentContainerStyle={[
+              styles.listContent,
+              !hasShots && { paddingBottom: Spacing.xl + 100 },
+            ]}
+          />
+          {!hasShots && (
+            <View style={[
+              styles.ctaContainer,
+              { 
+                borderTopColor: theme.backgroundTertiary,
+                paddingBottom: insets.bottom + Spacing.md,
+              },
+            ]}>
+              {buildProgress && (
+                <ThemedText style={[styles.progressText, { color: theme.textSecondary }]}>
+                  {buildProgress}
+                </ThemedText>
+              )}
+              <Button
+                onPress={handleGenerateStoryboard}
+                disabled={isBuilding}
+                style={styles.generateButton}
+              >
+                {isBuilding ? "Generating..." : "Generate Storyboard"}
+              </Button>
+            </View>
+          )}
+        </>
       )}
     </ThemedView>
   );
@@ -130,4 +207,17 @@ const styles = StyleSheet.create({
   loadingText: { fontSize: 13 },
   emptyContainer: { flex: 1, alignItems: "center", justifyContent: "center", padding: Spacing.lg },
   emptyText: { fontSize: 14, textAlign: "center" },
+  ctaContainer: {
+    paddingHorizontal: Spacing.lg,
+    paddingTop: Spacing.md,
+    borderTopWidth: 1,
+  },
+  generateButton: {
+    marginTop: Spacing.sm,
+  },
+  progressText: {
+    fontSize: 13,
+    textAlign: "center",
+    marginBottom: Spacing.sm,
+  },
 });
