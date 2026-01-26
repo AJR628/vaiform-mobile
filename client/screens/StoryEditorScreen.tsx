@@ -9,6 +9,8 @@ import {
   Pressable,
   Modal,
   Keyboard,
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import {
@@ -529,50 +531,56 @@ export default function StoryEditorScreen() {
 
       {/* Beat editor */}
       {selectedBeat && (
-        <View style={styles.inputContainer}>
-          <ThemedText style={styles.beatLabel}>
-            Beat {selectedBeat.sentenceIndex + 1}
-          </ThemedText>
-          <TextInput
-            ref={textInputRef}
-            style={[
-              styles.textInput,
-              {
-                color: theme.text,
-                backgroundColor: theme.backgroundSecondary,
-              },
-            ]}
-            value={displayText}
-            onChangeText={(text) => {
-              if (selectedSentenceIndex === null) return;
-              
-              if (text.includes("\n")) {
-                const cleaned = text.replace(/\n/g, " ").trim();
-                setBeatTexts((prev) => ({
-                  ...prev,
-                  [selectedSentenceIndex]: cleaned,
-                }));
-                handleSaveBeat(selectedBeat.sentenceIndex, "submit", cleaned);
-                textInputRef.current?.blur();
-                Keyboard.dismiss();
-              } else {
-                setBeatTexts((prev) => ({
-                  ...prev,
-                  [selectedSentenceIndex]: text,
-                }));
-              }
-            }}
-            onBlur={() => handleSaveBeat(selectedBeat.sentenceIndex, "blur")}
-            multiline
-            editable={!isSaving}
-            placeholderTextColor={theme.tabIconDefault}
-          />
-          {isSaving && (
-            <View style={styles.savingIndicator}>
-              <ActivityIndicator size="small" color={theme.link} />
-            </View>
-          )}
-        </View>
+        <KeyboardAvoidingView
+          style={styles.beatEditorKav}
+          behavior={Platform.OS === "ios" ? "position" : "height"}
+          keyboardVerticalOffset={0}
+        >
+          <View style={styles.inputContainer}>
+            <ThemedText style={styles.beatLabel}>
+              Beat {selectedBeat.sentenceIndex + 1}
+            </ThemedText>
+            <TextInput
+              ref={textInputRef}
+              style={[
+                styles.textInput,
+                {
+                  color: theme.text,
+                  backgroundColor: theme.backgroundSecondary,
+                },
+              ]}
+              value={displayText}
+              onChangeText={(text) => {
+                if (selectedSentenceIndex === null) return;
+                
+                if (text.includes("\n")) {
+                  const cleaned = text.replace(/\n/g, " ").trim();
+                  setBeatTexts((prev) => ({
+                    ...prev,
+                    [selectedSentenceIndex]: cleaned,
+                  }));
+                  handleSaveBeat(selectedBeat.sentenceIndex, "submit", cleaned);
+                  textInputRef.current?.blur();
+                  Keyboard.dismiss();
+                } else {
+                  setBeatTexts((prev) => ({
+                    ...prev,
+                    [selectedSentenceIndex]: text,
+                  }));
+                }
+              }}
+              onBlur={() => handleSaveBeat(selectedBeat.sentenceIndex, "blur")}
+              multiline
+              editable={!isSaving}
+              placeholderTextColor={theme.tabIconDefault}
+            />
+            {isSaving && (
+              <View style={styles.savingIndicator}>
+                <ActivityIndicator size="small" color={theme.link} />
+              </View>
+            )}
+          </View>
+        </KeyboardAvoidingView>
       )}
 
       {/* Timeline section */}
@@ -768,6 +776,9 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     marginBottom: Spacing.sm,
     opacity: 0.8,
+  },
+  beatEditorKav: {
+    flexShrink: 0,
   },
   inputContainer: {
     position: "relative",
