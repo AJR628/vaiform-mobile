@@ -1,5 +1,14 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { View, StyleSheet, FlatList, ActivityIndicator } from "react-native";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  View,
+  StyleSheet,
+  FlatList,
+  ActivityIndicator,
+  TextInput,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+} from "react-native";
 import { RouteProp, useRoute, useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -12,7 +21,7 @@ import { Button } from "@/components/Button";
 import { useTheme } from "@/hooks/useTheme";
 import { useToast } from "@/contexts/ToastContext";
 import { Spacing } from "@/constants/theme";
-import { storyGet, storyPlan, storySearchAll } from "@/api/client";
+import { storyGet, storyPlan, storySearchAll, storyUpdateBeatText } from "@/api/client";
 import { unwrapNormalized, extractBeats, StoryBeat } from "@/lib/storySession";
 
 import type { HomeStackParamList } from "@/navigation/HomeStackNavigator";
@@ -35,6 +44,10 @@ export default function ScriptScreen() {
   const [isBuilding, setIsBuilding] = useState(false);
   const [buildProgress, setBuildProgress] = useState<string | null>(null);
   const [ctaHeight, setCtaHeight] = useState(0);
+  const listRef = useRef<FlatList<StoryBeat>>(null);
+  const [editingSentenceIndex, setEditingSentenceIndex] = useState<number | null>(null);
+  const [draftTexts, setDraftTexts] = useState<Record<number, string>>({});
+  const [savingSentenceIndex, setSavingSentenceIndex] = useState<number | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -66,6 +79,8 @@ export default function ScriptScreen() {
       ? (session as any).shots.length > 0 
       : !!(session as any)?.shots;
   }, [session]);
+
+  const showCta = !hasShots && editingSentenceIndex === null;
 
   const handleGenerateStoryboard = async () => {
     setIsBuilding(true);
@@ -103,23 +118,122 @@ export default function ScriptScreen() {
     }
   };
 
-  const renderBeat = ({ item }: { item: StoryBeat }) => {
+  const saveBeat = async (
+    sentenceIndex: number,
+    reason: "submit" | "blur",
+    explicitText?: string,
+  ) => {
+    const raw = explicitText ?? draftTexts[sentenceIndex] ?? "";
+    const cleaned = raw.replace(/\n/g, " ").trim();
+
+    const current = beats.find((b) => b.sentenceIndex === sentenceIndex)?.text ?? "";
+    if (!cleaned || cleaned === current) {
+      if (reason === "submit") {
+        setEditingSentenceIndex(null);
+        Keyboard.dismiss();
+      }
+      return;
+    }
+
+    setSavingSentenceIndex(sentenceIndex);
+    try {
+      const res = await storyUpdateBeatText({ sessionId, sentenceIndex, text: cleaned });
+      if (!res?.ok && res?.success !== true) {
+        showError(res?.message || "Failed to save beat. Please try again.");
+        return;
+      }
+      const updated = unwrapNormalized(res);
+      setSession(updated);
+      setDraftTexts((prev) => ({ ...prev, [sentenceIndex]: cleaned }));
+      setEditingSentenceIndex(null);
+      Keyboard.dismiss();
+    } catch (err) {
+      console.error("[script] saveBeat error:", err);
+      showError("Failed to save beat. Please try again.");
+    } finally {
+      setSavingSentenceIndex(null);
+    }
+  };
+
+  const renderBeat = ({ item, index }: { item: StoryBeat; index: number }) => {
+    const isEditing = editingSentenceIndex === item.sentenceIndex;
+    const isSaving = savingSentenceIndex === item.sentenceIndex;
+    const draft = draftTexts[item.sentenceIndex] ?? item.text;
+
     return (
-      <Card elevation={1} style={styles.beatCard}>
+      <Card
+        elevation={1}
+        style={styles.beatCard}
+        onPress={() => {
+          if (isSaving) return;
+
+          // Toggle edit mode
+          const next = isEditing ? null : item.sentenceIndex;
+          setEditingSentenceIndex(next);
+
+          if (!isEditing) {
+            setDraftTexts((prev) => ({
+              ...prev,
+              [item.sentenceIndex]: prev[item.sentenceIndex] ?? item.text,
+            }));
+
+            // Scroll to beat when editing starts
+            requestAnimationFrame(() => {
+              try {
+                listRef.current?.scrollToIndex({ index, viewPosition: 0.2, animated: true });
+              } catch {}
+            });
+          } else {
+            Keyboard.dismiss();
+          }
+        }}
+      >
         <View style={styles.beatHeader}>
           <ThemedText style={[styles.beatLabel, { color: theme.textSecondary }]}>
             Beat {item.sentenceIndex + 1}
           </ThemedText>
         </View>
-        <ThemedText style={[styles.beatText, { color: theme.textPrimary }]}>
-          {item.text}
-        </ThemedText>
+
+        {isEditing ? (
+          <>
+            <TextInput
+              style={[
+                styles.textInput,
+                { color: theme.textPrimary, backgroundColor: theme.backgroundSecondary },
+              ]}
+              value={draft}
+              onChangeText={(text) => {
+                if (text.includes("\n")) {
+                  const cleaned = text.replace(/\n/g, " ").trim();
+                  setDraftTexts((prev) => ({ ...prev, [item.sentenceIndex]: cleaned }));
+                  saveBeat(item.sentenceIndex, "submit", cleaned);
+                } else {
+                  setDraftTexts((prev) => ({ ...prev, [item.sentenceIndex]: text }));
+                }
+              }}
+              onBlur={() => saveBeat(item.sentenceIndex, "blur")}
+              multiline
+              editable={!isSaving}
+              autoFocus
+              placeholderTextColor={theme.textSecondary}
+            />
+            {isSaving && (
+              <View style={styles.savingIndicator}>
+                <ActivityIndicator size="small" color={theme.primary} />
+              </View>
+            )}
+          </>
+        ) : (
+          <ThemedText style={[styles.beatText, { color: theme.textPrimary }]}>
+            {item.text}
+          </ThemedText>
+        )}
       </Card>
     );
   };
 
   return (
-    <ThemedView style={styles.container}>
+    <ThemedView style={[styles.container, { paddingTop: headerHeight + Spacing.sm }]}>
       <View style={styles.topNote}>
         <ThemedText style={[styles.topTitle, { color: theme.textPrimary }]}>
           Script
@@ -145,8 +259,13 @@ export default function ScriptScreen() {
           </ThemedText>
         </View>
       ) : (
-        <>
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          keyboardVerticalOffset={headerHeight}
+        >
           <FlatList
+            ref={listRef}
             data={beats}
             keyExtractor={(b) => String(b.sentenceIndex)}
             renderItem={renderBeat}
@@ -155,12 +274,15 @@ export default function ScriptScreen() {
               {
                 paddingBottom: hasShots
                   ? tabBarHeight + Spacing.lg
-                  : tabBarHeight + ctaHeight + Spacing.lg,
+                  : tabBarHeight + (showCta ? ctaHeight : 0) + Spacing.lg,
               },
             ]}
             scrollIndicatorInsets={{ bottom: tabBarHeight }}
+            onScrollToIndexFailed={() => {}}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
           />
-          {!hasShots && (
+          {showCta && (
             <View
               onLayout={(e) => setCtaHeight(e.nativeEvent.layout.height)}
               style={[
@@ -190,7 +312,7 @@ export default function ScriptScreen() {
               </Button>
             </View>
           )}
-        </>
+        </KeyboardAvoidingView>
       )}
     </ThemedView>
   );
@@ -235,5 +357,18 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textAlign: "center",
     marginBottom: Spacing.sm,
+  },
+  textInput: {
+    fontSize: 15,
+    lineHeight: 21,
+    padding: Spacing.md,
+    borderRadius: 12,
+    minHeight: 90,
+    textAlignVertical: "top",
+  },
+  savingIndicator: {
+    marginTop: Spacing.sm,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });
