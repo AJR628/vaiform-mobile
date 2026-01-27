@@ -45,6 +45,7 @@ export default function ScriptScreen() {
   const [buildProgress, setBuildProgress] = useState<string | null>(null);
   const [ctaHeight, setCtaHeight] = useState(0);
   const listRef = useRef<FlatList<StoryBeat>>(null);
+  const activeInputRef = useRef<TextInput | null>(null);
   const [editingSentenceIndex, setEditingSentenceIndex] = useState<number | null>(null);
   const [draftTexts, setDraftTexts] = useState<Record<number, string>>({});
   const [savingSentenceIndex, setSavingSentenceIndex] = useState<number | null>(null);
@@ -82,6 +83,17 @@ export default function ScriptScreen() {
 
   const showCta = !hasShots && editingSentenceIndex === null;
   const isEditing = editingSentenceIndex !== null;
+
+  useEffect(() => {
+    const sub = Keyboard.addListener("keyboardDidHide", () => {
+      // Only force blur if we're still in editing mode
+      if (editingSentenceIndex !== null) {
+        activeInputRef.current?.blur(); // triggers onBlur -> saveBeat()
+      }
+    });
+
+    return () => sub.remove();
+  }, [editingSentenceIndex]);
 
   const handleGenerateStoryboard = async () => {
     setIsBuilding(true);
@@ -124,33 +136,45 @@ export default function ScriptScreen() {
     reason: "submit" | "blur",
     explicitText?: string,
   ) => {
+    const closeIfCurrent = () =>
+      setEditingSentenceIndex((cur) => (cur === sentenceIndex ? null : cur));
+
     const raw = explicitText ?? draftTexts[sentenceIndex] ?? "";
     const cleaned = raw.replace(/\n/g, " ").trim();
 
     const current = beats.find((b) => b.sentenceIndex === sentenceIndex)?.text ?? "";
+
+    // If no change, still exit edit mode on blur/submit (but don't break "tap another beat")
     if (!cleaned || cleaned === current) {
-      if (reason === "submit") {
-        setEditingSentenceIndex(null);
-        Keyboard.dismiss();
-      }
+      closeIfCurrent();
+      if (reason === "submit") Keyboard.dismiss();
       return;
     }
 
     setSavingSentenceIndex(sentenceIndex);
     try {
       const res = await storyUpdateBeatText({ sessionId, sentenceIndex, text: cleaned });
+
       if (!res?.ok && res?.success !== true) {
         showError(res?.message || "Failed to save beat. Please try again.");
+
+        // If user dismissed keyboard, don't trap them in "editing" with CTA hidden
+        if (reason === "blur") closeIfCurrent();
         return;
       }
+
       const updated = unwrapNormalized(res);
       setSession(updated);
       setDraftTexts((prev) => ({ ...prev, [sentenceIndex]: cleaned }));
-      setEditingSentenceIndex(null);
-      Keyboard.dismiss();
+
+      closeIfCurrent();
+
+      // Only dismiss keyboard on explicit submit/enter
+      if (reason === "submit") Keyboard.dismiss();
     } catch (err) {
       console.error("[script] saveBeat error:", err);
       showError("Failed to save beat. Please try again.");
+      if (reason === "blur") closeIfCurrent();
     } finally {
       setSavingSentenceIndex(null);
     }
@@ -198,6 +222,9 @@ export default function ScriptScreen() {
         {isEditing ? (
           <>
             <TextInput
+              ref={(r) => {
+                if (isEditing) activeInputRef.current = r;
+              }}
               style={[
                 styles.textInput,
                 { color: theme.textPrimary, backgroundColor: theme.backgroundSecondary },
