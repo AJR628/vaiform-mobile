@@ -190,9 +190,42 @@ export default function ScriptScreen() {
         elevation={1}
         style={styles.beatCard}
         onPress={() => {
-          if (isSaving) return;
+          // Only block if the currently edited beat is saving (not the tapped beat)
+          if (savingSentenceIndex !== null && savingSentenceIndex === editingSentenceIndex) return;
 
-          // Toggle edit mode
+          // If switching from one beat to another while editing:
+          if (editingSentenceIndex !== null && editingSentenceIndex !== item.sentenceIndex) {
+            const prevIndex = editingSentenceIndex;
+            const prevDraft =
+              draftTexts[prevIndex] ??
+              beats.find((b) => b.sentenceIndex === prevIndex)?.text ??
+              "";
+
+            // Switch immediately (keyboard stays open via autoFocus on new TextInput)
+            setEditingSentenceIndex(item.sentenceIndex);
+
+            // Ensure draft init for the new beat
+            setDraftTexts((prev) => ({
+              ...prev,
+              [item.sentenceIndex]: prev[item.sentenceIndex] ?? item.text,
+            }));
+
+            // Save previous beat AFTER the switch (fire-and-forget)
+            requestAnimationFrame(() => {
+              saveBeat(prevIndex, "blur", prevDraft);
+            });
+
+            // Scroll to new beat
+            requestAnimationFrame(() => {
+              try {
+                listRef.current?.scrollToIndex({ index, viewPosition: 0.2, animated: true });
+              } catch {}
+            });
+
+            return;
+          }
+
+          // Existing toggle behavior (edit → not edit, or not edit → edit)
           const next = isEditing ? null : item.sentenceIndex;
           setEditingSentenceIndex(next);
 
@@ -246,7 +279,13 @@ export default function ScriptScreen() {
                   } catch {}
                 });
               }}
-              onBlur={() => saveBeat(item.sentenceIndex, "blur")}
+              onBlur={() => {
+                // Only save if this is still the active editing beat
+                // (prevents duplicate save when switching beats)
+                if (editingSentenceIndex === item.sentenceIndex) {
+                  saveBeat(item.sentenceIndex, "blur");
+                }
+              }}
               multiline
               editable={!isSaving}
               autoFocus
