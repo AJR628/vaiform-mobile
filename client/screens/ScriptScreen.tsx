@@ -81,6 +81,7 @@ export default function ScriptScreen() {
   }, [session]);
 
   const showCta = !hasShots && editingSentenceIndex === null;
+  const isEditing = editingSentenceIndex !== null;
 
   const handleGenerateStoryboard = async () => {
     setIsBuilding(true);
@@ -211,6 +212,13 @@ export default function ScriptScreen() {
                   setDraftTexts((prev) => ({ ...prev, [item.sentenceIndex]: text }));
                 }
               }}
+              onFocus={() => {
+                requestAnimationFrame(() => {
+                  try {
+                    listRef.current?.scrollToIndex({ index, viewPosition: 0.2, animated: true });
+                  } catch {}
+                });
+              }}
               onBlur={() => saveBeat(item.sentenceIndex, "blur")}
               multiline
               editable={!isSaving}
@@ -261,8 +269,8 @@ export default function ScriptScreen() {
       ) : (
         <KeyboardAvoidingView
           style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : "height"}
-          keyboardVerticalOffset={headerHeight}
+          behavior="height"
+          keyboardVerticalOffset={0}
         >
           <FlatList
             ref={listRef}
@@ -272,12 +280,14 @@ export default function ScriptScreen() {
             contentContainerStyle={[
               styles.listContent,
               {
-                paddingBottom: hasShots
-                  ? tabBarHeight + Spacing.lg
-                  : tabBarHeight + (showCta ? ctaHeight : 0) + Spacing.lg,
+                paddingBottom: isEditing
+                  ? Spacing.lg
+                  : hasShots
+                    ? tabBarHeight + Spacing.lg
+                    : tabBarHeight + (showCta ? ctaHeight : 0) + Spacing.lg,
               },
             ]}
-            scrollIndicatorInsets={{ bottom: tabBarHeight }}
+            scrollIndicatorInsets={{ bottom: isEditing ? 0 : tabBarHeight }}
             onScrollToIndexFailed={() => {}}
             keyboardShouldPersistTaps="handled"
             keyboardDismissMode="on-drag"
