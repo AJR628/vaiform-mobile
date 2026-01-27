@@ -46,6 +46,8 @@ export default function ScriptScreen() {
   const [ctaHeight, setCtaHeight] = useState(0);
   const listRef = useRef<FlatList<StoryBeat>>(null);
   const activeInputRef = useRef<TextInput | null>(null);
+  const activeListIndexRef = useRef<number | null>(null);
+  const keyboardVisibleRef = useRef(false);
   const [editingSentenceIndex, setEditingSentenceIndex] = useState<number | null>(null);
   const [draftTexts, setDraftTexts] = useState<Record<number, string>>({});
   const [savingSentenceIndex, setSavingSentenceIndex] = useState<number | null>(null);
@@ -85,14 +87,31 @@ export default function ScriptScreen() {
   const isEditing = editingSentenceIndex !== null;
 
   useEffect(() => {
-    const sub = Keyboard.addListener("keyboardDidHide", () => {
-      // Only force blur if we're still in editing mode
+    // Use keyboardWillShow/keyboardWillHide on iOS for smoother animation
+    // Use keyboardDidShow/keyboardDidHide on Android
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+
+    const subShow = Keyboard.addListener(showEvent, () => {
+      keyboardVisibleRef.current = true;
+
+      // After keyboard appears, re-anchor the focused beat above it
+      scrollActiveBeatToKeyboard();
+    });
+
+    const subHide = Keyboard.addListener(hideEvent, () => {
+      keyboardVisibleRef.current = false;
+
+      // Keep your swipe-down behavior: blur triggers onBlur -> saveBeat(...)
       if (editingSentenceIndex !== null) {
-        activeInputRef.current?.blur(); // triggers onBlur -> saveBeat()
+        activeInputRef.current?.blur();
       }
     });
 
-    return () => sub.remove();
+    return () => {
+      subShow.remove();
+      subHide.remove();
+    };
   }, [editingSentenceIndex]);
 
   const handleGenerateStoryboard = async () => {
@@ -180,6 +199,17 @@ export default function ScriptScreen() {
     }
   };
 
+  const scrollActiveBeatToKeyboard = () => {
+    const i = activeListIndexRef.current;
+    if (i === null) return;
+
+    requestAnimationFrame(() => {
+      try {
+        listRef.current?.scrollToIndex({ index: i, viewPosition: 1, animated: true });
+      } catch {}
+    });
+  };
+
   const renderBeat = ({ item, index }: { item: StoryBeat; index: number }) => {
     const isEditing = editingSentenceIndex === item.sentenceIndex;
     const isSaving = savingSentenceIndex === item.sentenceIndex;
@@ -200,6 +230,9 @@ export default function ScriptScreen() {
               draftTexts[prevIndex] ??
               beats.find((b) => b.sentenceIndex === prevIndex)?.text ??
               "";
+
+            // Track active beat index
+            activeListIndexRef.current = index;
 
             // Switch immediately (keyboard stays open via autoFocus on new TextInput)
             setEditingSentenceIndex(item.sentenceIndex);
@@ -227,6 +260,12 @@ export default function ScriptScreen() {
 
           // Existing toggle behavior (edit → not edit, or not edit → edit)
           const next = isEditing ? null : item.sentenceIndex;
+          
+          if (!isEditing) {
+            // Track active beat index when entering edit mode
+            activeListIndexRef.current = index;
+          }
+          
           setEditingSentenceIndex(next);
 
           if (!isEditing) {
@@ -273,9 +312,15 @@ export default function ScriptScreen() {
                 }
               }}
               onFocus={() => {
+                activeListIndexRef.current = index;
+
                 requestAnimationFrame(() => {
                   try {
-                    listRef.current?.scrollToIndex({ index, viewPosition: 0.2, animated: true });
+                    listRef.current?.scrollToIndex({
+                      index,
+                      viewPosition: keyboardVisibleRef.current ? 1 : 0.2,
+                      animated: true,
+                    });
                   } catch {}
                 });
               }}
