@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useLayoutEffect } from "react";
+import React, { useState, useEffect, useRef, useCallback, useLayoutEffect, useMemo } from "react";
 import {
   View,
   StyleSheet,
@@ -224,7 +224,17 @@ export default function StoryEditorScreen() {
     }, [sessionId, isLoading]) // deps exclude session
   );
 
-  const beats = session ? extractBeats(session) : [];
+  const beats = useMemo(
+    () => (session ? extractBeats(session) : []),
+    [session]
+  );
+
+  const selectedText =
+    selectedSentenceIndex !== null
+      ? (beatTexts[selectedSentenceIndex] ??
+          beats.find((b) => b.sentenceIndex === selectedSentenceIndex)?.text ??
+          "")
+      : "";
 
   // Clamp selectedSentenceIndex by membership (not numeric range)
   useEffect(() => {
@@ -250,10 +260,8 @@ export default function StoryEditorScreen() {
   // Trigger caption preview for the selected beat (debounced inside hook)
   useEffect(() => {
     if (selectedSentenceIndex === null || !sessionId) return;
-    const selectedBeat = beats.find((b) => b.sentenceIndex === selectedSentenceIndex);
-    const text = beatTexts[selectedSentenceIndex] ?? selectedBeat?.text ?? "";
-    requestPreview(selectedSentenceIndex, text, { placement: "center" });
-  }, [selectedSentenceIndex, sessionId, beatTexts, beats, requestPreview]);
+    requestPreview(selectedSentenceIndex, selectedText, { placement: "center" });
+  }, [selectedSentenceIndex, sessionId, selectedText, requestPreview]);
 
   // Set header right button
   useLayoutEffect(() => {

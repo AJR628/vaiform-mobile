@@ -56,7 +56,10 @@ export function useCaptionPreview(
       const now = Date.now();
       const cached = cacheRef.current.get(cacheKey);
       if (cached && cached.expiresAt > now) {
-        setPreviewByIndex((prev) => ({ ...prev, [sentenceIndex]: cached.rasterUrl }));
+        setPreviewByIndex((prev) => {
+          if (prev[sentenceIndex] === cached.rasterUrl) return prev;
+          return { ...prev, [sentenceIndex]: cached.rasterUrl };
+        });
         return;
       }
 
