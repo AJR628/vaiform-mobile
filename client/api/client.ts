@@ -44,6 +44,8 @@ interface ApiRequestOptions {
   body?: unknown;
   headers?: Record<string, string>;
   requireAuth?: boolean;
+  /** When provided, passed to fetch for request cancellation (e.g. per-beat caption preview). */
+  signal?: AbortSignal;
 }
 
 export interface ApiError {
@@ -120,7 +122,7 @@ export async function apiRequest<T = unknown>(
   endpoint: string,
   options: ApiRequestOptions = {}
 ): Promise<T> {
-  const { method = "GET", body, headers = {}, requireAuth = true } = options;
+  const { method = "GET", body, headers = {}, requireAuth = true, signal } = options;
 
   const url = `${API_BASE_URL}${endpoint}`;
 
@@ -143,6 +145,7 @@ export async function apiRequest<T = unknown>(
     method,
     headers: requestHeaders,
     body: body ? JSON.stringify(body) : undefined,
+    signal,
   });
 
   console.log(`[api] ${method} ${endpoint} ${response.status} hasAuthHeader=${hasAuthHeader}`);
@@ -175,7 +178,7 @@ export async function apiRequestNormalized<T = unknown>(
   endpoint: string,
   options: ApiRequestOptions = {}
 ): Promise<NormalizedResponse<T>> {
-  const { method = "GET", body, headers = {}, requireAuth = true } = options;
+  const { method = "GET", body, headers = {}, requireAuth = true, signal } = options;
 
   const url = `${API_BASE_URL}${endpoint}`;
 
@@ -199,6 +202,7 @@ export async function apiRequestNormalized<T = unknown>(
       method,
       headers: requestHeaders,
       body: body ? JSON.stringify(body) : undefined,
+      signal,
     });
 
     console.log(`[api] ${method} ${endpoint} ${response.status} hasAuthHeader=${hasAuthHeader}`);
@@ -289,6 +293,148 @@ export interface ShortDetail {
     cost?: number;
   };
   createdAt: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Caption preview (server-measured flow)
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Style whitelist for caption preview: typography, color/effects, layout only. */
+export interface CaptionPreviewStyle {
+  fontFamily?: string;
+  fontPx?: number;
+  weightCss?: string;
+  fontStyle?: string;
+  letterSpacingPx?: number;
+  lineSpacingPx?: number;
+  textAlign?: string;
+  textTransform?: string;
+  color?: string;
+  opacity?: number;
+  strokePx?: number;
+  strokeColor?: string;
+  shadowBlur?: number;
+  shadowOffsetX?: number;
+  shadowOffsetY?: number;
+  shadowColor?: string;
+  wPct?: number;
+  internalPaddingPx?: number;
+  internalPadding?: number;
+  rasterPadding?: number;
+}
+
+/** Server-measured request body: text + placement or yPct, optional style. No geometry. */
+export interface CaptionPreviewRequestBody {
+  ssotVersion: 3;
+  mode: "raster";
+  measure: "server";
+  text: string;
+  placement?: "top" | "center" | "bottom";
+  yPct?: number;
+  style?: CaptionPreviewStyle;
+  frameW?: number;
+  frameH?: number;
+}
+
+/** Meta returned by server; use keys verbatim (rasterUrl, rasterW, rasterH, etc.). */
+export interface CaptionPreviewMeta {
+  rasterUrl: string;
+  rasterW?: number;
+  rasterH?: number;
+  yPx_png?: number;
+  rasterPadding?: number;
+  lines?: number;
+  totalTextH?: number;
+  [key: string]: unknown;
+}
+
+export interface CaptionPreviewData {
+  imageUrl?: string | null;
+  wPx?: number;
+  hPx?: number;
+  xPx?: number;
+  meta: CaptionPreviewMeta;
+}
+
+const CAPTION_PREVIEW_STYLE_KEYS: (keyof CaptionPreviewStyle)[] = [
+  "fontFamily", "fontPx", "weightCss", "fontStyle", "letterSpacingPx", "lineSpacingPx",
+  "textAlign", "textTransform", "color", "opacity", "strokePx", "strokeColor",
+  "shadowBlur", "shadowOffsetX", "shadowOffsetY", "shadowColor",
+  "wPct", "internalPaddingPx", "internalPadding", "rasterPadding",
+];
+
+function extractStyleWhitelist(style: CaptionPreviewStyle | undefined): CaptionPreviewStyle | undefined {
+  if (!style || typeof style !== "object") return undefined;
+  const out: CaptionPreviewStyle = {};
+  for (const k of CAPTION_PREVIEW_STYLE_KEYS) {
+    if (style[k] !== undefined) (out as Record<string, unknown>)[k] = style[k];
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+/**
+ * Build server-measured caption preview payload (mobile). Only whitelisted style keys.
+ */
+export function buildCaptionPreviewPayload(params: {
+  text: string;
+  placement?: "top" | "center" | "bottom";
+  yPct?: number;
+  style?: CaptionPreviewStyle;
+  frameW?: number;
+  frameH?: number;
+}): CaptionPreviewRequestBody {
+  const { text, placement, yPct, style, frameW = 1080, frameH = 1920 } = params;
+  const body: CaptionPreviewRequestBody = {
+    ssotVersion: 3,
+    mode: "raster",
+    measure: "server",
+    text: text.trim() || " ",
+    frameW,
+    frameH,
+  };
+  if (placement !== undefined) body.placement = placement;
+  if (yPct !== undefined) body.yPct = yPct;
+  const sanitized = extractStyleWhitelist(style);
+  if (sanitized) body.style = sanitized;
+  return body;
+}
+
+export interface CaptionPreviewOptions {
+  signal?: AbortSignal;
+  timeoutMs?: number;
+}
+
+/**
+ * POST /api/caption/preview — server-measured caption preview. Returns data.meta.rasterUrl (base64 data URL).
+ */
+export async function captionPreview(
+  body: CaptionPreviewRequestBody,
+  options: CaptionPreviewOptions = {}
+): Promise<NormalizedResponse<CaptionPreviewData>> {
+  const { signal, timeoutMs = 10_000 } = options;
+  let effectiveSignal: AbortSignal | undefined = signal;
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  if (timeoutMs > 0 || signal) {
+    const controller = new AbortController();
+    if (timeoutMs > 0) {
+      timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+    }
+    if (signal) {
+      signal.addEventListener("abort", () => controller.abort());
+    }
+    effectiveSignal = controller.signal;
+  }
+  try {
+    const result = await apiRequestNormalized<CaptionPreviewData>("/api/caption/preview", {
+      method: "POST",
+      body,
+      requireAuth: true,
+      signal: effectiveSignal,
+    });
+    return result;
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

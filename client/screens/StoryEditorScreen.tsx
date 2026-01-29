@@ -26,6 +26,7 @@ import { ThemedText } from "@/components/ThemedText";
 import { Card } from "@/components/Card";
 import { HomeStackParamList } from "@/navigation/HomeStackNavigator";
 import { useTheme } from "@/hooks/useTheme";
+import { useCaptionPreview } from "@/hooks/useCaptionPreview";
 import { useToast } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Spacing } from "@/constants/theme";
@@ -127,6 +128,11 @@ export default function StoryEditorScreen() {
   const [replaceModalForIndex, setReplaceModalForIndex] = useState<number | null>(null);
   const [isRendering, setIsRendering] = useState(false);
   const [showRenderingModal, setShowRenderingModal] = useState(false);
+
+  const { previewByIndex, isLoadingByIndex, requestPreview } = useCaptionPreview(
+    sessionId,
+    selectedSentenceIndex
+  );
 
   const loggedRef = useRef(false);
   const shouldRefreshRef = useRef(false);
@@ -240,6 +246,14 @@ export default function StoryEditorScreen() {
       setSelectedSentenceIndex(beats[0].sentenceIndex);
     }
   }, [session, beats, selectedSentenceIndex]);
+
+  // Trigger caption preview for the selected beat (debounced inside hook)
+  useEffect(() => {
+    if (selectedSentenceIndex === null || !sessionId) return;
+    const selectedBeat = beats.find((b) => b.sentenceIndex === selectedSentenceIndex);
+    const text = beatTexts[selectedSentenceIndex] ?? selectedBeat?.text ?? "";
+    requestPreview(selectedSentenceIndex, text, { placement: "center" });
+  }, [selectedSentenceIndex, sessionId, beatTexts, beats, requestPreview]);
 
   // Set header right button
   useLayoutEffect(() => {
@@ -415,6 +429,7 @@ export default function StoryEditorScreen() {
     const isSelected = selectedSentenceIndex === item.sentenceIndex;
     const shot = session ? getSelectedShot(session, item.sentenceIndex) : null;
     const selectedClip = shot?.selectedClip || null;
+    const captionRasterUrl = previewByIndex[item.sentenceIndex];
 
     return (
       <Pressable
@@ -429,14 +444,25 @@ export default function StoryEditorScreen() {
         onLongPress={() => setReplaceModalForIndex(item.sentenceIndex)}
       >
         {selectedClip?.thumbUrl ? (
-          <Image
-            source={{ uri: selectedClip.thumbUrl }}
-            style={[
-              styles.timelineThumbnail,
-              { backgroundColor: theme.backgroundSecondary },
-            ]}
-            resizeMode="cover"
-          />
+          <View style={styles.timelineThumbnailWrapper}>
+            <Image
+              source={{ uri: selectedClip.thumbUrl }}
+              style={[
+                styles.timelineThumbnail,
+                { backgroundColor: theme.backgroundSecondary },
+              ]}
+              resizeMode="cover"
+            />
+            {captionRasterUrl && (
+              <View style={styles.timelineCaptionOverlay} pointerEvents="none">
+                <Image
+                  source={{ uri: captionRasterUrl }}
+                  style={styles.timelineCaptionImage}
+                  resizeMode="contain"
+                />
+              </View>
+            )}
+          </View>
         ) : (
           <View
             style={[
@@ -445,7 +471,16 @@ export default function StoryEditorScreen() {
               { backgroundColor: theme.backgroundSecondary },
             ]}
           >
-              <Feather name="video" size={16} color={theme.tabIconDefault} />
+            <Feather name="video" size={16} color={theme.tabIconDefault} />
+            {captionRasterUrl && (
+              <View style={styles.timelineCaptionOverlay} pointerEvents="none">
+                <Image
+                  source={{ uri: captionRasterUrl }}
+                  style={styles.timelineCaptionImage}
+                  resizeMode="contain"
+                />
+              </View>
+            )}
           </View>
         )}
       </Pressable>
@@ -515,6 +550,23 @@ export default function StoryEditorScreen() {
                   {selectedClip.provider}
                 </ThemedText>
               )}
+              {/* Caption preview overlay (server-measured raster) */}
+              {selectedSentenceIndex !== null &&
+                previewByIndex[selectedSentenceIndex] && (
+                  <View style={styles.captionPreviewOverlay} pointerEvents="none">
+                    <Image
+                      source={{ uri: previewByIndex[selectedSentenceIndex]! }}
+                      style={styles.captionPreviewImage}
+                      resizeMode="contain"
+                    />
+                  </View>
+                )}
+              {selectedSentenceIndex !== null &&
+                isLoadingByIndex[selectedSentenceIndex] && (
+                  <View style={styles.captionPreviewOverlay} pointerEvents="none">
+                    <ActivityIndicator size="small" color={theme.link} />
+                  </View>
+                )}
             </View>
           ) : selectedClip ? (
             <View
@@ -534,6 +586,23 @@ export default function StoryEditorScreen() {
               ]}
             >
               <ThemedText style={styles.placeholderText}>No clip selected</ThemedText>
+              {/* Caption preview overlay when no clip (server-measured raster) */}
+              {selectedSentenceIndex !== null &&
+                previewByIndex[selectedSentenceIndex] && (
+                  <View style={styles.captionPreviewOverlay} pointerEvents="none">
+                    <Image
+                      source={{ uri: previewByIndex[selectedSentenceIndex]! }}
+                      style={styles.captionPreviewImage}
+                      resizeMode="contain"
+                    />
+                  </View>
+                )}
+              {selectedSentenceIndex !== null &&
+                isLoadingByIndex[selectedSentenceIndex] && (
+                  <View style={styles.captionPreviewOverlay} pointerEvents="none">
+                    <ActivityIndicator size="small" color={theme.link} />
+                  </View>
+                )}
             </View>
           )}
         </View>
@@ -747,10 +816,24 @@ const styles = StyleSheet.create({
     width: "100%",
     borderRadius: 12,
     overflow: "hidden",
+    position: "relative",
   },
   previewThumbnail: {
     flex: 1,
     width: "100%",
+  },
+  captionPreviewOverlay: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    justifyContent: "flex-end",
+    minHeight: 80,
+  },
+  captionPreviewImage: {
+    width: "100%",
+    maxHeight: "45%",
   },
   previewFallback: {
     flex: 1,
@@ -767,6 +850,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
+    position: "relative",
   },
   providerLabel: {
     fontSize: 12,
@@ -820,6 +904,12 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     marginRight: Spacing.sm,
   },
+  timelineThumbnailWrapper: {
+    width: "100%",
+    height: "100%",
+    position: "relative",
+    borderRadius: 8,
+  },
   timelineThumbnail: {
     width: "100%",
     height: "100%",
@@ -828,6 +918,20 @@ const styles = StyleSheet.create({
   timelinePlaceholder: {
     alignItems: "center",
     justifyContent: "center",
+    position: "relative",
+  },
+  timelineCaptionOverlay: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    justifyContent: "flex-end",
+    height: "50%",
+  },
+  timelineCaptionImage: {
+    width: "100%",
+    height: "100%",
   },
   modalOverlay: {
     flex: 1,
