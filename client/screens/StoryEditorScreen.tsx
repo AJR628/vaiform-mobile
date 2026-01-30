@@ -585,6 +585,23 @@ export default function StoryEditorScreen() {
             >
               <Feather name="video" size={32} color={theme.tabIconDefault} />
               <ThemedText style={styles.fallbackText}>Video selected</ThemedText>
+              {/* Caption preview overlay (fallback branch) */}
+              {selectedSentenceIndex !== null &&
+                previewByIndex[selectedSentenceIndex] && (
+                  <View style={styles.captionPreviewOverlay} pointerEvents="none">
+                    <Image
+                      source={{ uri: previewByIndex[selectedSentenceIndex]! }}
+                      style={styles.captionPreviewImage}
+                      resizeMode="contain"
+                    />
+                  </View>
+                )}
+              {selectedSentenceIndex !== null &&
+                isLoadingByIndex[selectedSentenceIndex] && (
+                  <View style={styles.captionPreviewOverlay} pointerEvents="none">
+                    <ActivityIndicator size="small" color={theme.link} />
+                  </View>
+                )}
             </View>
           ) : (
             <View
@@ -838,6 +855,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "flex-end",
     minHeight: 80,
+    zIndex: 10,
+    elevation: 10,
   },
   captionPreviewImage: {
     width: "100%",
@@ -850,6 +869,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
+    position: "relative",
   },
   previewPlaceholder: {
     flex: 1,
