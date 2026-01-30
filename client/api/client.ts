@@ -6,6 +6,9 @@ const API_BASE_URL = (
   process.env.EXPO_PUBLIC_API_BASE_URL || "https://your-vaiform-backend.com"
 ).replace(/\/$/, "");
 
+const API_LOG =
+  __DEV__ && (process.env.EXPO_PUBLIC_API_LOG === "1");
+
 let cachedIdToken: string | null = null;
 let tokenExpirationTime: number = 0;
 
@@ -148,7 +151,11 @@ export async function apiRequest<T = unknown>(
     signal,
   });
 
-  console.log(`[api] ${method} ${endpoint} ${response.status} hasAuthHeader=${hasAuthHeader}`);
+  const isCaptionPreview = endpoint.includes("/api/caption/preview");
+  const shouldLog = API_LOG && !isCaptionPreview;
+  if (shouldLog) {
+    console.log(`[api] ${method} ${endpoint} ${response.status} hasAuthHeader=${hasAuthHeader}`);
+  }
 
   if (!response.ok) {
     const errorText = await response.text().catch(() => "Unknown error");
@@ -205,7 +212,11 @@ export async function apiRequestNormalized<T = unknown>(
       signal,
     });
 
-    console.log(`[api] ${method} ${endpoint} ${response.status} hasAuthHeader=${hasAuthHeader}`);
+    const isCaptionPreview = endpoint.includes("/api/caption/preview");
+    const shouldLog = API_LOG && !isCaptionPreview;
+    if (shouldLog) {
+      console.log(`[api] ${method} ${endpoint} ${response.status} hasAuthHeader=${hasAuthHeader}`);
+    }
 
     const contentType = response.headers.get("content-type");
     let json: unknown = null;
@@ -665,7 +676,9 @@ export async function storyFinalize(body: {
       throw fetchError;
     }
 
-    console.log(`[api] POST /api/story/finalize ${response.status}`);
+    if (API_LOG) {
+      console.log(`[api] POST /api/story/finalize ${response.status}`);
+    }
 
     const contentType = response.headers.get("content-type");
     let json: unknown = null;
