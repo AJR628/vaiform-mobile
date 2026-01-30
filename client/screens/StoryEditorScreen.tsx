@@ -855,12 +855,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "flex-end",
     minHeight: 80,
+    height: "45%",
     zIndex: 10,
     elevation: 10,
   },
   captionPreviewImage: {
     width: "100%",
-    maxHeight: "45%",
+    height: "100%",
   },
   previewFallback: {
     flex: 1,
