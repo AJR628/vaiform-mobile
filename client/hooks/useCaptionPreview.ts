@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import {
   captionPreview,
   buildCaptionPreviewPayload,
@@ -46,13 +46,18 @@ export function useCaptionPreview(
   const cacheRef = useRef<Map<string, CacheEntry>>(new Map());
   const debounceTimersRef = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
   const abortControllersRef = useRef<Record<number, AbortController>>({});
+  const requestIdRef = useRef<Record<number, number>>({});
 
   const doOneRequest = useCallback(
-    (
+    async (
       sentenceIndex: number,
       text: string,
       options: UseCaptionPreviewOptions = {}
     ): Promise<void> => {
+      requestIdRef.current[sentenceIndex] =
+        (requestIdRef.current[sentenceIndex] ?? 0) + 1;
+      const reqId = requestIdRef.current[sentenceIndex];
+
       const { placement = "center", style } = options;
       const trimmed = text?.trim() ?? "";
       const cacheKey = hashStyleAndText(style, placement, trimmed);
@@ -64,7 +69,11 @@ export function useCaptionPreview(
           if (prev[sentenceIndex] === cached.rasterUrl) return prev;
           return { ...prev, [sentenceIndex]: cached.rasterUrl };
         });
-        return Promise.resolve();
+        const isLatest = requestIdRef.current[sentenceIndex] === reqId;
+        if (isLatest) {
+          setIsLoadingByIndex((prev) => ({ ...prev, [sentenceIndex]: false }));
+        }
+        return;
       }
 
       const prevController = abortControllersRef.current[sentenceIndex];
@@ -73,7 +82,6 @@ export function useCaptionPreview(
       }
       const controller = new AbortController();
       abortControllersRef.current[sentenceIndex] = controller;
-
       setIsLoadingByIndex((prev) => ({ ...prev, [sentenceIndex]: true }));
 
       const body = buildCaptionPreviewPayload({
@@ -84,29 +92,53 @@ export function useCaptionPreview(
         frameH: 1920,
       });
 
-      return captionPreview(body, { signal: controller.signal, timeoutMs: 10_000 })
-        .then((result) => {
-          if (controller.signal.aborted) return;
-          if (!result.ok || !result.data?.meta?.rasterUrl) {
-            setIsLoadingByIndex((prev) => ({ ...prev, [sentenceIndex]: false }));
-            return;
-          }
+      try {
+        const result = await captionPreview(body, {
+          signal: controller.signal,
+          timeoutMs: 10_000,
+        });
+        const isLatest = requestIdRef.current[sentenceIndex] === reqId;
+        if (
+          !controller.signal.aborted &&
+          isLatest &&
+          result.ok &&
+          result.data?.meta?.rasterUrl
+        ) {
           const rasterUrl = result.data.meta.rasterUrl as string;
           cacheRef.current.set(cacheKey, {
             rasterUrl,
             expiresAt: Date.now() + CACHE_TTL_MS,
           });
           setPreviewByIndex((prev) => ({ ...prev, [sentenceIndex]: rasterUrl }));
+        }
+      } catch {
+        // loading cleared in finally
+      } finally {
+        const isLatest = requestIdRef.current[sentenceIndex] === reqId;
+        if (isLatest) {
           setIsLoadingByIndex((prev) => ({ ...prev, [sentenceIndex]: false }));
-        })
-        .catch(() => {
-          if (!controller.signal.aborted) {
-            setIsLoadingByIndex((prev) => ({ ...prev, [sentenceIndex]: false }));
-          }
-        });
+        }
+      }
     },
     []
   );
+
+  useEffect(() => {
+    return () => {
+      const timers = debounceTimersRef.current;
+      for (const key of Object.keys(timers)) {
+        const timerId = timers[Number(key)];
+        if (timerId != null) clearTimeout(timerId);
+      }
+      debounceTimersRef.current = {};
+      const controllers = abortControllersRef.current;
+      for (const key of Object.keys(controllers)) {
+        const ctrl = controllers[Number(key)];
+        if (ctrl) ctrl.abort();
+      }
+      abortControllersRef.current = {};
+    };
+  }, []);
 
   const requestPreview = useCallback(
     (
