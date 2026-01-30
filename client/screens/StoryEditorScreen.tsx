@@ -132,6 +132,8 @@ export default function StoryEditorScreen() {
   const { previewByIndex, isLoadingByIndex, requestPreview, prefetchAllBeats } =
     useCaptionPreview(sessionId, selectedSentenceIndex);
 
+  const [stageSize, setStageSize] = useState<{ w: number; h: number } | null>(null);
+
   const loggedRef = useRef(false);
   const prefetchDoneForSessionRef = useRef<string | null>(null);
   const shouldRefreshRef = useRef(false);
@@ -444,7 +446,7 @@ export default function StoryEditorScreen() {
     const isSelected = selectedSentenceIndex === item.sentenceIndex;
     const shot = session ? getSelectedShot(session, item.sentenceIndex) : null;
     const selectedClip = shot?.selectedClip || null;
-    const captionRasterUrl = previewByIndex[item.sentenceIndex];
+    const captionRasterUrl = previewByIndex[item.sentenceIndex]?.rasterUrl;
 
     return (
       <Pressable
@@ -544,13 +546,64 @@ export default function StoryEditorScreen() {
       ? beatTexts[selectedSentenceIndex] ?? selectedBeat?.text ?? ""
       : "";
 
+  const selectedMeta =
+    selectedSentenceIndex != null ? previewByIndex[selectedSentenceIndex] : null;
+
+  const hasSsotPlacement =
+    selectedMeta &&
+    stageSize &&
+    typeof selectedMeta.rasterW === "number" &&
+    typeof selectedMeta.rasterH === "number" &&
+    typeof selectedMeta.yPx_png === "number";
+  const frameW =
+    hasSsotPlacement && typeof selectedMeta?.frameW === "number"
+      ? selectedMeta.frameW
+      : 1080;
+  const frameH =
+    hasSsotPlacement && typeof selectedMeta?.frameH === "number"
+      ? selectedMeta.frameH
+      : 1920;
+  const scale = hasSsotPlacement && stageSize ? stageSize.w / frameW : 0;
+  const overlayW = hasSsotPlacement && selectedMeta ? (selectedMeta.rasterW ?? 0) * scale : 0;
+  const overlayH = hasSsotPlacement && selectedMeta ? (selectedMeta.rasterH ?? 0) * scale : 0;
+  const leftPx =
+    hasSsotPlacement && selectedMeta
+      ? typeof selectedMeta.xPx_png === "number"
+        ? selectedMeta.xPx_png * scale
+        : ((frameW - (selectedMeta.rasterW ?? 0)) / 2) * scale
+      : 0;
+  const topPx =
+    hasSsotPlacement && selectedMeta ? (selectedMeta.yPx_png ?? 0) * scale : 0;
+  const leftClamped =
+    stageSize && overlayW > 0
+      ? Math.max(0, Math.min(leftPx, stageSize.w - overlayW))
+      : leftPx;
+  const topClamped =
+    stageSize && overlayH > 0
+      ? Math.max(0, Math.min(topPx, stageSize.h - overlayH))
+      : topPx;
+
   return (
     <ThemedView style={styles.container}>
       {/* Preview section */}
       <View style={styles.previewSection}>
         {/* Big preview of selected shot */}
         <View style={styles.previewContainer}>
-          <View style={styles.previewStage9x16}>
+          <View
+            style={styles.previewStage9x16}
+            onLayout={(e) => {
+              const { width, height } = e.nativeEvent.layout;
+              if (
+                width > 0 &&
+                height > 0 &&
+                (!stageSize ||
+                  Math.abs(stageSize.w - width) > 0.5 ||
+                  Math.abs(stageSize.h - height) > 0.5)
+              ) {
+                setStageSize({ w: width, h: height });
+              }
+            }}
+          >
             {selectedClip?.thumbUrl ? (
             <View style={styles.previewThumbnailContainer}>
               <Image
@@ -566,17 +619,35 @@ export default function StoryEditorScreen() {
                   {selectedClip.provider}
                 </ThemedText>
               )}
-              {/* Caption preview overlay (server-measured raster) */}
-              {selectedSentenceIndex !== null &&
-                previewByIndex[selectedSentenceIndex] && (
+              {/* Caption preview overlay (SSOT or fallback) */}
+              {selectedMeta && (
+                hasSsotPlacement ? (
+                  <View
+                    style={{
+                      position: "absolute",
+                      left: leftClamped,
+                      top: topClamped,
+                      width: overlayW,
+                      height: overlayH,
+                    }}
+                    pointerEvents="none"
+                  >
+                    <Image
+                      source={{ uri: selectedMeta.rasterUrl }}
+                      style={{ width: "100%", height: "100%" }}
+                      resizeMode="stretch"
+                    />
+                  </View>
+                ) : (
                   <View style={styles.captionPreviewOverlay} pointerEvents="none">
                     <Image
-                      source={{ uri: previewByIndex[selectedSentenceIndex]! }}
+                      source={{ uri: selectedMeta.rasterUrl }}
                       style={styles.captionPreviewImage}
                       resizeMode="contain"
                     />
                   </View>
-                )}
+                )
+              )}
               {selectedSentenceIndex !== null &&
                 isLoadingByIndex[selectedSentenceIndex] && (
                   <View style={styles.captionPreviewOverlay} pointerEvents="none">
@@ -593,17 +664,35 @@ export default function StoryEditorScreen() {
             >
               <Feather name="video" size={32} color={theme.tabIconDefault} />
               <ThemedText style={styles.fallbackText}>Video selected</ThemedText>
-              {/* Caption preview overlay (fallback branch) */}
-              {selectedSentenceIndex !== null &&
-                previewByIndex[selectedSentenceIndex] && (
+              {/* Caption preview overlay (SSOT or fallback) */}
+              {selectedMeta && (
+                hasSsotPlacement ? (
+                  <View
+                    style={{
+                      position: "absolute",
+                      left: leftClamped,
+                      top: topClamped,
+                      width: overlayW,
+                      height: overlayH,
+                    }}
+                    pointerEvents="none"
+                  >
+                    <Image
+                      source={{ uri: selectedMeta.rasterUrl }}
+                      style={{ width: "100%", height: "100%" }}
+                      resizeMode="stretch"
+                    />
+                  </View>
+                ) : (
                   <View style={styles.captionPreviewOverlay} pointerEvents="none">
                     <Image
-                      source={{ uri: previewByIndex[selectedSentenceIndex]! }}
+                      source={{ uri: selectedMeta.rasterUrl }}
                       style={styles.captionPreviewImage}
                       resizeMode="contain"
                     />
                   </View>
-                )}
+                )
+              )}
               {selectedSentenceIndex !== null &&
                 isLoadingByIndex[selectedSentenceIndex] && (
                   <View style={styles.captionPreviewOverlay} pointerEvents="none">
@@ -619,17 +708,35 @@ export default function StoryEditorScreen() {
               ]}
             >
               <ThemedText style={styles.placeholderText}>No clip selected</ThemedText>
-              {/* Caption preview overlay when no clip (server-measured raster) */}
-              {selectedSentenceIndex !== null &&
-                previewByIndex[selectedSentenceIndex] && (
+              {/* Caption preview overlay (SSOT or fallback) */}
+              {selectedMeta && (
+                hasSsotPlacement ? (
+                  <View
+                    style={{
+                      position: "absolute",
+                      left: leftClamped,
+                      top: topClamped,
+                      width: overlayW,
+                      height: overlayH,
+                    }}
+                    pointerEvents="none"
+                  >
+                    <Image
+                      source={{ uri: selectedMeta.rasterUrl }}
+                      style={{ width: "100%", height: "100%" }}
+                      resizeMode="stretch"
+                    />
+                  </View>
+                ) : (
                   <View style={styles.captionPreviewOverlay} pointerEvents="none">
                     <Image
-                      source={{ uri: previewByIndex[selectedSentenceIndex]! }}
+                      source={{ uri: selectedMeta.rasterUrl }}
                       style={styles.captionPreviewImage}
                       resizeMode="contain"
                     />
                   </View>
-                )}
+                )
+              )}
               {selectedSentenceIndex !== null &&
                 isLoadingByIndex[selectedSentenceIndex] && (
                   <View style={styles.captionPreviewOverlay} pointerEvents="none">

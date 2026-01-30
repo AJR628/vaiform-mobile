@@ -3,6 +3,7 @@ import {
   captionPreview,
   buildCaptionPreviewPayload,
   type CaptionPreviewStyle,
+  type CaptionPreviewMeta,
 } from "@/api/client";
 
 const DEBOUNCE_MS = 350;
@@ -22,7 +23,7 @@ function hashStyleAndText(
 }
 
 interface CacheEntry {
-  rasterUrl: string;
+  meta: CaptionPreviewMeta;
   expiresAt: number;
 }
 
@@ -40,7 +41,7 @@ export function useCaptionPreview(
   _sessionId: string | undefined,
   selectedSentenceIndex: number | null
 ) {
-  const [previewByIndex, setPreviewByIndex] = useState<Record<number, string | null>>({});
+  const [previewByIndex, setPreviewByIndex] = useState<Record<number, CaptionPreviewMeta | null>>({});
   const [isLoadingByIndex, setIsLoadingByIndex] = useState<Record<number, boolean>>({});
 
   const cacheRef = useRef<Map<string, CacheEntry>>(new Map());
@@ -66,8 +67,8 @@ export function useCaptionPreview(
       const cached = cacheRef.current.get(cacheKey);
       if (cached && cached.expiresAt > now) {
         setPreviewByIndex((prev) => {
-          if (prev[sentenceIndex] === cached.rasterUrl) return prev;
-          return { ...prev, [sentenceIndex]: cached.rasterUrl };
+          if (prev[sentenceIndex]?.rasterUrl === cached.meta.rasterUrl) return prev;
+          return { ...prev, [sentenceIndex]: cached.meta };
         });
         const isLatest = requestIdRef.current[sentenceIndex] === reqId;
         if (isLatest) {
@@ -104,12 +105,12 @@ export function useCaptionPreview(
           result.ok &&
           result.data?.meta?.rasterUrl
         ) {
-          const rasterUrl = result.data.meta.rasterUrl as string;
+          const meta = result.data.meta as CaptionPreviewMeta;
           cacheRef.current.set(cacheKey, {
-            rasterUrl,
+            meta,
             expiresAt: Date.now() + CACHE_TTL_MS,
           });
-          setPreviewByIndex((prev) => ({ ...prev, [sentenceIndex]: rasterUrl }));
+          setPreviewByIndex((prev) => ({ ...prev, [sentenceIndex]: meta }));
         }
       } catch {
         // loading cleared in finally
