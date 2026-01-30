@@ -36,6 +36,7 @@ export default function HomeStackNavigator() {
         name="StoryEditor"
         component={StoryEditorScreen}
         options={{
+          headerTransparent: false,
           headerTitle: "Storyboard Editor",
         }}
       />
