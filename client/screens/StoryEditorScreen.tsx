@@ -837,9 +837,12 @@ const styles = StyleSheet.create({
   },
   previewContainer: {
     flex: 1,
+    alignItems: "center",
   },
   previewStage9x16: {
-    width: "100%",
+    flex: 1,
+    maxWidth: "100%",
+    alignSelf: "center",
     aspectRatio: 9 / 16,
     overflow: "hidden",
     position: "relative",
