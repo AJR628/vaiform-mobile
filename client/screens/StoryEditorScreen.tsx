@@ -543,7 +543,8 @@ export default function StoryEditorScreen() {
       <View style={styles.previewSection}>
         {/* Big preview of selected shot */}
         <View style={styles.previewContainer}>
-          {selectedClip?.thumbUrl ? (
+          <View style={styles.previewStage9x16}>
+            {selectedClip?.thumbUrl ? (
             <View style={styles.previewThumbnailContainer}>
               <Image
                 source={{ uri: selectedClip.thumbUrl }}
@@ -630,6 +631,7 @@ export default function StoryEditorScreen() {
                 )}
             </View>
           )}
+          </View>
         </View>
       </View>
 
@@ -835,6 +837,12 @@ const styles = StyleSheet.create({
   },
   previewContainer: {
     flex: 1,
+  },
+  previewStage9x16: {
+    width: "100%",
+    aspectRatio: 9 / 16,
+    overflow: "hidden",
+    position: "relative",
   },
   previewThumbnailContainer: {
     flex: 1,
