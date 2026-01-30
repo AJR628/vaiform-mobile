@@ -704,6 +704,7 @@ export default function StoryEditorScreen() {
           data={beats}
           renderItem={renderTimelineItem}
           keyExtractor={(item) => `beat-${item.sentenceIndex}`}
+          extraData={{ previewByIndex, selectedSentenceIndex }}
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.timelineContent}
