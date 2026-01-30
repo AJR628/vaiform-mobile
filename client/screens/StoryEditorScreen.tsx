@@ -11,7 +11,14 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   Platform,
+  useWindowDimensions,
 } from "react-native";
+import Animated, {
+  useAnimatedScrollHandler,
+  useAnimatedStyle,
+  useSharedValue,
+  interpolate,
+} from "react-native-reanimated";
 import { Feather } from "@expo/vector-icons";
 import {
   useRoute,
@@ -132,13 +139,26 @@ export default function StoryEditorScreen() {
   const { previewByIndex, isLoadingByIndex, requestPreview, prefetchAllBeats } =
     useCaptionPreview(sessionId, selectedSentenceIndex);
 
-  const [stageSize, setStageSize] = useState<{ w: number; h: number } | null>(null);
+  const scrollX = useSharedValue(0);
+  const onDeckScroll = useAnimatedScrollHandler({
+    onScroll: (e) => {
+      scrollX.value = e.contentOffset.x;
+    },
+  });
 
   const loggedRef = useRef(false);
   const prefetchDoneForSessionRef = useRef<string | null>(null);
   const shouldRefreshRef = useRef(false);
   const textInputRef = useRef<TextInput>(null);
   const savingRef = useRef<number | null>(null);
+  const deckListRef = useRef<FlatList<Beat>>(null);
+  const selectionFromDeckRef = useRef(false);
+
+  const { width: windowWidth } = useWindowDimensions();
+  const cardW = Math.round(windowWidth * 0.84);
+  const cardH = Math.round((cardW * 16) / 9);
+  const deckGap = 12;
+  const cardStep = cardW + deckGap;
 
   // Load session on mount
   useEffect(() => {
@@ -272,6 +292,18 @@ export default function StoryEditorScreen() {
     prefetchAllBeats(beats, { delayBetweenMs: 120 });
   }, [sessionId, beats, prefetchAllBeats]);
 
+  // Selection → deck scroll (only when selection changed externally, not from onMomentumScrollEnd)
+  useEffect(() => {
+    if (selectionFromDeckRef.current) {
+      selectionFromDeckRef.current = false;
+      return;
+    }
+    if (selectedSentenceIndex === null || beats.length === 0) return;
+    const index = beats.findIndex((b) => b.sentenceIndex === selectedSentenceIndex);
+    if (index < 0) return;
+    deckListRef.current?.scrollToOffset({ offset: index * cardStep, animated: true });
+  }, [selectedSentenceIndex, beats, cardStep]);
+
   // Set header right button
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -342,7 +374,7 @@ export default function StoryEditorScreen() {
 
       textInputRef.current?.blur();
       Keyboard.dismiss();
-      setSelectedSentenceIndex(null);
+      // Keep selection so deck does not jump back to beat 1
     } catch (error) {
       console.error("[story] save beat error:", error);
       showError("Failed to update beat text. Please try again.");
@@ -442,68 +474,6 @@ export default function StoryEditorScreen() {
     }
   };
 
-  const renderTimelineItem = ({ item }: { item: Beat }) => {
-    const isSelected = selectedSentenceIndex === item.sentenceIndex;
-    const shot = session ? getSelectedShot(session, item.sentenceIndex) : null;
-    const selectedClip = shot?.selectedClip || null;
-    const captionRasterUrl = previewByIndex[item.sentenceIndex]?.rasterUrl;
-
-    return (
-      <Pressable
-        style={[
-          styles.timelineItem,
-          isSelected && {
-            borderColor: theme.link,
-            borderWidth: 2,
-          },
-        ]}
-        onPress={() => setSelectedSentenceIndex(item.sentenceIndex)}
-        onLongPress={() => setReplaceModalForIndex(item.sentenceIndex)}
-      >
-        {selectedClip?.thumbUrl ? (
-          <View style={styles.timelineThumbnailWrapper}>
-            <Image
-              source={{ uri: selectedClip.thumbUrl }}
-              style={[
-                styles.timelineThumbnail,
-                { backgroundColor: theme.backgroundSecondary },
-              ]}
-              resizeMode="cover"
-            />
-            {captionRasterUrl && (
-              <View style={styles.timelineCaptionOverlay} pointerEvents="none">
-                <Image
-                  source={{ uri: captionRasterUrl }}
-                  style={styles.timelineCaptionImage}
-                  resizeMode="contain"
-                />
-              </View>
-            )}
-          </View>
-        ) : (
-          <View
-            style={[
-              styles.timelineThumbnail,
-              styles.timelinePlaceholder,
-              { backgroundColor: theme.backgroundSecondary },
-            ]}
-          >
-            <Feather name="video" size={16} color={theme.tabIconDefault} />
-            {captionRasterUrl && (
-              <View style={styles.timelineCaptionOverlay} pointerEvents="none">
-                <Image
-                  source={{ uri: captionRasterUrl }}
-                  style={styles.timelineCaptionImage}
-                  resizeMode="contain"
-                />
-              </View>
-            )}
-          </View>
-        )}
-      </Pressable>
-    );
-  };
-
   if (isLoading) {
     return (
       <ThemedView style={styles.container}>
@@ -527,12 +497,7 @@ export default function StoryEditorScreen() {
     );
   }
 
-  // Get selected shot and beat
-  const selectedShot =
-    selectedSentenceIndex !== null
-      ? getSelectedShot(session, selectedSentenceIndex)
-      : null;
-  const selectedClip = selectedShot?.selectedClip || null;
+  // Selected beat and display text for beat editor (deck is the only preview surface)
   const selectedBeat =
     selectedSentenceIndex !== null
       ? beats.find((b) => b.sentenceIndex === selectedSentenceIndex)
@@ -546,207 +511,135 @@ export default function StoryEditorScreen() {
       ? beatTexts[selectedSentenceIndex] ?? selectedBeat?.text ?? ""
       : "";
 
-  const selectedMeta =
-    selectedSentenceIndex != null ? previewByIndex[selectedSentenceIndex] : null;
+  function DeckCard({ item, index }: { item: Beat; index: number }) {
+    const shot = session ? getSelectedShot(session, item.sentenceIndex) : null;
+    const clip = shot?.selectedClip || null;
+    const meta = previewByIndex[item.sentenceIndex] ?? null;
+    const frameW = meta?.frameW ?? 1080;
+    const scaleMeta = cardW / frameW;
+    const overlayW = (meta?.rasterW ?? 0) * scaleMeta;
+    const overlayH = (meta?.rasterH ?? 0) * scaleMeta;
+    const leftPx =
+      (typeof meta?.xPx_png === "number"
+        ? meta.xPx_png
+        : (frameW - (meta?.rasterW ?? 0)) / 2) * scaleMeta;
+    const topPx = (meta?.yPx_png ?? 0) * scaleMeta;
+    const hasMeta = meta?.rasterUrl && overlayW > 0 && overlayH > 0;
 
-  const hasSsotPlacement =
-    selectedMeta &&
-    stageSize &&
-    typeof selectedMeta.rasterW === "number" &&
-    typeof selectedMeta.rasterH === "number" &&
-    typeof selectedMeta.yPx_png === "number";
-  const frameW =
-    hasSsotPlacement && typeof selectedMeta?.frameW === "number"
-      ? selectedMeta.frameW
-      : 1080;
-  const frameH =
-    hasSsotPlacement && typeof selectedMeta?.frameH === "number"
-      ? selectedMeta.frameH
-      : 1920;
-  const scale = hasSsotPlacement && stageSize ? stageSize.w / frameW : 0;
-  const overlayW = hasSsotPlacement && selectedMeta ? (selectedMeta.rasterW ?? 0) * scale : 0;
-  const overlayH = hasSsotPlacement && selectedMeta ? (selectedMeta.rasterH ?? 0) * scale : 0;
-  const leftPx =
-    hasSsotPlacement && selectedMeta
-      ? typeof selectedMeta.xPx_png === "number"
-        ? selectedMeta.xPx_png * scale
-        : ((frameW - (selectedMeta.rasterW ?? 0)) / 2) * scale
-      : 0;
-  const topPx =
-    hasSsotPlacement && selectedMeta ? (selectedMeta.yPx_png ?? 0) * scale : 0;
-  const leftClamped =
-    stageSize && overlayW > 0
-      ? Math.max(0, Math.min(leftPx, stageSize.w - overlayW))
-      : leftPx;
-  const topClamped =
-    stageSize && overlayH > 0
-      ? Math.max(0, Math.min(topPx, stageSize.h - overlayH))
-      : topPx;
+    const animatedStyle = useAnimatedStyle(() => {
+      const inputRange = [
+        (index - 1) * cardStep,
+        index * cardStep,
+        (index + 1) * cardStep,
+      ];
+      return {
+        transform: [
+          { scale: interpolate(scrollX.value, inputRange, [0.93, 1, 0.93]) },
+        ],
+      };
+    });
+
+    return (
+      <Animated.View style={[{ width: cardStep, alignItems: "center" }, animatedStyle]}>
+        <Pressable
+          style={[
+            styles.deckCard,
+            { width: cardW, height: cardH, backgroundColor: theme.backgroundSecondary },
+          ]}
+          onLongPress={() => setReplaceModalForIndex(item.sentenceIndex)}
+        >
+          {clip?.thumbUrl ? (
+            <View style={styles.deckCardInner}>
+              <Image
+                source={{ uri: clip.thumbUrl }}
+                style={[styles.deckThumbnail, { backgroundColor: theme.backgroundSecondary }]}
+                resizeMode="cover"
+              />
+              {hasMeta && (
+                <View
+                  style={{
+                    position: "absolute",
+                    left: leftPx,
+                    top: topPx,
+                    width: overlayW,
+                    height: overlayH,
+                  }}
+                  pointerEvents="none"
+                >
+                  <Image
+                    source={{ uri: meta!.rasterUrl }}
+                    style={{ width: "100%", height: "100%" }}
+                    resizeMode="stretch"
+                  />
+                </View>
+              )}
+              {isLoadingByIndex[item.sentenceIndex] && (
+                <View style={styles.deckCaptionLoading} pointerEvents="none">
+                  <ActivityIndicator size="small" color={theme.link} />
+                </View>
+              )}
+            </View>
+          ) : (
+            <View style={[styles.deckCardInner, styles.deckPlaceholder]}>
+              <Feather name="video" size={24} color={theme.tabIconDefault} />
+              <ThemedText style={styles.deckPlaceholderText}>No clip</ThemedText>
+              {hasMeta && meta?.rasterUrl && (
+                <View
+                  style={{
+                    position: "absolute",
+                    left: leftPx,
+                    top: topPx,
+                    width: overlayW,
+                    height: overlayH,
+                  }}
+                  pointerEvents="none"
+                >
+                  <Image
+                    source={{ uri: meta.rasterUrl }}
+                    style={{ width: "100%", height: "100%" }}
+                    resizeMode="stretch"
+                  />
+                </View>
+              )}
+            </View>
+          )}
+        </Pressable>
+      </Animated.View>
+    );
+  }
+
+  const renderDeckItem = ({ item, index }: { item: Beat; index: number }) => (
+    <DeckCard item={item} index={index} />
+  );
 
   return (
     <ThemedView style={styles.container}>
-      {/* Preview section */}
-      <View style={styles.previewSection}>
-        {/* Big preview of selected shot */}
-        <View style={styles.previewContainer}>
-          <View
-            style={styles.previewStage9x16}
-            onLayout={(e) => {
-              const { width, height } = e.nativeEvent.layout;
-              if (
-                width > 0 &&
-                height > 0 &&
-                (!stageSize ||
-                  Math.abs(stageSize.w - width) > 0.5 ||
-                  Math.abs(stageSize.h - height) > 0.5)
-              ) {
-                setStageSize({ w: width, h: height });
-              }
-            }}
-          >
-            {selectedClip?.thumbUrl ? (
-            <View style={styles.previewThumbnailContainer}>
-              <Image
-                source={{ uri: selectedClip.thumbUrl }}
-                style={[
-                  styles.previewThumbnail,
-                  { backgroundColor: theme.backgroundSecondary },
-                ]}
-                resizeMode="cover"
-              />
-              {selectedClip.provider && (
-                <ThemedText style={styles.providerLabel}>
-                  {selectedClip.provider}
-                </ThemedText>
-              )}
-              {/* Caption preview overlay (SSOT or fallback) */}
-              {selectedMeta && (
-                hasSsotPlacement ? (
-                  <View
-                    style={{
-                      position: "absolute",
-                      left: leftClamped,
-                      top: topClamped,
-                      width: overlayW,
-                      height: overlayH,
-                    }}
-                    pointerEvents="none"
-                  >
-                    <Image
-                      source={{ uri: selectedMeta.rasterUrl }}
-                      style={{ width: "100%", height: "100%" }}
-                      resizeMode="stretch"
-                    />
-                  </View>
-                ) : (
-                  <View style={styles.captionPreviewOverlay} pointerEvents="none">
-                    <Image
-                      source={{ uri: selectedMeta.rasterUrl }}
-                      style={styles.captionPreviewImage}
-                      resizeMode="contain"
-                    />
-                  </View>
-                )
-              )}
-              {selectedSentenceIndex !== null &&
-                isLoadingByIndex[selectedSentenceIndex] && (
-                  <View style={styles.captionPreviewOverlay} pointerEvents="none">
-                    <ActivityIndicator size="small" color={theme.link} />
-                  </View>
-                )}
-            </View>
-          ) : selectedClip ? (
-            <View
-              style={[
-                styles.previewFallback,
-                { backgroundColor: theme.backgroundSecondary },
-              ]}
-            >
-              <Feather name="video" size={32} color={theme.tabIconDefault} />
-              <ThemedText style={styles.fallbackText}>Video selected</ThemedText>
-              {/* Caption preview overlay (SSOT or fallback) */}
-              {selectedMeta && (
-                hasSsotPlacement ? (
-                  <View
-                    style={{
-                      position: "absolute",
-                      left: leftClamped,
-                      top: topClamped,
-                      width: overlayW,
-                      height: overlayH,
-                    }}
-                    pointerEvents="none"
-                  >
-                    <Image
-                      source={{ uri: selectedMeta.rasterUrl }}
-                      style={{ width: "100%", height: "100%" }}
-                      resizeMode="stretch"
-                    />
-                  </View>
-                ) : (
-                  <View style={styles.captionPreviewOverlay} pointerEvents="none">
-                    <Image
-                      source={{ uri: selectedMeta.rasterUrl }}
-                      style={styles.captionPreviewImage}
-                      resizeMode="contain"
-                    />
-                  </View>
-                )
-              )}
-              {selectedSentenceIndex !== null &&
-                isLoadingByIndex[selectedSentenceIndex] && (
-                  <View style={styles.captionPreviewOverlay} pointerEvents="none">
-                    <ActivityIndicator size="small" color={theme.link} />
-                  </View>
-                )}
-            </View>
-          ) : (
-            <View
-              style={[
-                styles.previewPlaceholder,
-                { backgroundColor: theme.backgroundDefault },
-              ]}
-            >
-              <ThemedText style={styles.placeholderText}>No clip selected</ThemedText>
-              {/* Caption preview overlay (SSOT or fallback) */}
-              {selectedMeta && (
-                hasSsotPlacement ? (
-                  <View
-                    style={{
-                      position: "absolute",
-                      left: leftClamped,
-                      top: topClamped,
-                      width: overlayW,
-                      height: overlayH,
-                    }}
-                    pointerEvents="none"
-                  >
-                    <Image
-                      source={{ uri: selectedMeta.rasterUrl }}
-                      style={{ width: "100%", height: "100%" }}
-                      resizeMode="stretch"
-                    />
-                  </View>
-                ) : (
-                  <View style={styles.captionPreviewOverlay} pointerEvents="none">
-                    <Image
-                      source={{ uri: selectedMeta.rasterUrl }}
-                      style={styles.captionPreviewImage}
-                      resizeMode="contain"
-                    />
-                  </View>
-                )
-              )}
-              {selectedSentenceIndex !== null &&
-                isLoadingByIndex[selectedSentenceIndex] && (
-                  <View style={styles.captionPreviewOverlay} pointerEvents="none">
-                    <ActivityIndicator size="small" color={theme.link} />
-                  </View>
-                )}
-            </View>
-          )}
-          </View>
-        </View>
+      {/* Deck: center card is the stage */}
+      <View style={styles.deckSection}>
+        <Animated.FlatList
+          ref={deckListRef as React.RefObject<Animated.FlatList<Beat>>}
+          data={beats}
+          renderItem={renderDeckItem}
+          keyExtractor={(item) => `beat-${item.sentenceIndex}`}
+          horizontal
+          snapToInterval={cardStep}
+          decelerationRate="fast"
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={{ paddingHorizontal: (windowWidth - cardW) / 2 }}
+          extraData={{ previewByIndex, selectedSentenceIndex }}
+          removeClippedSubviews={false}
+          onScroll={onDeckScroll}
+          scrollEventThrottle={16}
+          onMomentumScrollEnd={(e) => {
+            const offsetX = e.nativeEvent.contentOffset.x;
+            const index = Math.round(offsetX / cardStep);
+            const clamped = Math.max(0, Math.min(index, beats.length - 1));
+            selectionFromDeckRef.current = true;
+            setSelectedSentenceIndex(beats[clamped].sentenceIndex);
+          }}
+          keyboardShouldPersistTaps="handled"
+          keyboardDismissMode="on-drag"
+        />
       </View>
 
       {/* Beat editor */}
@@ -802,23 +695,6 @@ export default function StoryEditorScreen() {
           </View>
         </KeyboardAvoidingView>
       )}
-
-      {/* Timeline section */}
-      <View style={[styles.timelineSection, { 
-        borderTopColor: theme.backgroundTertiary,
-      }]}>
-        <FlatList
-          data={beats}
-          renderItem={renderTimelineItem}
-          keyExtractor={(item) => `beat-${item.sentenceIndex}`}
-          extraData={{ previewByIndex, selectedSentenceIndex }}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.timelineContent}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-        />
-      </View>
 
       {/* Render Button */}
       <View style={[styles.renderButtonContainer, { paddingBottom: tabBarHeight }]}>
@@ -945,80 +821,40 @@ const styles = StyleSheet.create({
     opacity: 0.7,
     textAlign: "center",
   },
-  previewSection: {
+  deckSection: {
     flex: 1,
-    padding: Spacing.sm,
-    gap: Spacing.md,
+    overflow: "visible" as const,
   },
-  previewContainer: {
-    flex: 1,
-    alignItems: "center",
-  },
-  previewStage9x16: {
-    flex: 1,
-    maxWidth: "100%",
-    alignSelf: "center",
-    aspectRatio: 9 / 16,
-    overflow: "hidden",
-    position: "relative",
-  },
-  previewThumbnailContainer: {
-    flex: 1,
-    width: "100%",
+  deckCard: {
     borderRadius: 12,
     overflow: "hidden",
     position: "relative",
   },
-  previewThumbnail: {
-    flex: 1,
+  deckCardInner: {
     width: "100%",
+    height: "100%",
+    position: "relative",
   },
-  captionPreviewOverlay: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    alignItems: "center",
-    justifyContent: "flex-end",
-    minHeight: 80,
-    height: "45%",
-    zIndex: 10,
-    elevation: 10,
-  },
-  captionPreviewImage: {
+  deckThumbnail: {
     width: "100%",
     height: "100%",
   },
-  previewFallback: {
-    flex: 1,
-    width: "100%",
-    borderRadius: 12,
-    overflow: "hidden",
+  deckPlaceholder: {
     alignItems: "center",
     justifyContent: "center",
-    position: "relative",
   },
-  previewPlaceholder: {
-    flex: 1,
-    width: "100%",
-    borderRadius: 12,
-    overflow: "hidden",
-    alignItems: "center",
-    justifyContent: "center",
-    position: "relative",
-  },
-  providerLabel: {
+  deckPlaceholderText: {
     fontSize: 12,
     opacity: 0.7,
-    textTransform: "capitalize",
+    marginTop: 4,
   },
-  fallbackText: {
-    fontSize: 14,
-    opacity: 0.7,
-  },
-  placeholderText: {
-    fontSize: 14,
-    opacity: 0.6,
+  deckCaptionLoading: {
+    position: "absolute",
+    bottom: 8,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+    justifyContent: "center",
   },
   beatLabel: {
     fontSize: 14,
@@ -1043,50 +879,6 @@ const styles = StyleSheet.create({
     position: "absolute",
     top: Spacing.sm,
     right: Spacing.sm,
-  },
-  timelineSection: {
-    borderTopWidth: 1,
-  },
-  timelineContent: {
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    gap: Spacing.sm,
-  },
-  timelineItem: {
-    width: 100,
-    height: 100,
-    borderRadius: 8,
-    overflow: "hidden",
-    marginRight: Spacing.sm,
-  },
-  timelineThumbnailWrapper: {
-    width: "100%",
-    height: "100%",
-    position: "relative",
-    borderRadius: 8,
-  },
-  timelineThumbnail: {
-    width: "100%",
-    height: "100%",
-    borderRadius: 8,
-  },
-  timelinePlaceholder: {
-    alignItems: "center",
-    justifyContent: "center",
-    position: "relative",
-  },
-  timelineCaptionOverlay: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    alignItems: "center",
-    justifyContent: "flex-end",
-    height: "50%",
-  },
-  timelineCaptionImage: {
-    width: "100%",
-    height: "100%",
   },
   modalOverlay: {
     flex: 1,
