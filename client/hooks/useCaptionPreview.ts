@@ -31,6 +31,11 @@ export interface UseCaptionPreviewOptions {
   style?: CaptionPreviewStyle;
 }
 
+export interface PrefetchBeat {
+  sentenceIndex: number;
+  text: string;
+}
+
 export function useCaptionPreview(
   _sessionId: string | undefined,
   selectedSentenceIndex: number | null
@@ -42,17 +47,16 @@ export function useCaptionPreview(
   const debounceTimersRef = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
   const abortControllersRef = useRef<Record<number, AbortController>>({});
 
-  const requestPreview = useCallback(
+  const doOneRequest = useCallback(
     (
       sentenceIndex: number,
       text: string,
       options: UseCaptionPreviewOptions = {}
-    ) => {
+    ): Promise<void> => {
       const { placement = "center", style } = options;
       const trimmed = text?.trim() ?? "";
       const cacheKey = hashStyleAndText(style, placement, trimmed);
 
-      // Check cache (TTL 60s)
       const now = Date.now();
       const cached = cacheRef.current.get(cacheKey);
       if (cached && cached.expiresAt > now) {
@@ -60,10 +64,58 @@ export function useCaptionPreview(
           if (prev[sentenceIndex] === cached.rasterUrl) return prev;
           return { ...prev, [sentenceIndex]: cached.rasterUrl };
         });
-        return;
+        return Promise.resolve();
       }
 
-      // Debounce: clear existing timer for this beat
+      const prevController = abortControllersRef.current[sentenceIndex];
+      if (prevController) {
+        prevController.abort();
+      }
+      const controller = new AbortController();
+      abortControllersRef.current[sentenceIndex] = controller;
+
+      setIsLoadingByIndex((prev) => ({ ...prev, [sentenceIndex]: true }));
+
+      const body = buildCaptionPreviewPayload({
+        text: trimmed || " ",
+        placement,
+        style,
+        frameW: 1080,
+        frameH: 1920,
+      });
+
+      return captionPreview(body, { signal: controller.signal, timeoutMs: 10_000 })
+        .then((result) => {
+          if (controller.signal.aborted) return;
+          if (!result.ok || !result.data?.meta?.rasterUrl) {
+            setIsLoadingByIndex((prev) => ({ ...prev, [sentenceIndex]: false }));
+            return;
+          }
+          const rasterUrl = result.data.meta.rasterUrl as string;
+          cacheRef.current.set(cacheKey, {
+            rasterUrl,
+            expiresAt: Date.now() + CACHE_TTL_MS,
+          });
+          setPreviewByIndex((prev) => ({ ...prev, [sentenceIndex]: rasterUrl }));
+          setIsLoadingByIndex((prev) => ({ ...prev, [sentenceIndex]: false }));
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) {
+            setIsLoadingByIndex((prev) => ({ ...prev, [sentenceIndex]: false }));
+          }
+        });
+    },
+    []
+  );
+
+  const requestPreview = useCallback(
+    (
+      sentenceIndex: number,
+      text: string,
+      options: UseCaptionPreviewOptions = {}
+    ) => {
+      const trimmed = text?.trim() ?? "";
+
       const existingTimer = debounceTimersRef.current[sentenceIndex];
       if (existingTimer) {
         clearTimeout(existingTimer);
@@ -72,53 +124,34 @@ export function useCaptionPreview(
 
       debounceTimersRef.current[sentenceIndex] = setTimeout(() => {
         debounceTimersRef.current[sentenceIndex] = undefined;
-
-        // Abort previous in-flight request for this beat
-        const prevController = abortControllersRef.current[sentenceIndex];
-        if (prevController) {
-          prevController.abort();
-        }
-        const controller = new AbortController();
-        abortControllersRef.current[sentenceIndex] = controller;
-
-        setIsLoadingByIndex((prev) => ({ ...prev, [sentenceIndex]: true }));
-
-        const body = buildCaptionPreviewPayload({
-          text: trimmed || " ",
-          placement,
-          style,
-          frameW: 1080,
-          frameH: 1920,
-        });
-
-        captionPreview(body, { signal: controller.signal, timeoutMs: 10_000 })
-          .then((result) => {
-            if (controller.signal.aborted) return;
-            if (!result.ok || !result.data?.meta?.rasterUrl) {
-              setIsLoadingByIndex((prev) => ({ ...prev, [sentenceIndex]: false }));
-              return;
-            }
-            const rasterUrl = result.data.meta.rasterUrl as string;
-            cacheRef.current.set(cacheKey, {
-              rasterUrl,
-              expiresAt: now + CACHE_TTL_MS,
-            });
-            setPreviewByIndex((prev) => ({ ...prev, [sentenceIndex]: rasterUrl }));
-            setIsLoadingByIndex((prev) => ({ ...prev, [sentenceIndex]: false }));
-          })
-          .catch(() => {
-            if (!controller.signal.aborted) {
-              setIsLoadingByIndex((prev) => ({ ...prev, [sentenceIndex]: false }));
-            }
-          });
+        doOneRequest(sentenceIndex, trimmed, options);
       }, DEBOUNCE_MS);
     },
-    []
+    [doOneRequest]
+  );
+
+  const prefetchAllBeats = useCallback(
+    async (
+      beats: PrefetchBeat[],
+      opts?: { delayBetweenMs?: number }
+    ): Promise<void> => {
+      const delayBetweenMs = opts?.delayBetweenMs ?? 120;
+      for (const beat of beats) {
+        try {
+          await doOneRequest(beat.sentenceIndex, beat.text, { placement: "center" });
+        } catch {
+          // continue to next beat
+        }
+        await new Promise((r) => setTimeout(r, delayBetweenMs));
+      }
+    },
+    [doOneRequest]
   );
 
   return {
     previewByIndex,
     isLoadingByIndex,
     requestPreview,
+    prefetchAllBeats,
   };
 }

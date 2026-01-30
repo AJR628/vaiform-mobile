@@ -129,12 +129,11 @@ export default function StoryEditorScreen() {
   const [isRendering, setIsRendering] = useState(false);
   const [showRenderingModal, setShowRenderingModal] = useState(false);
 
-  const { previewByIndex, isLoadingByIndex, requestPreview } = useCaptionPreview(
-    sessionId,
-    selectedSentenceIndex
-  );
+  const { previewByIndex, isLoadingByIndex, requestPreview, prefetchAllBeats } =
+    useCaptionPreview(sessionId, selectedSentenceIndex);
 
   const loggedRef = useRef(false);
+  const prefetchDoneForSessionRef = useRef<string | null>(null);
   const shouldRefreshRef = useRef(false);
   const textInputRef = useRef<TextInput>(null);
   const savingRef = useRef<number | null>(null);
@@ -262,6 +261,14 @@ export default function StoryEditorScreen() {
     if (selectedSentenceIndex === null || !sessionId) return;
     requestPreview(selectedSentenceIndex, selectedText, { placement: "center" });
   }, [selectedSentenceIndex, sessionId, selectedText, requestPreview]);
+
+  // Prefetch caption previews for all beats once per session (no taps)
+  useEffect(() => {
+    if (!sessionId || beats.length === 0) return;
+    if (prefetchDoneForSessionRef.current === sessionId) return;
+    prefetchDoneForSessionRef.current = sessionId;
+    prefetchAllBeats(beats, { delayBetweenMs: 120 });
+  }, [sessionId, beats, prefetchAllBeats]);
 
   // Set header right button
   useLayoutEffect(() => {
