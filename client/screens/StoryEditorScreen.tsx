@@ -737,10 +737,12 @@ export default function StoryEditorScreen() {
         />
       </View>
 
-      {/* Beat editor + Render button: single KAV so both rise above keyboard */}
+      {/* Beat editor + Render button: single KAV so both rise above keyboard.
+          iOS "position" moves editor up without stealing layout height from deckSection;
+          "padding" would shrink flex:1 deckSection -> smaller deckAreaH -> cardH shrink -> deck collapses. */}
       <KeyboardAvoidingView
         style={styles.beatEditorKav}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        behavior={Platform.OS === "ios" ? "position" : undefined}
         keyboardVerticalOffset={headerHeight}
       >
         {selectedBeat && (
@@ -751,8 +753,7 @@ export default function StoryEditorScreen() {
               </ThemedText>
               <Pressable
                 onPress={() => {
-                  textInputRef.current?.blur();
-                  Keyboard.dismiss();
+                  handleSaveBeat(selectedBeat.sentenceIndex, "submit", draftText);
                 }}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 style={({ pressed }) => [
