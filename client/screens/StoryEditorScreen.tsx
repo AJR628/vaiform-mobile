@@ -27,6 +27,7 @@ import {
   RouteProp,
   useFocusEffect,
 } from "@react-navigation/native";
+import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { ThemedView } from "@/components/ThemedView";
@@ -251,6 +252,7 @@ export default function StoryEditorScreen() {
   const { userProfile, refreshCredits } = useAuth();
   const credits = userProfile?.credits ?? 0;
   const canRender = credits >= 20;
+  const headerHeight = useHeaderHeight();
   const tabBarHeight = useBottomTabBarHeight();
 
   const [session, setSession] = useState<StorySession | null>(null);
@@ -735,17 +737,34 @@ export default function StoryEditorScreen() {
         />
       </View>
 
-      {/* Beat editor */}
-      {selectedBeat && (
-        <KeyboardAvoidingView
-          style={styles.beatEditorKav}
-          behavior={Platform.OS === "ios" ? "position" : "height"}
-          keyboardVerticalOffset={0}
-        >
+      {/* Beat editor + Render button: single KAV so both rise above keyboard */}
+      <KeyboardAvoidingView
+        style={styles.beatEditorKav}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        keyboardVerticalOffset={headerHeight}
+      >
+        {selectedBeat && (
           <View style={styles.inputContainer}>
-            <ThemedText style={styles.beatLabel}>
-              Beat {selectedBeat.sentenceIndex + 1}
-            </ThemedText>
+            <View style={styles.beatLabelRow}>
+              <ThemedText style={styles.beatLabel}>
+                Beat {selectedBeat.sentenceIndex + 1}
+              </ThemedText>
+              <Pressable
+                onPress={() => {
+                  textInputRef.current?.blur();
+                  Keyboard.dismiss();
+                }}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={({ pressed }) => [
+                  styles.doneButton,
+                  { opacity: pressed ? 0.7 : 1 },
+                ]}
+              >
+                <ThemedText style={[styles.doneButtonText, { color: theme.link }]}>
+                  Done
+                </ThemedText>
+              </Pressable>
+            </View>
             <TextInput
               ref={textInputRef}
               style={[
@@ -785,32 +804,32 @@ export default function StoryEditorScreen() {
               </View>
             )}
           </View>
-        </KeyboardAvoidingView>
-      )}
+        )}
 
-      {/* Render Button */}
-      <View style={[styles.renderButtonContainer, { paddingBottom: tabBarHeight }]}>
-        <Pressable
-          style={[
-            styles.renderButton,
-            {
-              backgroundColor: canRender && !isRendering ? theme.link : theme.backgroundTertiary,
-              opacity: canRender && !isRendering ? 1 : 0.5,
-            },
-          ]}
-          onPress={handleRender}
-          disabled={isRendering || !canRender}
-        >
-          <ThemedText
+        {/* Render Button */}
+        <View style={[styles.renderButtonContainer, { paddingBottom: tabBarHeight }]}>
+          <Pressable
             style={[
-              styles.renderButtonText,
-              { color: canRender && !isRendering ? theme.buttonText : theme.text },
+              styles.renderButton,
+              {
+                backgroundColor: canRender && !isRendering ? theme.link : theme.backgroundTertiary,
+                opacity: canRender && !isRendering ? 1 : 0.5,
+              },
             ]}
+            onPress={handleRender}
+            disabled={isRendering || !canRender}
           >
-            {isRendering ? "Rendering..." : "Render"}
-          </ThemedText>
-        </Pressable>
-      </View>
+            <ThemedText
+              style={[
+                styles.renderButtonText,
+                { color: canRender && !isRendering ? theme.buttonText : theme.text },
+              ]}
+            >
+              {isRendering ? "Rendering..." : "Render"}
+            </ThemedText>
+          </Pressable>
+        </View>
+      </KeyboardAvoidingView>
 
       {/* Rendering Modal */}
       <Modal
@@ -948,11 +967,24 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  beatLabelRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: Spacing.sm,
+  },
   beatLabel: {
     fontSize: 14,
     fontWeight: "600",
-    marginBottom: Spacing.sm,
     opacity: 0.8,
+  },
+  doneButton: {
+    paddingVertical: Spacing.xs,
+    paddingHorizontal: Spacing.sm,
+  },
+  doneButtonText: {
+    fontSize: 14,
+    fontWeight: "600",
   },
   beatEditorKav: {
     flexShrink: 0,
