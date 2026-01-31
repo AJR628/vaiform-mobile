@@ -489,6 +489,44 @@ export default function StoryEditorScreen() {
     });
   }, [navigation, theme.text, selectedSentenceIndex, sessionId]);
 
+  // Deck FlatList memoization — must be before any early return (Rules of Hooks)
+  const flatListExtraData = useMemo(
+    () => ({ previewByIndex, selectedSentenceIndex, isLoadingByIndex }),
+    [previewByIndex, selectedSentenceIndex, isLoadingByIndex]
+  );
+
+  const renderDeckItem = useCallback(
+    ({ item, index }: { item: Beat; index: number }) => (
+      <DeckCard
+        item={item}
+        index={index}
+        session={session}
+        meta={previewByIndex[item.sentenceIndex] ?? null}
+        isLoading={isLoadingByIndex[item.sentenceIndex] ?? false}
+        cardW={cardW}
+        cardH={cardH}
+        cardStep={cardStep}
+        scrollX={scrollX}
+        onLongPress={setReplaceModalForIndex}
+        backgroundSecondary={theme.backgroundSecondary}
+        tabIconDefault={theme.tabIconDefault}
+        link={theme.link}
+      />
+    ),
+    [
+      session,
+      previewByIndex,
+      isLoadingByIndex,
+      cardW,
+      cardH,
+      cardStep,
+      scrollX,
+      theme.backgroundSecondary,
+      theme.tabIconDefault,
+      theme.link,
+    ]
+  );
+
   const handleSaveBeat = async (
     sentenceIndex: number,
     _source?: "submit" | "blur",
@@ -666,43 +704,6 @@ export default function StoryEditorScreen() {
     selectedSentenceIndex !== null
       ? savingByIndex[selectedSentenceIndex] || false
       : false;
-
-  const flatListExtraData = useMemo(
-    () => ({ previewByIndex, selectedSentenceIndex, isLoadingByIndex }),
-    [previewByIndex, selectedSentenceIndex, isLoadingByIndex]
-  );
-
-  const renderDeckItem = useCallback(
-    ({ item, index }: { item: Beat; index: number }) => (
-      <DeckCard
-        item={item}
-        index={index}
-        session={session}
-        meta={previewByIndex[item.sentenceIndex] ?? null}
-        isLoading={isLoadingByIndex[item.sentenceIndex] ?? false}
-        cardW={cardW}
-        cardH={cardH}
-        cardStep={cardStep}
-        scrollX={scrollX}
-        onLongPress={setReplaceModalForIndex}
-        backgroundSecondary={theme.backgroundSecondary}
-        tabIconDefault={theme.tabIconDefault}
-        link={theme.link}
-      />
-    ),
-    [
-      session,
-      previewByIndex,
-      isLoadingByIndex,
-      cardW,
-      cardH,
-      cardStep,
-      scrollX,
-      theme.backgroundSecondary,
-      theme.tabIconDefault,
-      theme.link,
-    ]
-  );
 
   return (
     <ThemedView style={styles.container}>
