@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import { Colors } from "@/constants/theme";
 import { useColorScheme } from "@/hooks/useColorScheme";
 
@@ -14,16 +15,20 @@ export interface ExtendedTheme extends BaseTheme {
 export function useTheme() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
-  const baseTheme = Colors[colorScheme ?? "light"];
 
-  // Add semantic aliases
-  const theme: ExtendedTheme = {
-    ...baseTheme,
-    textPrimary: baseTheme.text,
-    textSecondary: baseTheme.tabIconDefault,
-    textTertiary: baseTheme.tabIconDefault,
-    primary: baseTheme.link,
-  };
+  const theme = useMemo<ExtendedTheme>(
+    () => {
+      const baseTheme = Colors[colorScheme ?? "light"];
+      return {
+        ...baseTheme,
+        textPrimary: baseTheme.text,
+        textSecondary: baseTheme.tabIconDefault,
+        textTertiary: baseTheme.tabIconDefault,
+        primary: baseTheme.link,
+      };
+    },
+    [colorScheme]
+  );
 
   return {
     theme,

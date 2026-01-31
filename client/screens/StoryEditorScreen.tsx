@@ -38,8 +38,9 @@ import { useCaptionPreview } from "@/hooks/useCaptionPreview";
 import { useToast } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Spacing } from "@/constants/theme";
-import { storyGet, storyUpdateBeatText, storyFinalize } from "@/api/client";
+import { storyGet, storyUpdateBeatText, storyFinalize, type CaptionPreviewMeta } from "@/api/client";
 import { Linking } from "react-native";
+import type { SharedValue } from "react-native-reanimated";
 import type { StorySession } from "@/types/story";
 
 type StoryEditorRouteProp = RouteProp<HomeStackParamList, "StoryEditor">;
@@ -109,6 +110,132 @@ function getSelectedShot(session: any, sentenceIndex: number): any | null {
 
   return null;
 }
+
+interface DeckCardProps {
+  item: Beat;
+  index: number;
+  session: StorySession | null;
+  meta: CaptionPreviewMeta | null;
+  isLoading: boolean;
+  cardW: number;
+  cardH: number;
+  cardStep: number;
+  scrollX: SharedValue<number>;
+  onLongPress: (sentenceIndex: number) => void;
+  backgroundSecondary: string;
+  tabIconDefault: string;
+  link: string;
+}
+
+const DeckCard = React.memo(function DeckCard({
+  item,
+  index,
+  session,
+  meta,
+  isLoading,
+  cardW,
+  cardH,
+  cardStep,
+  scrollX,
+  onLongPress,
+  backgroundSecondary,
+  tabIconDefault,
+  link,
+}: DeckCardProps) {
+  const shot = session ? getSelectedShot(session, item.sentenceIndex) : null;
+  const clip = shot?.selectedClip || null;
+  const frameW = meta?.frameW ?? 1080;
+  const scaleMeta = cardW / frameW;
+  const overlayW = (meta?.rasterW ?? 0) * scaleMeta;
+  const overlayH = (meta?.rasterH ?? 0) * scaleMeta;
+  const leftPx =
+    (typeof meta?.xPx_png === "number"
+      ? meta.xPx_png
+      : (frameW - (meta?.rasterW ?? 0)) / 2) * scaleMeta;
+  const topPx = (meta?.yPx_png ?? 0) * scaleMeta;
+  const hasMeta = meta?.rasterUrl && overlayW > 0 && overlayH > 0;
+
+  const animatedStyle = useAnimatedStyle(() => {
+    const inputRange = [
+      (index - 1) * cardStep,
+      index * cardStep,
+      (index + 1) * cardStep,
+    ];
+    return {
+      transform: [
+        { scale: interpolate(scrollX.value, inputRange, [0.93, 1, 0.93]) },
+      ],
+    };
+  });
+
+  return (
+    <Animated.View style={[{ width: cardStep, alignItems: "center" }, animatedStyle]}>
+      <Pressable
+        style={[
+          styles.deckCard,
+          { width: cardW, height: cardH, backgroundColor: backgroundSecondary },
+        ]}
+        onLongPress={() => onLongPress(item.sentenceIndex)}
+      >
+        {clip?.thumbUrl ? (
+          <View style={styles.deckCardInner}>
+            <Image
+              source={{ uri: clip.thumbUrl }}
+              style={[styles.deckThumbnail, { backgroundColor: backgroundSecondary }]}
+              resizeMode="cover"
+            />
+            {hasMeta && (
+              <View
+                style={{
+                  position: "absolute",
+                  left: leftPx,
+                  top: topPx,
+                  width: overlayW,
+                  height: overlayH,
+                }}
+                pointerEvents="none"
+              >
+                <Image
+                  source={{ uri: meta!.rasterUrl }}
+                  style={{ width: "100%", height: "100%" }}
+                  resizeMode="stretch"
+                />
+              </View>
+            )}
+            {isLoading && (
+              <View style={styles.deckCaptionLoading} pointerEvents="none">
+                <ActivityIndicator size="small" color={link} />
+              </View>
+            )}
+          </View>
+        ) : (
+          <View style={[styles.deckCardInner, styles.deckPlaceholder]}>
+            <Feather name="video" size={24} color={tabIconDefault} />
+            <ThemedText style={styles.deckPlaceholderText}>No clip</ThemedText>
+            {hasMeta && meta?.rasterUrl && (
+              <View
+                style={{
+                  position: "absolute",
+                  left: leftPx,
+                  top: topPx,
+                  width: overlayW,
+                  height: overlayH,
+                }}
+                pointerEvents="none"
+              >
+                <Image
+                  source={{ uri: meta.rasterUrl }}
+                  style={{ width: "100%", height: "100%" }}
+                  resizeMode="stretch"
+                />
+              </View>
+            )}
+          </View>
+        )}
+      </Pressable>
+    </Animated.View>
+  );
+});
 
 type StoryEditorNavProp = NativeStackNavigationProp<
   HomeStackParamList,
@@ -540,105 +667,41 @@ export default function StoryEditorScreen() {
       ? savingByIndex[selectedSentenceIndex] || false
       : false;
 
-  function DeckCard({ item, index }: { item: Beat; index: number }) {
-    const shot = session ? getSelectedShot(session, item.sentenceIndex) : null;
-    const clip = shot?.selectedClip || null;
-    const meta = previewByIndex[item.sentenceIndex] ?? null;
-    const frameW = meta?.frameW ?? 1080;
-    const scaleMeta = cardW / frameW;
-    const overlayW = (meta?.rasterW ?? 0) * scaleMeta;
-    const overlayH = (meta?.rasterH ?? 0) * scaleMeta;
-    const leftPx =
-      (typeof meta?.xPx_png === "number"
-        ? meta.xPx_png
-        : (frameW - (meta?.rasterW ?? 0)) / 2) * scaleMeta;
-    const topPx = (meta?.yPx_png ?? 0) * scaleMeta;
-    const hasMeta = meta?.rasterUrl && overlayW > 0 && overlayH > 0;
+  const flatListExtraData = useMemo(
+    () => ({ previewByIndex, selectedSentenceIndex, isLoadingByIndex }),
+    [previewByIndex, selectedSentenceIndex, isLoadingByIndex]
+  );
 
-    const animatedStyle = useAnimatedStyle(() => {
-      const inputRange = [
-        (index - 1) * cardStep,
-        index * cardStep,
-        (index + 1) * cardStep,
-      ];
-      return {
-        transform: [
-          { scale: interpolate(scrollX.value, inputRange, [0.93, 1, 0.93]) },
-        ],
-      };
-    });
-
-    return (
-      <Animated.View style={[{ width: cardStep, alignItems: "center" }, animatedStyle]}>
-        <Pressable
-          style={[
-            styles.deckCard,
-            { width: cardW, height: cardH, backgroundColor: theme.backgroundSecondary },
-          ]}
-          onLongPress={() => setReplaceModalForIndex(item.sentenceIndex)}
-        >
-          {clip?.thumbUrl ? (
-            <View style={styles.deckCardInner}>
-              <Image
-                source={{ uri: clip.thumbUrl }}
-                style={[styles.deckThumbnail, { backgroundColor: theme.backgroundSecondary }]}
-                resizeMode="cover"
-              />
-              {hasMeta && (
-                <View
-                  style={{
-                    position: "absolute",
-                    left: leftPx,
-                    top: topPx,
-                    width: overlayW,
-                    height: overlayH,
-                  }}
-                  pointerEvents="none"
-                >
-                  <Image
-                    source={{ uri: meta!.rasterUrl }}
-                    style={{ width: "100%", height: "100%" }}
-                    resizeMode="stretch"
-                  />
-                </View>
-              )}
-              {isLoadingByIndex[item.sentenceIndex] && (
-                <View style={styles.deckCaptionLoading} pointerEvents="none">
-                  <ActivityIndicator size="small" color={theme.link} />
-                </View>
-              )}
-            </View>
-          ) : (
-            <View style={[styles.deckCardInner, styles.deckPlaceholder]}>
-              <Feather name="video" size={24} color={theme.tabIconDefault} />
-              <ThemedText style={styles.deckPlaceholderText}>No clip</ThemedText>
-              {hasMeta && meta?.rasterUrl && (
-                <View
-                  style={{
-                    position: "absolute",
-                    left: leftPx,
-                    top: topPx,
-                    width: overlayW,
-                    height: overlayH,
-                  }}
-                  pointerEvents="none"
-                >
-                  <Image
-                    source={{ uri: meta.rasterUrl }}
-                    style={{ width: "100%", height: "100%" }}
-                    resizeMode="stretch"
-                  />
-                </View>
-              )}
-            </View>
-          )}
-        </Pressable>
-      </Animated.View>
-    );
-  }
-
-  const renderDeckItem = ({ item, index }: { item: Beat; index: number }) => (
-    <DeckCard item={item} index={index} />
+  const renderDeckItem = useCallback(
+    ({ item, index }: { item: Beat; index: number }) => (
+      <DeckCard
+        item={item}
+        index={index}
+        session={session}
+        meta={previewByIndex[item.sentenceIndex] ?? null}
+        isLoading={isLoadingByIndex[item.sentenceIndex] ?? false}
+        cardW={cardW}
+        cardH={cardH}
+        cardStep={cardStep}
+        scrollX={scrollX}
+        onLongPress={setReplaceModalForIndex}
+        backgroundSecondary={theme.backgroundSecondary}
+        tabIconDefault={theme.tabIconDefault}
+        link={theme.link}
+      />
+    ),
+    [
+      session,
+      previewByIndex,
+      isLoadingByIndex,
+      cardW,
+      cardH,
+      cardStep,
+      scrollX,
+      theme.backgroundSecondary,
+      theme.tabIconDefault,
+      theme.link,
+    ]
   );
 
   return (
@@ -655,7 +718,7 @@ export default function StoryEditorScreen() {
           decelerationRate="fast"
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={{ paddingHorizontal: (windowWidth - cardW) / 2 }}
-          extraData={{ previewByIndex, selectedSentenceIndex }}
+          extraData={flatListExtraData}
           removeClippedSubviews={false}
           onScroll={onDeckScroll}
           scrollEventThrottle={16}
