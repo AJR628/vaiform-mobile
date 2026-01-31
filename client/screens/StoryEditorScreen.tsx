@@ -9,7 +9,6 @@ import {
   Pressable,
   Modal,
   Keyboard,
-  KeyboardAvoidingView,
   Platform,
   useWindowDimensions,
   type LayoutChangeEvent,
@@ -27,7 +26,6 @@ import {
   RouteProp,
   useFocusEffect,
 } from "@react-navigation/native";
-import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { ThemedView } from "@/components/ThemedView";
@@ -252,7 +250,6 @@ export default function StoryEditorScreen() {
   const { userProfile, refreshCredits } = useAuth();
   const credits = userProfile?.credits ?? 0;
   const canRender = credits >= 20;
-  const headerHeight = useHeaderHeight();
   const tabBarHeight = useBottomTabBarHeight();
 
   const [session, setSession] = useState<StorySession | null>(null);
@@ -265,6 +262,9 @@ export default function StoryEditorScreen() {
   const [replaceModalForIndex, setReplaceModalForIndex] = useState<number | null>(null);
   const [isRendering, setIsRendering] = useState(false);
   const [showRenderingModal, setShowRenderingModal] = useState(false);
+  const [keyboardVisible, setKeyboardVisible] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [editorH, setEditorH] = useState(120);
 
   const { previewByIndex, isLoadingByIndex, requestPreview, prefetchAllBeats } =
     useCaptionPreview(sessionId, selectedSentenceIndex);
@@ -285,6 +285,7 @@ export default function StoryEditorScreen() {
   const selectionFromDeckRef = useRef(false);
   const deckAreaHRef = useRef(0);
   const isEditingRef = useRef(false);
+  const editorHRef = useRef(120);
 
   const [deckAreaH, setDeckAreaH] = useState(0);
   const [draftText, setDraftText] = useState("");
@@ -462,6 +463,24 @@ export default function StoryEditorScreen() {
     if (index < 0) return;
     deckListRef.current?.scrollToOffset({ offset: index * cardStep, animated: true });
   }, [selectedSentenceIndex, beats, cardStep]);
+
+  // Explicit keyboard height (no KAV): pin editor flush to keyboard, reserve only editor height for hero
+  useEffect(() => {
+    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const subShow = Keyboard.addListener(showEvent, (e) => {
+      setKeyboardVisible(true);
+      setKeyboardHeight(e.endCoordinates?.height ?? 0);
+    });
+    const subHide = Keyboard.addListener(hideEvent, () => {
+      setKeyboardVisible(false);
+      setKeyboardHeight(0);
+    });
+    return () => {
+      subShow.remove();
+      subHide.remove();
+    };
+  }, []);
 
   // Set header right button
   useLayoutEffect(() => {
@@ -708,7 +727,7 @@ export default function StoryEditorScreen() {
       : false;
 
   return (
-    <ThemedView style={styles.container}>
+    <ThemedView style={[styles.container, keyboardVisible && { paddingBottom: editorH }]}>
       {/* Deck: center card is the stage */}
       <View style={styles.deckSection} onLayout={onDeckLayout}>
         <Animated.FlatList
@@ -737,17 +756,28 @@ export default function StoryEditorScreen() {
         />
       </View>
 
-      {/* Beat editor + Render button: single KAV so both rise above keyboard.
-          iOS "position" moves editor up without stealing layout height from deckSection;
-          "padding" would shrink flex:1 deckSection -> smaller deckAreaH -> cardH shrink -> deck collapses. */}
-      <KeyboardAvoidingView
-        style={styles.beatEditorKav}
-        behavior={Platform.OS === "ios" ? "position" : undefined}
-        keyboardVerticalOffset={headerHeight}
-      >
-        {selectedBeat && (
-          <View style={styles.inputContainer}>
-            <View style={styles.beatLabelRow}>
+      {/* Beat editor: explicit keyboard positioning (no KAV); flush to keyboard when open */}
+      {selectedBeat && (
+        <View
+          style={[
+            styles.inputContainer,
+            keyboardVisible && {
+              position: "absolute",
+              left: 0,
+              right: 0,
+              bottom: keyboardHeight,
+              zIndex: 50,
+            },
+          ]}
+          onLayout={(e) => {
+            const h = e.nativeEvent.layout.height;
+            if (Math.abs(h - editorHRef.current) >= 2) {
+              editorHRef.current = h;
+              setEditorH(h);
+            }
+          }}
+        >
+          <View style={styles.beatLabelRow}>
               <ThemedText style={styles.beatLabel}>
                 Beat {selectedBeat.sentenceIndex + 1}
               </ThemedText>
@@ -807,7 +837,8 @@ export default function StoryEditorScreen() {
           </View>
         )}
 
-        {/* Render Button */}
+      {/* Render Button: hidden while keyboard open so it does not move into preview */}
+      {!keyboardVisible && (
         <View style={[styles.renderButtonContainer, { paddingBottom: tabBarHeight }]}>
           <Pressable
             style={[
@@ -830,7 +861,7 @@ export default function StoryEditorScreen() {
             </ThemedText>
           </Pressable>
         </View>
-      </KeyboardAvoidingView>
+      )}
 
       {/* Rendering Modal */}
       <Modal
@@ -986,9 +1017,6 @@ const styles = StyleSheet.create({
   doneButtonText: {
     fontSize: 14,
     fontWeight: "600",
-  },
-  beatEditorKav: {
-    flexShrink: 0,
   },
   inputContainer: {
     position: "relative",
