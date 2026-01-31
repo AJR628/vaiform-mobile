@@ -288,6 +288,7 @@ export default function StoryEditorScreen() {
   const editorHRef = useRef(120);
   const keyboardVisibleRef = useRef(false);
   const editorTranslateY = useRef(new RNAnimated.Value(0)).current;
+  const renderAreaHRef = useRef(0);
   const prefetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [deckAreaH, setDeckAreaH] = useState(0);
@@ -781,7 +782,10 @@ export default function StoryEditorScreen() {
       {/* Beat editor: native Animated translate (no re-render) so iOS keeps first responder */}
       {selectedBeat && (
         <RNAnimated.View
-          style={[styles.inputContainer, { zIndex: 50 }]}
+          style={[
+            styles.inputContainer,
+            { zIndex: 50, transform: [{ translateY: editorTranslateY }] },
+          ]}
           onLayout={(e) => {
             const h = e.nativeEvent.layout.height;
             if (Math.abs(h - editorHRef.current) >= 2) {
@@ -790,7 +794,6 @@ export default function StoryEditorScreen() {
             }
           }}
         >
-          <RNAnimated.View style={{ transform: [{ translateY: editorTranslateY }] }}>
           <View style={styles.beatLabelRow}>
               <ThemedText style={styles.beatLabel}>
                 Beat {selectedBeat.sentenceIndex + 1}
@@ -850,7 +853,6 @@ export default function StoryEditorScreen() {
                 <ActivityIndicator size="small" color={theme.link} />
               </View>
             )}
-          </RNAnimated.View>
         </RNAnimated.View>
         )}
 
@@ -862,6 +864,12 @@ export default function StoryEditorScreen() {
           { paddingBottom: tabBarHeight },
           keyboardVisible && { opacity: 0 },
         ]}
+        onLayout={(e) => {
+          // Used to compute how much fixed UI sits below the beat editor.
+          // Allows us to shift the editor by (keyboardHeight - reservedBelowEditor)
+          // so it docks flush to the keyboard instead of floating above it.
+          renderAreaHRef.current = e.nativeEvent.layout.height;
+        }}
       >
         <Pressable
           style={[
