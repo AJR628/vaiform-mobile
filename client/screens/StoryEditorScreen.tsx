@@ -12,6 +12,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   useWindowDimensions,
+  type LayoutChangeEvent,
 } from "react-native";
 import Animated, {
   useAnimatedScrollHandler,
@@ -153,11 +154,26 @@ export default function StoryEditorScreen() {
   const savingRef = useRef<number | null>(null);
   const deckListRef = useRef<FlatList<Beat>>(null);
   const selectionFromDeckRef = useRef(false);
+  const deckAreaHRef = useRef(0);
+  const isEditingRef = useRef(false);
+
+  const [deckAreaH, setDeckAreaH] = useState(0);
+  const [draftText, setDraftText] = useState("");
+
+  const onDeckLayout = useCallback((e: LayoutChangeEvent) => {
+    const h = e.nativeEvent.layout.height;
+    if (h > 0 && h !== deckAreaHRef.current) {
+      deckAreaHRef.current = h;
+      setDeckAreaH(h);
+    }
+  }, []);
 
   const { width: windowWidth } = useWindowDimensions();
-  const cardW = Math.round(windowWidth * 0.84);
-  const cardH = Math.round((cardW * 16) / 9);
   const deckGap = 12;
+  const desiredW = Math.round(windowWidth * 0.84);
+  const desiredH = desiredW * (16 / 9);
+  const cardH = deckAreaH > 0 ? Math.min(deckAreaH, desiredH) : desiredH;
+  const cardW = Math.round((cardH * 9) / 16);
   const cardStep = cardW + deckGap;
 
   // Load session on mount
@@ -250,12 +266,25 @@ export default function StoryEditorScreen() {
     [session]
   );
 
-  const selectedText =
+  const committedText =
     selectedSentenceIndex !== null
       ? (beatTexts[selectedSentenceIndex] ??
           beats.find((b) => b.sentenceIndex === selectedSentenceIndex)?.text ??
           "")
       : "";
+
+  // Sync draftText when selection changes (not when beatTexts changes — avoid clobbering active typing)
+  useEffect(() => {
+    if (selectedSentenceIndex === null) return;
+    if (isEditingRef.current) return;
+
+    const committed =
+      beatTexts[selectedSentenceIndex] ??
+      beats.find((b) => b.sentenceIndex === selectedSentenceIndex)?.text ??
+      "";
+
+    setDraftText(committed);
+  }, [selectedSentenceIndex, sessionId, beats]);
 
   // Clamp selectedSentenceIndex by membership (not numeric range)
   useEffect(() => {
@@ -278,11 +307,12 @@ export default function StoryEditorScreen() {
     }
   }, [session, beats, selectedSentenceIndex]);
 
-  // Trigger caption preview for the selected beat (debounced inside hook)
+  // Trigger caption preview for the selected beat (debounced inside hook). Only on committed text.
   useEffect(() => {
     if (selectedSentenceIndex === null || !sessionId) return;
-    requestPreview(selectedSentenceIndex, selectedText, { placement: "center" });
-  }, [selectedSentenceIndex, sessionId, selectedText, requestPreview]);
+    if (!committedText.trim()) return;
+    requestPreview(selectedSentenceIndex, committedText, { placement: "center" });
+  }, [selectedSentenceIndex, sessionId, committedText, requestPreview]);
 
   // Prefetch caption previews for all beats once per session (no taps)
   useEffect(() => {
@@ -339,6 +369,8 @@ export default function StoryEditorScreen() {
   ) => {
     if (savingRef.current === sentenceIndex) return;
 
+    isEditingRef.current = false;
+
     const draft = (draftOverride ?? beatTexts[sentenceIndex] ?? "").trim();
     if (!draft) {
       showError("Beat text cannot be empty");
@@ -346,8 +378,8 @@ export default function StoryEditorScreen() {
     }
 
     const beat = beats.find((b) => b.sentenceIndex === sentenceIndex);
-    const original = beat?.text?.trim() ?? "";
-    if (draft === original) {
+    const committed = beatTexts[sentenceIndex] ?? beat?.text?.trim() ?? "";
+    if (draft === committed) {
       savingRef.current = sentenceIndex;
       textInputRef.current?.blur();
       Keyboard.dismiss();
@@ -372,6 +404,7 @@ export default function StoryEditorScreen() {
         return;
       }
 
+      setBeatTexts((prev) => ({ ...prev, [sentenceIndex]: draft }));
       textInputRef.current?.blur();
       Keyboard.dismiss();
       // Keep selection so deck does not jump back to beat 1
@@ -506,10 +539,6 @@ export default function StoryEditorScreen() {
     selectedSentenceIndex !== null
       ? savingByIndex[selectedSentenceIndex] || false
       : false;
-  const displayText =
-    selectedSentenceIndex !== null
-      ? beatTexts[selectedSentenceIndex] ?? selectedBeat?.text ?? ""
-      : "";
 
   function DeckCard({ item, index }: { item: Beat; index: number }) {
     const shot = session ? getSelectedShot(session, item.sentenceIndex) : null;
@@ -615,7 +644,7 @@ export default function StoryEditorScreen() {
   return (
     <ThemedView style={styles.container}>
       {/* Deck: center card is the stage */}
-      <View style={styles.deckSection}>
+      <View style={styles.deckSection} onLayout={onDeckLayout}>
         <Animated.FlatList
           ref={deckListRef as React.RefObject<Animated.FlatList<Beat>>}
           data={beats}
@@ -662,27 +691,26 @@ export default function StoryEditorScreen() {
                   backgroundColor: theme.backgroundSecondary,
                 },
               ]}
-              value={displayText}
+              value={draftText}
+              onFocus={() => {
+                isEditingRef.current = true;
+              }}
+              onBlur={() => {
+                handleSaveBeat(selectedBeat.sentenceIndex, "blur", draftText);
+              }}
               onChangeText={(text) => {
                 if (selectedSentenceIndex === null) return;
-                
+
                 if (text.includes("\n")) {
                   const cleaned = text.replace(/\n/g, " ").trim();
-                  setBeatTexts((prev) => ({
-                    ...prev,
-                    [selectedSentenceIndex]: cleaned,
-                  }));
+                  setDraftText(cleaned);
                   handleSaveBeat(selectedBeat.sentenceIndex, "submit", cleaned);
                   textInputRef.current?.blur();
                   Keyboard.dismiss();
                 } else {
-                  setBeatTexts((prev) => ({
-                    ...prev,
-                    [selectedSentenceIndex]: text,
-                  }));
+                  setDraftText(text);
                 }
               }}
-              onBlur={() => handleSaveBeat(selectedBeat.sentenceIndex, "blur")}
               multiline
               editable={!isSaving}
               placeholderTextColor={theme.tabIconDefault}
