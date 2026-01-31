@@ -464,10 +464,11 @@ export default function StoryEditorScreen() {
     deckListRef.current?.scrollToOffset({ offset: index * cardStep, animated: true });
   }, [selectedSentenceIndex, beats, cardStep]);
 
-  // Explicit keyboard height (no KAV): pin editor flush to keyboard, reserve only editor height for hero
+  // Explicit keyboard height (no KAV): pin editor flush to keyboard, reserve only editor height for hero.
+  // iOS: use keyboardDidShow/Hide (not Will*) so we don't change layout before keyboard presents and cancel first responder.
   useEffect(() => {
-    const showEvent = Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow";
-    const hideEvent = Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide";
+    const showEvent = Platform.OS === "ios" ? "keyboardDidShow" : "keyboardDidShow";
+    const hideEvent = Platform.OS === "ios" ? "keyboardDidHide" : "keyboardDidHide";
     const subShow = Keyboard.addListener(showEvent, (e) => {
       setKeyboardVisible(true);
       setKeyboardHeight(e.endCoordinates?.height ?? 0);
