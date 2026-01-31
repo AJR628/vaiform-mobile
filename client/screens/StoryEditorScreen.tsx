@@ -470,10 +470,13 @@ export default function StoryEditorScreen() {
     const showEvent = Platform.OS === "ios" ? "keyboardDidShow" : "keyboardDidShow";
     const hideEvent = Platform.OS === "ios" ? "keyboardDidHide" : "keyboardDidHide";
     const subShow = Keyboard.addListener(showEvent, (e) => {
+      const h = e.endCoordinates?.height ?? 0;
+      if (__DEV__) console.log("[beat] keyboardDidShow", h);
       setKeyboardVisible(true);
-      setKeyboardHeight(e.endCoordinates?.height ?? 0);
+      setKeyboardHeight(h);
     });
     const subHide = Keyboard.addListener(hideEvent, () => {
+      if (__DEV__) console.log("[beat] keyboardDidHide");
       setKeyboardVisible(false);
       setKeyboardHeight(0);
     });
@@ -728,7 +731,7 @@ export default function StoryEditorScreen() {
       : false;
 
   return (
-    <ThemedView style={[styles.container, keyboardVisible && { paddingBottom: editorH }]}>
+    <ThemedView style={styles.container}>
       {/* Deck: center card is the stage */}
       <View style={styles.deckSection} onLayout={onDeckLayout}>
         <Animated.FlatList
@@ -753,20 +756,17 @@ export default function StoryEditorScreen() {
             setSelectedSentenceIndex(beats[clamped].sentenceIndex);
           }}
           keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
+          keyboardDismissMode={keyboardVisible ? "none" : "on-drag"}
         />
       </View>
 
-      {/* Beat editor: explicit keyboard positioning (no KAV); flush to keyboard when open */}
+      {/* Beat editor: transform (no layout flip) so iOS keeps focus; visually above keyboard when open */}
       {selectedBeat && (
         <View
           style={[
             styles.inputContainer,
             keyboardVisible && {
-              position: "absolute",
-              left: 0,
-              right: 0,
-              bottom: keyboardHeight,
+              transform: [{ translateY: -keyboardHeight }],
               zIndex: 50,
             },
           ]}
@@ -808,9 +808,11 @@ export default function StoryEditorScreen() {
               ]}
               value={draftText}
               onFocus={() => {
+                if (__DEV__) console.log("[beat] onFocus");
                 isEditingRef.current = true;
               }}
               onBlur={() => {
+                if (__DEV__) console.log("[beat] onBlur");
                 handleSaveBeat(selectedBeat.sentenceIndex, "blur", draftText);
               }}
               onChangeText={(text) => {
@@ -838,31 +840,36 @@ export default function StoryEditorScreen() {
           </View>
         )}
 
-      {/* Render Button: hidden while keyboard open so it does not move into preview */}
-      {!keyboardVisible && (
-        <View style={[styles.renderButtonContainer, { paddingBottom: tabBarHeight }]}>
-          <Pressable
+      {/* Render Button: always mounted; visually hidden and non-interactive while keyboard open (avoids tree churn) */}
+      <View
+        pointerEvents={keyboardVisible ? "none" : "auto"}
+        style={[
+          styles.renderButtonContainer,
+          { paddingBottom: tabBarHeight },
+          keyboardVisible && { opacity: 0 },
+        ]}
+      >
+        <Pressable
+          style={[
+            styles.renderButton,
+            {
+              backgroundColor: canRender && !isRendering ? theme.link : theme.backgroundTertiary,
+              opacity: canRender && !isRendering ? 1 : 0.5,
+            },
+          ]}
+          onPress={handleRender}
+          disabled={isRendering || !canRender}
+        >
+          <ThemedText
             style={[
-              styles.renderButton,
-              {
-                backgroundColor: canRender && !isRendering ? theme.link : theme.backgroundTertiary,
-                opacity: canRender && !isRendering ? 1 : 0.5,
-              },
+              styles.renderButtonText,
+              { color: canRender && !isRendering ? theme.buttonText : theme.text },
             ]}
-            onPress={handleRender}
-            disabled={isRendering || !canRender}
           >
-            <ThemedText
-              style={[
-                styles.renderButtonText,
-                { color: canRender && !isRendering ? theme.buttonText : theme.text },
-              ]}
-            >
-              {isRendering ? "Rendering..." : "Render"}
-            </ThemedText>
-          </Pressable>
-        </View>
-      )}
+            {isRendering ? "Rendering..." : "Render"}
+          </ThemedText>
+        </Pressable>
+      </View>
 
       {/* Rendering Modal */}
       <Modal
