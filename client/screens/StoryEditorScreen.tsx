@@ -12,6 +12,7 @@ import {
   Platform,
   useWindowDimensions,
   type LayoutChangeEvent,
+  Animated as RNAnimated,
 } from "react-native";
 import Animated, {
   useAnimatedScrollHandler,
@@ -263,7 +264,6 @@ export default function StoryEditorScreen() {
   const [isRendering, setIsRendering] = useState(false);
   const [showRenderingModal, setShowRenderingModal] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [editorH, setEditorH] = useState(120);
 
   const { previewByIndex, isLoadingByIndex, requestPreview, prefetchAllBeats } =
@@ -286,6 +286,9 @@ export default function StoryEditorScreen() {
   const deckAreaHRef = useRef(0);
   const isEditingRef = useRef(false);
   const editorHRef = useRef(120);
+  const keyboardVisibleRef = useRef(false);
+  const editorTranslateY = useRef(new RNAnimated.Value(0)).current;
+  const prefetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [deckAreaH, setDeckAreaH] = useState(0);
   const [draftText, setDraftText] = useState("");
@@ -444,12 +447,25 @@ export default function StoryEditorScreen() {
     requestPreview(selectedSentenceIndex, committedText, { placement: "center" });
   }, [selectedSentenceIndex, sessionId, committedText, requestPreview]);
 
-  // Prefetch caption previews for all beats once per session (no taps)
+  // Prefetch caption previews for all beats once per session; delay start and skip while editing to avoid focus loss
   useEffect(() => {
     if (!sessionId || beats.length === 0) return;
     if (prefetchDoneForSessionRef.current === sessionId) return;
-    prefetchDoneForSessionRef.current = sessionId;
-    prefetchAllBeats(beats, { delayBetweenMs: 120 });
+
+    prefetchTimeoutRef.current = setTimeout(() => {
+      prefetchTimeoutRef.current = null;
+      if (isEditingRef.current || keyboardVisibleRef.current) return;
+      if (prefetchDoneForSessionRef.current === sessionId) return;
+      prefetchDoneForSessionRef.current = sessionId;
+      prefetchAllBeats(beats, { delayBetweenMs: 120 });
+    }, 1500);
+
+    return () => {
+      if (prefetchTimeoutRef.current) {
+        clearTimeout(prefetchTimeoutRef.current);
+        prefetchTimeoutRef.current = null;
+      }
+    };
   }, [sessionId, beats, prefetchAllBeats]);
 
   // Selection → deck scroll (only when selection changed externally, not from onMomentumScrollEnd)
@@ -464,21 +480,22 @@ export default function StoryEditorScreen() {
     deckListRef.current?.scrollToOffset({ offset: index * cardStep, animated: true });
   }, [selectedSentenceIndex, beats, cardStep]);
 
-  // Explicit keyboard height (no KAV): pin editor flush to keyboard, reserve only editor height for hero.
-  // iOS: use keyboardDidShow/Hide (not Will*) so we don't change layout before keyboard presents and cancel first responder.
+  // Native Animated translate (no re-render) so iOS keeps first responder; keyboardVisible for UI only
   useEffect(() => {
     const showEvent = Platform.OS === "ios" ? "keyboardDidShow" : "keyboardDidShow";
     const hideEvent = Platform.OS === "ios" ? "keyboardDidHide" : "keyboardDidHide";
     const subShow = Keyboard.addListener(showEvent, (e) => {
       const h = e.endCoordinates?.height ?? 0;
       if (__DEV__) console.log("[beat] keyboardDidShow", h);
+      keyboardVisibleRef.current = true;
       setKeyboardVisible(true);
-      setKeyboardHeight(h);
+      editorTranslateY.setValue(-h);
     });
     const subHide = Keyboard.addListener(hideEvent, () => {
       if (__DEV__) console.log("[beat] keyboardDidHide");
+      editorTranslateY.setValue(0);
+      keyboardVisibleRef.current = false;
       setKeyboardVisible(false);
-      setKeyboardHeight(0);
     });
     return () => {
       subShow.remove();
@@ -757,19 +774,14 @@ export default function StoryEditorScreen() {
           }}
           keyboardShouldPersistTaps="handled"
           keyboardDismissMode={keyboardVisible ? "none" : "on-drag"}
+          scrollEnabled={!keyboardVisible}
         />
       </View>
 
-      {/* Beat editor: transform (no layout flip) so iOS keeps focus; visually above keyboard when open */}
+      {/* Beat editor: native Animated translate (no re-render) so iOS keeps first responder */}
       {selectedBeat && (
-        <View
-          style={[
-            styles.inputContainer,
-            keyboardVisible && {
-              transform: [{ translateY: -keyboardHeight }],
-              zIndex: 50,
-            },
-          ]}
+        <RNAnimated.View
+          style={[styles.inputContainer, { zIndex: 50 }]}
           onLayout={(e) => {
             const h = e.nativeEvent.layout.height;
             if (Math.abs(h - editorHRef.current) >= 2) {
@@ -778,6 +790,7 @@ export default function StoryEditorScreen() {
             }
           }}
         >
+          <RNAnimated.View style={{ transform: [{ translateY: editorTranslateY }] }}>
           <View style={styles.beatLabelRow}>
               <ThemedText style={styles.beatLabel}>
                 Beat {selectedBeat.sentenceIndex + 1}
@@ -837,7 +850,8 @@ export default function StoryEditorScreen() {
                 <ActivityIndicator size="small" color={theme.link} />
               </View>
             )}
-          </View>
+          </RNAnimated.View>
+        </RNAnimated.View>
         )}
 
       {/* Render Button: always mounted; visually hidden and non-interactive while keyboard open (avoids tree churn) */}
