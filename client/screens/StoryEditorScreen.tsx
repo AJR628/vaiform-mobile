@@ -811,7 +811,7 @@ export default function StoryEditorScreen() {
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={{
             paddingHorizontal: (windowWidth - cardW) / 2,
-            paddingTop: Spacing["2xl"],
+            paddingTop: Spacing["5xl"] + Spacing.lg,
             paddingBottom: Spacing.sm,
           }}
           extraData={flatListExtraData}
@@ -1126,7 +1126,7 @@ const styles = StyleSheet.create({
     position: "relative",
   },
   textInput: {
-    minHeight: 80,
+    minHeight: 64,
     padding: Spacing.md,
     borderRadius: 8,
     fontSize: 16,
