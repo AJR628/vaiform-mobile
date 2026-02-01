@@ -893,7 +893,13 @@ export default function StoryEditorScreen() {
             }
           }}
         >
-          <View style={styles.beatLabelRow}>
+          <View
+            style={[
+              styles.beatLabelRow,
+              editorCollapsed && styles.beatLabelRowCollapsed,
+              editorCollapsed && { backgroundColor: theme.backgroundSecondary },
+            ]}
+          >
             <ThemedText style={styles.beatLabel}>
               Beat {selectedBeat.sentenceIndex + 1}
             </ThemedText>
@@ -927,23 +933,7 @@ export default function StoryEditorScreen() {
               </Pressable>
             </View>
           </View>
-          {editorCollapsed ? (
-            <Pressable
-              style={[styles.editorCollapsedRow, { backgroundColor: theme.backgroundSecondary }]}
-              onPress={expandEditor}
-            >
-              <ThemedText
-                style={styles.editorCollapsedText}
-                numberOfLines={2}
-                ellipsizeMode="tail"
-              >
-                {draftText.trim() || selectedBeat.text || "No caption"}
-              </ThemedText>
-              <ThemedText style={[styles.editorCollapsedHint, { color: theme.tabIconDefault }]}>
-                Tap to edit
-              </ThemedText>
-            </Pressable>
-          ) : (
+          {!editorCollapsed && (
             <>
               <TextInput
                 ref={textInputRef}
@@ -1226,6 +1216,13 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: Spacing.sm,
+  },
+  beatLabelRowCollapsed: {
+    marginHorizontal: Spacing.lg,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+    borderRadius: 12,
+    marginBottom: 0,
   },
   beatLabel: {
     fontSize: 14,
