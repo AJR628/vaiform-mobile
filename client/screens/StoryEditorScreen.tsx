@@ -132,6 +132,9 @@ interface DeckCardProps {
   link: string;
 }
 
+/** SSOT: center card scale; used in DeckCard interpolate and deck card height math so balloon fits in deck section. */
+const ACTIVE_SCALE = 1.16;
+
 const DeckCard = React.memo(function DeckCard({
   item,
   index,
@@ -169,7 +172,7 @@ const DeckCard = React.memo(function DeckCard({
       index * cardStep,
       (index + 1) * cardStep,
     ];
-    const scale = interpolate(scrollX.value, inputRange, [0.92, 1.16, 0.92]);
+    const scale = interpolate(scrollX.value, inputRange, [0.92, ACTIVE_SCALE, 0.92]);
     const translateY = interpolate(scrollX.value, inputRange, [6, -10, 6]);
     const opacity = interpolate(scrollX.value, inputRange, [0.75, 1, 0.75]);
     const zIndex = Math.round(interpolate(scrollX.value, inputRange, [0, 10, 0]));
@@ -285,6 +288,7 @@ export default function StoryEditorScreen() {
   const [showRenderingModal, setShowRenderingModal] = useState(false);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [editorH, setEditorH] = useState(120);
+  const [editorCollapsed, setEditorCollapsed] = useState(false);
 
   const { previewByIndex, isLoadingByIndex, requestPreview, prefetchAllBeats } =
     useCaptionPreview(sessionId, selectedSentenceIndex);
@@ -324,9 +328,14 @@ export default function StoryEditorScreen() {
 
   const { width: windowWidth } = useWindowDimensions();
   const deckGap = 16;
+  const DECK_PAD_TOP = Spacing["5xl"] + Spacing.lg;
+  const DECK_PAD_BOTTOM = Spacing.sm;
   const desiredW = Math.round(windowWidth * 0.84);
   const desiredH = desiredW * (16 / 9);
-  const cardH = deckAreaH > 0 ? Math.min(deckAreaH, desiredH) : desiredH;
+  const deckInnerH = deckAreaH > 0 ? Math.max(0, deckAreaH - DECK_PAD_TOP - DECK_PAD_BOTTOM) : 0;
+  const fitFactor = 1 + (ACTIVE_SCALE - 1) / 2;
+  const maxCardH = deckAreaH > 0 ? deckInnerH / fitFactor : desiredH;
+  const cardH = deckAreaH > 0 ? Math.min(maxCardH, desiredH) : desiredH;
   const cardW = Math.round((cardH * 9) / 16);
   const cardStep = cardW + deckGap;
 
@@ -685,6 +694,17 @@ export default function StoryEditorScreen() {
     });
   };
 
+  const toggleEditorCollapsed = useCallback(() => {
+    if (keyboardVisibleRef.current || keyboardVisible) return;
+    setEditorCollapsed((prev) => !prev);
+  }, [keyboardVisible]);
+
+  const expandEditor = useCallback(() => {
+    if (keyboardVisibleRef.current) return;
+    setEditorCollapsed(false);
+    setTimeout(() => textInputRef.current?.focus(), 50);
+  }, []);
+
   const handleRender = async () => {
     // Credit check: verify cost is 20 credits (from spec verification)
     if (credits < 20) {
@@ -799,7 +819,7 @@ export default function StoryEditorScreen() {
 
   return (
     <ThemedView style={styles.container}>
-      {/* Deck: center card is the stage */}
+      {/* Deck: center card is the stage. Card H is capped so scaled (ACTIVE_SCALE) bounds fit in deckInnerH; editor/render sit below and would otherwise paint over the card. */}
       <View style={styles.deckSection} onLayout={onDeckLayout}>
         <View style={styles.deckStageWrap}>
           <Animated.FlatList
@@ -813,8 +833,8 @@ export default function StoryEditorScreen() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{
               paddingHorizontal: (windowWidth - cardW) / 2,
-              paddingTop: Spacing["5xl"] + Spacing.lg,
-              paddingBottom: Spacing.sm,
+              paddingTop: DECK_PAD_TOP,
+              paddingBottom: DECK_PAD_BOTTOM,
             }}
             extraData={flatListExtraData}
             removeClippedSubviews={false}
@@ -874,64 +894,99 @@ export default function StoryEditorScreen() {
           }}
         >
           <View style={styles.beatLabelRow}>
-              <ThemedText style={styles.beatLabel}>
-                Beat {selectedBeat.sentenceIndex + 1}
-              </ThemedText>
+            <ThemedText style={styles.beatLabel}>
+              Beat {selectedBeat.sentenceIndex + 1}
+            </ThemedText>
+            <View style={styles.beatLabelActions}>
+              {!editorCollapsed && (
+                <Pressable
+                  onPress={() => {
+                    handleSaveBeat(selectedBeat.sentenceIndex, "submit", draftText);
+                  }}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  style={({ pressed }) => [
+                    styles.doneButton,
+                    { opacity: pressed ? 0.7 : 1 },
+                  ]}
+                >
+                  <ThemedText style={[styles.doneButtonText, { color: theme.link }]}>
+                    Done
+                  </ThemedText>
+                </Pressable>
+              )}
               <Pressable
-                onPress={() => {
-                  handleSaveBeat(selectedBeat.sentenceIndex, "submit", draftText);
-                }}
+                onPress={toggleEditorCollapsed}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                style={({ pressed }) => [
-                  styles.doneButton,
-                  { opacity: pressed ? 0.7 : 1 },
-                ]}
+                style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
               >
-                <ThemedText style={[styles.doneButtonText, { color: theme.link }]}>
-                  Done
-                </ThemedText>
+                <Feather
+                  name={editorCollapsed ? "chevron-up" : "chevron-down"}
+                  size={20}
+                  color={theme.tabIconDefault}
+                />
               </Pressable>
             </View>
-            <TextInput
-              ref={textInputRef}
-              style={[
-                styles.textInput,
-                {
-                  color: theme.text,
-                  backgroundColor: theme.backgroundSecondary,
-                },
-              ]}
-              value={draftText}
-              onFocus={() => {
-                if (__DEV__) console.log("[beat] onFocus");
-                isEditingRef.current = true;
-              }}
-              onBlur={() => {
-                if (__DEV__) console.log("[beat] onBlur");
-                handleSaveBeat(selectedBeat.sentenceIndex, "blur", draftText);
-              }}
-              onChangeText={(text) => {
-                if (selectedSentenceIndex === null) return;
+          </View>
+          {editorCollapsed ? (
+            <Pressable
+              style={[styles.editorCollapsedRow, { backgroundColor: theme.backgroundSecondary }]}
+              onPress={expandEditor}
+            >
+              <ThemedText
+                style={styles.editorCollapsedText}
+                numberOfLines={2}
+                ellipsizeMode="tail"
+              >
+                {draftText.trim() || selectedBeat.text || "No caption"}
+              </ThemedText>
+              <ThemedText style={[styles.editorCollapsedHint, { color: theme.tabIconDefault }]}>
+                Tap to edit
+              </ThemedText>
+            </Pressable>
+          ) : (
+            <>
+              <TextInput
+                ref={textInputRef}
+                style={[
+                  styles.textInput,
+                  {
+                    color: theme.text,
+                    backgroundColor: theme.backgroundSecondary,
+                  },
+                ]}
+                value={draftText}
+                onFocus={() => {
+                  if (__DEV__) console.log("[beat] onFocus");
+                  isEditingRef.current = true;
+                }}
+                onBlur={() => {
+                  if (__DEV__) console.log("[beat] onBlur");
+                  handleSaveBeat(selectedBeat.sentenceIndex, "blur", draftText);
+                }}
+                onChangeText={(text) => {
+                  if (selectedSentenceIndex === null) return;
 
-                if (text.includes("\n")) {
-                  const cleaned = text.replace(/\n/g, " ").trim();
-                  setDraftText(cleaned);
-                  handleSaveBeat(selectedBeat.sentenceIndex, "submit", cleaned);
-                  textInputRef.current?.blur();
-                  Keyboard.dismiss();
-                } else {
-                  setDraftText(text);
-                }
-              }}
-              multiline
-              editable={!isSaving}
-              placeholderTextColor={theme.tabIconDefault}
-            />
-            {isSaving && (
-              <View style={styles.savingIndicator}>
-                <ActivityIndicator size="small" color={theme.link} />
-              </View>
-            )}
+                  if (text.includes("\n")) {
+                    const cleaned = text.replace(/\n/g, " ").trim();
+                    setDraftText(cleaned);
+                    handleSaveBeat(selectedBeat.sentenceIndex, "submit", cleaned);
+                    textInputRef.current?.blur();
+                    Keyboard.dismiss();
+                  } else {
+                    setDraftText(text);
+                  }
+                }}
+                multiline
+                editable={!isSaving}
+                placeholderTextColor={theme.tabIconDefault}
+              />
+              {isSaving && (
+                <View style={styles.savingIndicator}>
+                  <ActivityIndicator size="small" color={theme.link} />
+                </View>
+              )}
+            </>
+          )}
         </RNAnimated.View>
         )}
 
@@ -1176,6 +1231,26 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
     opacity: 0.8,
+  },
+  beatLabelActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: Spacing.sm,
+  },
+  editorCollapsedRow: {
+    padding: Spacing.md,
+    borderRadius: 8,
+    minHeight: 48,
+    justifyContent: "center",
+  },
+  editorCollapsedText: {
+    fontSize: 14,
+    opacity: 0.9,
+  },
+  editorCollapsedHint: {
+    fontSize: 12,
+    opacity: 0.7,
+    marginTop: 4,
   },
   doneButton: {
     paddingVertical: Spacing.xs,
