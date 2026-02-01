@@ -490,7 +490,11 @@ export default function StoryEditorScreen() {
       if (__DEV__) console.log("[beat] keyboardDidShow", h);
       keyboardVisibleRef.current = true;
       setKeyboardVisible(true);
-      editorTranslateY.setValue(-h);
+      // Shift only by the amount the keyboard overlaps the editor.
+      const reservedBelowEditor = renderAreaHRef.current || 0;
+      const shiftUp = Math.max(0, h - reservedBelowEditor);
+      if (__DEV__) console.log("[beat] dock", { h, reservedBelowEditor, shiftUp });
+      editorTranslateY.setValue(-shiftUp);
     });
     const subHide = Keyboard.addListener(hideEvent, () => {
       if (__DEV__) console.log("[beat] keyboardDidHide");
