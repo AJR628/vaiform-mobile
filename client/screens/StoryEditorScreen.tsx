@@ -39,6 +39,7 @@ import { useToast } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { Spacing } from "@/constants/theme";
 import { storyGet, storyUpdateBeatText, storyFinalize, type CaptionPreviewMeta } from "@/api/client";
+import * as Haptics from "expo-haptics";
 import { Linking } from "react-native";
 import type { SharedValue } from "react-native-reanimated";
 import type { StorySession } from "@/types/story";
@@ -121,7 +122,10 @@ interface DeckCardProps {
   cardH: number;
   cardStep: number;
   scrollX: SharedValue<number>;
+  onPress: (index: number) => void;
   onLongPress: (sentenceIndex: number) => void;
+  selectedSentenceIndex: number | null;
+  totalBeats: number;
   backgroundSecondary: string;
   tabIconDefault: string;
   link: string;
@@ -137,7 +141,10 @@ const DeckCard = React.memo(function DeckCard({
   cardH,
   cardStep,
   scrollX,
+  onPress,
   onLongPress,
+  selectedSentenceIndex,
+  totalBeats,
   backgroundSecondary,
   tabIconDefault,
   link,
@@ -161,10 +168,14 @@ const DeckCard = React.memo(function DeckCard({
       index * cardStep,
       (index + 1) * cardStep,
     ];
+    const scale = interpolate(scrollX.value, inputRange, [0.92, 1.16, 0.92]);
+    const translateY = interpolate(scrollX.value, inputRange, [6, -12, 6]);
+    const opacity = interpolate(scrollX.value, inputRange, [0.75, 1, 0.75]);
+    const zIndex = Math.round(interpolate(scrollX.value, inputRange, [0, 10, 0]));
     return {
-      transform: [
-        { scale: interpolate(scrollX.value, inputRange, [0.93, 1, 0.93]) },
-      ],
+      transform: [{ scale }, { translateY }],
+      opacity,
+      zIndex,
     };
   });
 
@@ -175,8 +186,16 @@ const DeckCard = React.memo(function DeckCard({
           styles.deckCard,
           { width: cardW, height: cardH, backgroundColor: backgroundSecondary },
         ]}
+        onPress={() => onPress(index)}
         onLongPress={() => onLongPress(item.sentenceIndex)}
       >
+        {selectedSentenceIndex === item.sentenceIndex && (
+          <View style={styles.deckCardPill} pointerEvents="none">
+            <ThemedText style={styles.deckCardPillText}>
+              Beat {item.sentenceIndex + 1} / {totalBeats}
+            </ThemedText>
+          </View>
+        )}
         {clip?.thumbUrl ? (
           <View style={styles.deckCardInner}>
             <Image
@@ -542,6 +561,25 @@ export default function StoryEditorScreen() {
     [previewByIndex, selectedSentenceIndex, isLoadingByIndex]
   );
 
+  const handleDeckCardPress = useCallback(
+    (index: number) => {
+      if (keyboardVisibleRef.current || keyboardVisible) return;
+      if (!beats[index]) return;
+
+      Haptics.selectionAsync().catch(() => {});
+
+      selectionFromDeckRef.current = true;
+
+      deckListRef.current?.scrollToOffset({
+        offset: index * cardStep,
+        animated: true,
+      });
+
+      setSelectedSentenceIndex(beats[index].sentenceIndex);
+    },
+    [beats, cardStep, keyboardVisible]
+  );
+
   const renderDeckItem = useCallback(
     ({ item, index }: { item: Beat; index: number }) => (
       <DeckCard
@@ -554,7 +592,10 @@ export default function StoryEditorScreen() {
         cardH={cardH}
         cardStep={cardStep}
         scrollX={scrollX}
+        onPress={handleDeckCardPress}
         onLongPress={setReplaceModalForIndex}
+        selectedSentenceIndex={selectedSentenceIndex}
+        totalBeats={beats.length}
         backgroundSecondary={theme.backgroundSecondary}
         tabIconDefault={theme.tabIconDefault}
         link={theme.link}
@@ -568,6 +609,9 @@ export default function StoryEditorScreen() {
       cardH,
       cardStep,
       scrollX,
+      handleDeckCardPress,
+      selectedSentenceIndex,
+      beats.length,
       theme.backgroundSecondary,
       theme.tabIconDefault,
       theme.link,
@@ -1006,6 +1050,26 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: "hidden",
     position: "relative",
+    elevation: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+  },
+  deckCardPill: {
+    position: "absolute",
+    bottom: 8,
+    left: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    borderRadius: 12,
+    backgroundColor: "rgba(0,0,0,0.5)",
+  },
+  deckCardPillText: {
+    fontSize: 11,
+    fontWeight: "600",
+    opacity: 0.95,
+    color: "#fff",
   },
   deckCardInner: {
     width: "100%",
