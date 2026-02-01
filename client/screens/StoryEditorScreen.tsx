@@ -169,7 +169,7 @@ const DeckCard = React.memo(function DeckCard({
       (index + 1) * cardStep,
     ];
     const scale = interpolate(scrollX.value, inputRange, [0.92, 1.16, 0.92]);
-    const translateY = interpolate(scrollX.value, inputRange, [6, -12, 6]);
+    const translateY = interpolate(scrollX.value, inputRange, [6, -10, 6]);
     const opacity = interpolate(scrollX.value, inputRange, [0.75, 1, 0.75]);
     const zIndex = Math.round(interpolate(scrollX.value, inputRange, [0, 10, 0]));
     return {
@@ -322,7 +322,7 @@ export default function StoryEditorScreen() {
   }, []);
 
   const { width: windowWidth } = useWindowDimensions();
-  const deckGap = 12;
+  const deckGap = 16;
   const desiredW = Math.round(windowWidth * 0.84);
   const desiredH = desiredW * (16 / 9);
   const cardH = deckAreaH > 0 ? Math.min(deckAreaH, desiredH) : desiredH;
@@ -809,7 +809,11 @@ export default function StoryEditorScreen() {
           snapToInterval={cardStep}
           decelerationRate="fast"
           showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: (windowWidth - cardW) / 2 }}
+          contentContainerStyle={{
+            paddingHorizontal: (windowWidth - cardW) / 2,
+            paddingTop: Spacing["2xl"],
+            paddingBottom: Spacing.sm,
+          }}
           extraData={flatListExtraData}
           removeClippedSubviews={false}
           onScroll={onDeckScroll}
@@ -1050,6 +1054,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     overflow: "hidden",
     position: "relative",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.10)",
     elevation: 8,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },

@@ -6,6 +6,7 @@ import ClipSearchModal from "@/screens/ClipSearchModal";
 import ScriptScreen from "@/screens/ScriptScreen";
 import { HeaderTitle } from "@/components/HeaderTitle";
 import { useScreenOptions } from "@/hooks/useScreenOptions";
+import { useTheme } from "@/hooks/useTheme";
 
 export type HomeStackParamList = {
   Home: undefined;
@@ -22,6 +23,7 @@ const Stack = createNativeStackNavigator<HomeStackParamList>();
 
 export default function HomeStackNavigator() {
   const screenOptions = useScreenOptions();
+  const { theme } = useTheme();
 
   return (
     <Stack.Navigator screenOptions={screenOptions}>
@@ -38,6 +40,10 @@ export default function HomeStackNavigator() {
         options={{
           headerTransparent: false,
           headerTitle: "Storyboard Editor",
+          headerStyle: { backgroundColor: theme.backgroundRoot },
+          headerTintColor: theme.text,
+          headerTitleStyle: { color: theme.text, fontSize: 16, fontWeight: "600" },
+          headerShadowVisible: false,
         }}
       />
       <Stack.Screen
