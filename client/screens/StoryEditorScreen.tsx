@@ -40,6 +40,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Spacing } from "@/constants/theme";
 import { storyGet, storyUpdateBeatText, storyFinalize, type CaptionPreviewMeta } from "@/api/client";
 import * as Haptics from "expo-haptics";
+import { LinearGradient } from "expo-linear-gradient";
 import { Linking } from "react-native";
 import type { SharedValue } from "react-native-reanimated";
 import type { StorySession } from "@/types/story";
@@ -800,35 +801,61 @@ export default function StoryEditorScreen() {
     <ThemedView style={styles.container}>
       {/* Deck: center card is the stage */}
       <View style={styles.deckSection} onLayout={onDeckLayout}>
-        <Animated.FlatList
-          ref={deckListRef as React.RefObject<Animated.FlatList<Beat>>}
-          data={beats}
-          renderItem={renderDeckItem}
-          keyExtractor={(item) => `beat-${item.sentenceIndex}`}
-          horizontal
-          snapToInterval={cardStep}
-          decelerationRate="fast"
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={{
-            paddingHorizontal: (windowWidth - cardW) / 2,
-            paddingTop: Spacing["5xl"] + Spacing.lg,
-            paddingBottom: Spacing.sm,
-          }}
-          extraData={flatListExtraData}
-          removeClippedSubviews={false}
-          onScroll={onDeckScroll}
-          scrollEventThrottle={16}
-          onMomentumScrollEnd={(e) => {
-            const offsetX = e.nativeEvent.contentOffset.x;
-            const index = Math.round(offsetX / cardStep);
-            const clamped = Math.max(0, Math.min(index, beats.length - 1));
-            selectionFromDeckRef.current = true;
-            setSelectedSentenceIndex(beats[clamped].sentenceIndex);
-          }}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode={keyboardVisible ? "none" : "on-drag"}
-          scrollEnabled={!keyboardVisible}
-        />
+        <View style={styles.deckStageWrap}>
+          <Animated.FlatList
+            ref={deckListRef as React.RefObject<Animated.FlatList<Beat>>}
+            data={beats}
+            renderItem={renderDeckItem}
+            keyExtractor={(item) => `beat-${item.sentenceIndex}`}
+            horizontal
+            snapToInterval={cardStep}
+            decelerationRate="fast"
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={{
+              paddingHorizontal: (windowWidth - cardW) / 2,
+              paddingTop: Spacing["5xl"] + Spacing.lg,
+              paddingBottom: Spacing.sm,
+            }}
+            extraData={flatListExtraData}
+            removeClippedSubviews={false}
+            onScroll={onDeckScroll}
+            scrollEventThrottle={16}
+            onMomentumScrollEnd={(e) => {
+              const offsetX = e.nativeEvent.contentOffset.x;
+              const index = Math.round(offsetX / cardStep);
+              const clamped = Math.max(0, Math.min(index, beats.length - 1));
+              selectionFromDeckRef.current = true;
+              setSelectedSentenceIndex(beats[clamped].sentenceIndex);
+            }}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode={keyboardVisible ? "none" : "on-drag"}
+            scrollEnabled={!keyboardVisible}
+          />
+          <LinearGradient
+            colors={["rgba(0,0,0,0.55)", "transparent"]}
+            style={[styles.deckScrimTop, { zIndex: 5 }]}
+            pointerEvents="none"
+          />
+          <LinearGradient
+            colors={["transparent", "rgba(0,0,0,0.55)"]}
+            style={[styles.deckScrimBottom, { zIndex: 5 }]}
+            pointerEvents="none"
+          />
+          <LinearGradient
+            colors={["rgba(0,0,0,0.45)", "transparent"]}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={[styles.deckScrimLeft, { zIndex: 5 }]}
+            pointerEvents="none"
+          />
+          <LinearGradient
+            colors={["transparent", "rgba(0,0,0,0.45)"]}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={[styles.deckScrimRight, { zIndex: 5 }]}
+            pointerEvents="none"
+          />
+        </View>
       </View>
 
       {/* Beat editor: native Animated translate (no re-render) so iOS keeps first responder */}
@@ -1049,6 +1076,42 @@ const styles = StyleSheet.create({
   deckSection: {
     flex: 1,
     overflow: "visible" as const,
+  },
+  deckStageWrap: {
+    flex: 1,
+    position: "relative",
+  },
+  deckScrimTop: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    height: Spacing["3xl"],
+    pointerEvents: "none",
+  },
+  deckScrimBottom: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: Spacing["3xl"],
+    pointerEvents: "none",
+  },
+  deckScrimLeft: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: Spacing.xl,
+    pointerEvents: "none",
+  },
+  deckScrimRight: {
+    position: "absolute",
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: Spacing.xl,
+    pointerEvents: "none",
   },
   deckCard: {
     borderRadius: 12,
