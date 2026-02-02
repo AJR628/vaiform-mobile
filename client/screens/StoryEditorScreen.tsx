@@ -913,6 +913,20 @@ export default function StoryEditorScreen() {
               Beat {selectedBeat.sentenceIndex + 1}
             </ThemedText>
             <View style={styles.beatLabelActions}>
+              <Pressable
+                onPress={() => setReplaceModalForIndex(selectedBeat.sentenceIndex)}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                style={({ pressed }) => [
+                  styles.iconButton,
+                  { opacity: pressed ? 0.7 : 1 },
+                ]}
+              >
+                <Feather
+                  name="shuffle"
+                  size={18}
+                  color={theme.tabIconDefault}
+                />
+              </Pressable>
               {!editorCollapsed && (
                 <Pressable
                   onPress={() => {
