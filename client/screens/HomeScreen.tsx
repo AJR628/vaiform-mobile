@@ -1,4 +1,4 @@
-import React, { useState, useLayoutEffect } from "react";
+import React, { useState } from "react";
 import { View, StyleSheet, Pressable, ActivityIndicator, Platform, TextInput, Alert } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -16,7 +16,6 @@ import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollV
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/contexts/ToastContext";
 import { useActiveStorySession } from "@/contexts/ActiveStorySessionContext";
-import { FlowTabsHeader } from "@/components/FlowTabsHeader";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import { storyStart, storyGenerate } from "@/api/client";
@@ -142,37 +141,6 @@ export default function HomeScreen() {
     inputType === "link"
       ? "Paste article URL..."
       : "Describe your idea...";
-
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerTitle: () => (
-        <FlowTabsHeader
-          currentStep="create"
-          onCreatePress={undefined}
-          onScriptPress={() => {
-            if (!isHydrated || !activeSessionId) {
-              if (isHydrated) showError("Create a script first");
-              return;
-            }
-            navigation.navigate("Script", { sessionId: activeSessionId });
-          }}
-          onStoryboardPress={() => {
-            if (!isHydrated || !activeSessionId) {
-              if (isHydrated) showError("Create a script first");
-              return;
-            }
-            navigation.navigate("StoryEditor", { sessionId: activeSessionId });
-          }}
-          disabledSteps={{
-            script: !isHydrated || !activeSessionId,
-            storyboard: !isHydrated || !activeSessionId,
-          }}
-          renderDisabled={true}
-        />
-      ),
-      headerLeft: () => null,
-    });
-  }, [navigation, activeSessionId, isHydrated, showError]);
 
   return (
     <ThemedView style={styles.container}>

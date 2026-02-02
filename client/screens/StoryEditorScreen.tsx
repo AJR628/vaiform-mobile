@@ -13,6 +13,7 @@ import {
   useWindowDimensions,
   type LayoutChangeEvent,
   Animated as RNAnimated,
+  Alert,
 } from "react-native";
 import Animated, {
   useAnimatedScrollHandler,
@@ -549,6 +550,8 @@ export default function StoryEditorScreen() {
     navigation.setOptions({
       headerRight: () => null,
       headerLeft: () => null,
+      headerBackVisible: false,
+      headerBackTitleVisible: false,
       headerTitle: () => (
         <FlowTabsHeader
           currentStep="storyboard"
@@ -710,14 +713,7 @@ export default function StoryEditorScreen() {
     setTimeout(() => textInputRef.current?.focus(), 50);
   }, []);
 
-  const handleRender = useCallback(async () => {
-    // Credit check: verify cost is 20 credits (from spec verification)
-    if (credits < 20) {
-      showError("Not enough credits. You need 20 credits to render.");
-      Linking.openURL("https://vaiform.com/pricing");
-      return;
-    }
-
+  const doRender = useCallback(async () => {
     setIsRendering(true);
     setShowRenderingModal(true);
 
@@ -757,7 +753,7 @@ export default function StoryEditorScreen() {
       if (result.ok && result.shortId) {
         setShowRenderingModal(false);
         showSuccess("Video rendered successfully!");
-        
+
         // Refresh credits to show updated balance
         try {
           await refreshCredits();
@@ -765,7 +761,7 @@ export default function StoryEditorScreen() {
           console.warn("[story] Failed to refresh credits after render:", err);
           // Don't block navigation on credit refresh failure
         }
-        
+
         const tabNavigator = navigation.getParent();
         if (__DEV__) {
           console.log("[nav-verify] parent routeNames:", tabNavigator?.getState()?.routeNames);
@@ -788,14 +784,30 @@ export default function StoryEditorScreen() {
       setIsRendering(false);
     }
   }, [
-    credits,
+    sessionId,
     showError,
     showWarning,
     showSuccess,
-    sessionId,
     navigation,
     refreshCredits,
   ]);
+
+  const handleRender = useCallback(() => {
+    if (credits < 20) {
+      showError("Not enough credits. You need 20 credits to render.");
+      Linking.openURL("https://vaiform.com/pricing");
+      return;
+    }
+    Alert.alert(
+      "Render now?",
+      "This will spend credits and start rendering.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Render", onPress: () => doRender() },
+      ]
+    );
+  }, [credits, doRender, showError]);
+
 
   if (isLoading) {
     return (
