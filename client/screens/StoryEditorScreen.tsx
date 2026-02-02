@@ -538,33 +538,10 @@ export default function StoryEditorScreen() {
     };
   }, []);
 
-  // Header right: Script + overflow (Replace Clip). Depends on selectedSentenceIndex for overflow target.
+  // Header right: cleared; Replace Clip entrypoint moved to Beat row (Swap Clip).
   useLayoutEffect(() => {
-    navigation.setOptions({
-      headerRight: () => (
-        <View style={{ flexDirection: "row", alignItems: "center" }}>
-          <Pressable
-            onPress={() => navigation.navigate("Script", { sessionId })}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            style={{ marginRight: 12 }}
-          >
-            <Feather name="file-text" size={20} color={theme.text} />
-          </Pressable>
-
-          <Pressable
-            onPress={() => {
-              if (selectedSentenceIndex !== null) {
-                setReplaceModalForIndex(selectedSentenceIndex);
-              }
-            }}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Feather name="more-horizontal" size={22} color={theme.text} />
-          </Pressable>
-        </View>
-      ),
-    });
-  }, [navigation, theme.text, selectedSentenceIndex, sessionId]);
+    navigation.setOptions({ headerRight: () => null });
+  }, [navigation]);
 
   // Header title: Flow tabs. No selectedSentenceIndex to avoid header churn on beat tap.
   useLayoutEffect(() => {
@@ -1236,6 +1213,10 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: Spacing.sm,
+  },
+  iconButton: {
+    padding: Spacing.xs,
+    borderRadius: 6,
   },
   editorCollapsedRow: {
     padding: Spacing.md,
