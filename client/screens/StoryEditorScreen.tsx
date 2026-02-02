@@ -32,6 +32,7 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
 import { Card } from "@/components/Card";
+import { FlowTabsHeader } from "@/components/FlowTabsHeader";
 import { HomeStackParamList } from "@/navigation/HomeStackNavigator";
 import { useTheme } from "@/hooks/useTheme";
 import { useCaptionPreview } from "@/hooks/useCaptionPreview";
@@ -537,7 +538,7 @@ export default function StoryEditorScreen() {
     };
   }, []);
 
-  // Set header right button
+  // Header right: Script + overflow (Replace Clip). Depends on selectedSentenceIndex for overflow target.
   useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: () => (
@@ -564,6 +565,29 @@ export default function StoryEditorScreen() {
       ),
     });
   }, [navigation, theme.text, selectedSentenceIndex, sessionId]);
+
+  // Header title: Flow tabs. No selectedSentenceIndex to avoid header churn on beat tap.
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerTitle: () => (
+        <FlowTabsHeader
+          currentStep="storyboard"
+          onRenderPress={handleRender}
+          onScriptPress={() => navigation.navigate("Script", { sessionId })}
+          onSpeechPress={() => showWarning("Coming soon.")}
+          renderDisabled={!canRender || isRendering || keyboardVisible}
+        />
+      ),
+    });
+  }, [
+    navigation,
+    sessionId,
+    handleRender,
+    canRender,
+    isRendering,
+    keyboardVisible,
+    showWarning,
+  ]);
 
   // Deck FlatList memoization — must be before any early return (Rules of Hooks)
   const flatListExtraData = useMemo(
@@ -705,7 +729,7 @@ export default function StoryEditorScreen() {
     setTimeout(() => textInputRef.current?.focus(), 50);
   }, []);
 
-  const handleRender = async () => {
+  const handleRender = useCallback(async () => {
     // Credit check: verify cost is 20 credits (from spec verification)
     if (credits < 20) {
       showError("Not enough credits. You need 20 credits to render.");
@@ -782,7 +806,15 @@ export default function StoryEditorScreen() {
     } finally {
       setIsRendering(false);
     }
-  };
+  }, [
+    credits,
+    showError,
+    showWarning,
+    showSuccess,
+    sessionId,
+    navigation,
+    refreshCredits,
+  ]);
 
   if (isLoading) {
     return (
@@ -980,42 +1012,13 @@ export default function StoryEditorScreen() {
         </RNAnimated.View>
         )}
 
-      {/* Render Button: always mounted; visually hidden and non-interactive while keyboard open (avoids tree churn) */}
+      {/* Tab-bar-only spacer: reserves space below editor for keyboard docking. SSOT: reservedBelowEditor = tabBarHeight + Spacing.sm. */}
       <View
-        pointerEvents={keyboardVisible ? "none" : "auto"}
-        style={[
-          styles.renderButtonContainer,
-          { paddingBottom: tabBarHeight },
-          keyboardVisible && { opacity: 0 },
-        ]}
+        style={[styles.renderAreaSpacer, { height: tabBarHeight + Spacing.sm }]}
         onLayout={(e) => {
-          // Used to compute how much fixed UI sits below the beat editor.
-          // Allows us to shift the editor by (keyboardHeight - reservedBelowEditor)
-          // so it docks flush to the keyboard instead of floating above it.
           renderAreaHRef.current = e.nativeEvent.layout.height;
         }}
-      >
-        <Pressable
-          style={[
-            styles.renderButton,
-            {
-              backgroundColor: canRender && !isRendering ? theme.link : theme.backgroundTertiary,
-              opacity: canRender && !isRendering ? 1 : 0.5,
-            },
-          ]}
-          onPress={handleRender}
-          disabled={isRendering || !canRender}
-        >
-          <ThemedText
-            style={[
-              styles.renderButtonText,
-              { color: canRender && !isRendering ? theme.buttonText : theme.text },
-            ]}
-          >
-            {isRendering ? "Rendering..." : "Render"}
-          </ThemedText>
-        </Pressable>
-      </View>
+      />
 
       {/* Rendering Modal */}
       <Modal
@@ -1307,22 +1310,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "500",
   },
-  renderButtonContainer: {
-    paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    borderTopWidth: 1,
-    borderTopColor: "transparent",
-  },
-  renderButton: {
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.xl,
-    borderRadius: 8,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  renderButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
+  renderAreaSpacer: {
+    width: "100%",
   },
   renderingModalOverlay: {
     flex: 1,
