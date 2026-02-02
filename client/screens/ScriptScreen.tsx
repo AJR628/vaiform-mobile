@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, useLayoutEffect } from "react";
 import {
   View,
   StyleSheet,
@@ -17,6 +17,8 @@ import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { ThemedView } from "@/components/ThemedView";
 import { ThemedText } from "@/components/ThemedText";
 import { Card } from "@/components/Card";
+import { FlowTabsHeader } from "@/components/FlowTabsHeader";
+import { useActiveStorySession } from "@/contexts/ActiveStorySessionContext";
 import { Button } from "@/components/Button";
 import { useTheme } from "@/hooks/useTheme";
 import { useToast } from "@/contexts/ToastContext";
@@ -36,6 +38,7 @@ export default function ScriptScreen() {
 
   const { theme } = useTheme();
   const { showError } = useToast();
+  const { setActiveSessionId } = useActiveStorySession();
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useBottomTabBarHeight();
 
@@ -51,6 +54,25 @@ export default function ScriptScreen() {
   const [editingSentenceIndex, setEditingSentenceIndex] = useState<number | null>(null);
   const [draftTexts, setDraftTexts] = useState<Record<number, string>>({});
   const [savingSentenceIndex, setSavingSentenceIndex] = useState<number | null>(null);
+
+  useEffect(() => {
+    setActiveSessionId(sessionId);
+  }, [sessionId, setActiveSessionId]);
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerTitle: () => (
+        <FlowTabsHeader
+          currentStep="script"
+          onCreatePress={() => navigation.popToTop()}
+          onScriptPress={undefined}
+          onStoryboardPress={() => navigation.replace("StoryEditor", { sessionId })}
+          renderDisabled={true}
+        />
+      ),
+      headerLeft: () => null,
+    });
+  }, [navigation, sessionId]);
 
   useEffect(() => {
     const load = async () => {

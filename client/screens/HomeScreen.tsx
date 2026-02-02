@@ -1,5 +1,5 @@
-import React, { useState } from "react";
-import { View, StyleSheet, Pressable, ActivityIndicator, Platform, TextInput } from "react-native";
+import React, { useState, useLayoutEffect } from "react";
+import { View, StyleSheet, Pressable, ActivityIndicator, Platform, TextInput, Alert } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
@@ -15,6 +15,8 @@ import { Card } from "@/components/Card";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/contexts/ToastContext";
+import { useActiveStorySession } from "@/contexts/ActiveStorySessionContext";
+import { FlowTabsHeader } from "@/components/FlowTabsHeader";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius } from "@/constants/theme";
 import { storyStart, storyGenerate } from "@/api/client";
@@ -40,6 +42,7 @@ export default function HomeScreen() {
   const { theme } = useTheme();
   const { showError } = useToast();
   const navigation = useNavigation<HomeNavProp>();
+  const { activeSessionId, isHydrated, setActiveSessionId, clearActiveSessionId } = useActiveStorySession();
 
   const [inputType, setInputType] = useState<"link" | "idea">("link");
   const [inputText, setInputText] = useState("");
@@ -53,6 +56,28 @@ export default function HomeScreen() {
       return;
     }
 
+    if (activeSessionId) {
+      Alert.alert(
+        "Start new project?",
+        "This will replace your current script and storyboard.",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "OK",
+            onPress: () => {
+              clearActiveSessionId();
+              runCreateFlow(trimmedInput);
+            },
+          },
+        ]
+      );
+      return;
+    }
+
+    runCreateFlow(trimmedInput);
+  };
+
+  const runCreateFlow = async (trimmedInput: string) => {
     setIsCreating(true);
     setProgressText("Starting…");
 
@@ -60,7 +85,7 @@ export default function HomeScreen() {
       // Step 1: Start story session
       const startResult = await storyStart({
         input: trimmedInput,
-        inputType,
+        inputType: inputType,
       });
 
       if (!startResult.ok) {
@@ -96,9 +121,10 @@ export default function HomeScreen() {
         return;
       }
 
-      // Success - navigate to script screen
+      // Success - persist session and navigate to script screen
       setIsCreating(false);
       setProgressText(null);
+      setActiveSessionId(sessionId);
       navigation.navigate("Script", { sessionId });
 
       if (Platform.OS !== "web") {
@@ -116,6 +142,37 @@ export default function HomeScreen() {
     inputType === "link"
       ? "Paste article URL..."
       : "Describe your idea...";
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerTitle: () => (
+        <FlowTabsHeader
+          currentStep="create"
+          onCreatePress={undefined}
+          onScriptPress={() => {
+            if (!isHydrated || !activeSessionId) {
+              if (isHydrated) showError("Create a script first");
+              return;
+            }
+            navigation.navigate("Script", { sessionId: activeSessionId });
+          }}
+          onStoryboardPress={() => {
+            if (!isHydrated || !activeSessionId) {
+              if (isHydrated) showError("Create a script first");
+              return;
+            }
+            navigation.navigate("StoryEditor", { sessionId: activeSessionId });
+          }}
+          disabledSteps={{
+            script: !isHydrated || !activeSessionId,
+            storyboard: !isHydrated || !activeSessionId,
+          }}
+          renderDisabled={true}
+        />
+      ),
+      headerLeft: () => null,
+    });
+  }, [navigation, activeSessionId, isHydrated, showError]);
 
   return (
     <ThemedView style={styles.container}>

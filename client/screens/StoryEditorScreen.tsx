@@ -38,6 +38,7 @@ import { useTheme } from "@/hooks/useTheme";
 import { useCaptionPreview } from "@/hooks/useCaptionPreview";
 import { useToast } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
+import { useActiveStorySession } from "@/contexts/ActiveStorySessionContext";
 import { Spacing } from "@/constants/theme";
 import { storyGet, storyUpdateBeatText, storyFinalize, type CaptionPreviewMeta } from "@/api/client";
 import * as Haptics from "expo-haptics";
@@ -272,6 +273,7 @@ export default function StoryEditorScreen() {
   const { sessionId } = route.params;
   const { theme } = useTheme();
   const { showError, showWarning, showSuccess } = useToast();
+  const { setActiveSessionId } = useActiveStorySession();
   const { userProfile, refreshCredits } = useAuth();
   const credits = userProfile?.credits ?? 0;
   const canRender = credits >= 20;
@@ -538,19 +540,21 @@ export default function StoryEditorScreen() {
     };
   }, []);
 
-  // Header right: cleared; Replace Clip entrypoint moved to Beat row (Swap Clip).
-  useLayoutEffect(() => {
-    navigation.setOptions({ headerRight: () => null });
-  }, [navigation]);
+  useEffect(() => {
+    setActiveSessionId(sessionId);
+  }, [sessionId, setActiveSessionId]);
 
-  // Header title: Flow tabs. No selectedSentenceIndex to avoid header churn on beat tap.
+  // Header: Flow tabs, no back arrow (Create tab is primary escape), no header right.
   useLayoutEffect(() => {
     navigation.setOptions({
+      headerRight: () => null,
+      headerLeft: () => null,
       headerTitle: () => (
         <FlowTabsHeader
           currentStep="storyboard"
+          onCreatePress={() => navigation.popToTop()}
+          onScriptPress={() => navigation.replace("Script", { sessionId })}
           onRenderPress={handleRender}
-          onScriptPress={() => navigation.navigate("Script", { sessionId })}
           onSpeechPress={() => showWarning("Coming soon.")}
           renderDisabled={!canRender || isRendering || keyboardVisible}
         />

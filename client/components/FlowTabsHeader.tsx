@@ -1,8 +1,7 @@
-import React from "react";
+import React, { useRef, useCallback } from "react";
 import { View, Pressable, StyleSheet } from "react-native";
 import { ThemedText } from "@/components/ThemedText";
 import { useTheme } from "@/hooks/useTheme";
-import { Spacing } from "@/constants/theme";
 
 export type FlowStep = "create" | "script" | "storyboard" | "speech" | "render";
 
@@ -14,13 +13,17 @@ const STEPS: { key: FlowStep; label: string }[] = [
   { key: "render", label: "Render" },
 ];
 
+const NAV_COOLDOWN_MS = 150;
+
 export interface FlowTabsHeaderProps {
   currentStep: FlowStep;
-  onRenderPress: () => void;
+  onRenderPress?: () => void;
   onScriptPress?: () => void;
   onCreatePress?: () => void;
   onSpeechPress?: () => void;
-  renderDisabled: boolean;
+  onStoryboardPress?: () => void;
+  renderDisabled?: boolean;
+  disabledSteps?: Partial<Record<FlowStep, boolean>>;
 }
 
 export function FlowTabsHeader({
@@ -29,9 +32,21 @@ export function FlowTabsHeader({
   onScriptPress,
   onCreatePress,
   onSpeechPress,
-  renderDisabled,
+  onStoryboardPress,
+  renderDisabled = true,
+  disabledSteps,
 }: FlowTabsHeaderProps) {
   const { theme } = useTheme();
+  const navBusyRef = useRef(false);
+
+  const runNav = useCallback((fn: () => void) => {
+    if (navBusyRef.current) return;
+    navBusyRef.current = true;
+    fn();
+    setTimeout(() => {
+      navBusyRef.current = false;
+    }, NAV_COOLDOWN_MS);
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -41,13 +56,20 @@ export function FlowTabsHeader({
         const isSpeech = key === "speech";
         const isScript = key === "script";
         const isCreate = key === "create";
+        const isStoryboard = key === "storyboard";
 
-        const disabled = isRender && renderDisabled;
+        const disabled =
+          (isRender && (renderDisabled || !onRenderPress)) ||
+          (isSpeech && !onSpeechPress) ||
+          !!disabledSteps?.[key];
+
         const onPress = () => {
-          if (isRender && !renderDisabled) onRenderPress();
-          else if (isScript && onScriptPress) onScriptPress();
-          else if (isCreate && onCreatePress) onCreatePress();
-          else if (isSpeech && onSpeechPress) onSpeechPress();
+          if (disabled) return;
+          if (isRender && onRenderPress) runNav(onRenderPress);
+          else if (isScript && onScriptPress) runNav(onScriptPress);
+          else if (isCreate && onCreatePress) runNav(onCreatePress);
+          else if (isStoryboard && onStoryboardPress) runNav(onStoryboardPress);
+          else if (isSpeech && onSpeechPress) runNav(onSpeechPress);
         };
 
         return (

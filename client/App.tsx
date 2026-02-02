@@ -13,6 +13,7 @@ import RootStackNavigator from "@/navigation/RootStackNavigator";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ToastProvider } from "@/contexts/ToastContext";
+import { ActiveStorySessionProvider } from "@/contexts/ActiveStorySessionContext";
 
 export default function App() {
   return (
@@ -24,7 +25,9 @@ export default function App() {
               <KeyboardProvider>
                 <NavigationContainer>
                   <ToastProvider>
-                    <RootStackNavigator />
+                    <ActiveStorySessionProvider>
+                      <RootStackNavigator />
+                    </ActiveStorySessionProvider>
                   </ToastProvider>
                 </NavigationContainer>
                 <StatusBar style="auto" />
