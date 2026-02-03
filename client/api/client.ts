@@ -334,6 +334,11 @@ export interface CaptionPreviewStyle {
   rasterPadding?: number;
 }
 
+export interface StoryOverlayCaptionStyle extends CaptionPreviewStyle {
+  placement?: "top" | "center" | "bottom";
+  yPct?: number;
+}
+
 /** Server-measured request body: text + placement or yPct, optional style. No geometry. */
 export interface CaptionPreviewRequestBody {
   ssotVersion: 3;
@@ -628,6 +633,23 @@ export async function storyUpdateShot(body: {
     body,
     requireAuth: true,
   });
+}
+
+/**
+ * POST /api/story/update-caption-style - Persist caption overlay style for session
+ */
+export async function storyUpdateCaptionStyle(body: {
+  sessionId: string;
+  overlayCaption: StoryOverlayCaptionStyle;
+}): Promise<NormalizedResponse<{ overlayCaption?: StoryOverlayCaptionStyle }>> {
+  return apiRequestNormalized<{ overlayCaption?: StoryOverlayCaptionStyle }>(
+    "/api/story/update-caption-style",
+    {
+      method: "POST",
+      body,
+      requireAuth: true,
+    }
+  );
 }
 
 /**

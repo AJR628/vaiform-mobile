@@ -41,7 +41,13 @@ import { useToast } from "@/contexts/ToastContext";
 import { useAuth } from "@/contexts/AuthContext";
 import { useActiveStorySession } from "@/contexts/ActiveStorySessionContext";
 import { Spacing } from "@/constants/theme";
-import { storyGet, storyUpdateBeatText, storyFinalize, type CaptionPreviewMeta } from "@/api/client";
+import {
+  storyGet,
+  storyUpdateBeatText,
+  storyFinalize,
+  storyUpdateCaptionStyle,
+  type CaptionPreviewMeta,
+} from "@/api/client";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import { Linking } from "react-native";
@@ -54,6 +60,15 @@ interface Beat {
   sentenceIndex: number;
   text: string;
 }
+
+type CaptionPlacement = "top" | "center" | "bottom";
+
+const CAPTION_PLACEMENTS: CaptionPlacement[] = ["top", "center", "bottom"];
+const PLACEMENT_TO_YPCT: Record<CaptionPlacement, number> = {
+  top: 0.1,
+  center: 0.5,
+  bottom: 0.9,
+};
 
 /**
  * Unwrap session from NormalizedResponse shape
@@ -293,6 +308,7 @@ export default function StoryEditorScreen() {
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [editorH, setEditorH] = useState(120);
   const [editorCollapsed, setEditorCollapsed] = useState(false);
+  const [captionPlacement, setCaptionPlacement] = useState<CaptionPlacement>("center");
 
   const { previewByIndex, isLoadingByIndex, requestPreview, prefetchAllBeats } =
     useCaptionPreview(sessionId, selectedSentenceIndex);
@@ -318,6 +334,10 @@ export default function StoryEditorScreen() {
   const editorTranslateY = useRef(new RNAnimated.Value(0)).current;
   const renderAreaHRef = useRef(0);
   const prefetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const persistInFlightRef = useRef(false);
+  const pendingPlacementRef = useRef<CaptionPlacement | null>(null);
+  const lastPersistedPlacementRef = useRef<CaptionPlacement>("center");
+  const lastPersistedYPctRef = useRef<number>(PLACEMENT_TO_YPCT.center);
 
   const [deckAreaH, setDeckAreaH] = useState(0);
   const [draftText, setDraftText] = useState("");
@@ -433,6 +453,15 @@ export default function StoryEditorScreen() {
     [session]
   );
 
+  useEffect(() => {
+    const placement = session?.overlayCaption?.placement as CaptionPlacement | undefined;
+    if (placement && CAPTION_PLACEMENTS.includes(placement)) {
+      setCaptionPlacement((prev) => (prev === placement ? prev : placement));
+      lastPersistedPlacementRef.current = placement;
+      lastPersistedYPctRef.current = PLACEMENT_TO_YPCT[placement];
+    }
+  }, [session]);
+
   const committedText =
     selectedSentenceIndex !== null
       ? (beatTexts[selectedSentenceIndex] ??
@@ -478,8 +507,12 @@ export default function StoryEditorScreen() {
   useEffect(() => {
     if (selectedSentenceIndex === null || !sessionId) return;
     if (!committedText.trim()) return;
-    requestPreview(selectedSentenceIndex, committedText, { placement: "center" });
-  }, [selectedSentenceIndex, sessionId, committedText, requestPreview]);
+    const yPct = PLACEMENT_TO_YPCT[captionPlacement];
+    requestPreview(selectedSentenceIndex, committedText, {
+      placement: captionPlacement,
+      yPct,
+    });
+  }, [selectedSentenceIndex, sessionId, committedText, captionPlacement, requestPreview]);
 
   // Prefetch caption previews for all beats once per session; delay start and skip while editing to avoid focus loss
   useEffect(() => {
@@ -491,7 +524,11 @@ export default function StoryEditorScreen() {
       if (isEditingRef.current || keyboardVisibleRef.current) return;
       if (prefetchDoneForSessionRef.current === sessionId) return;
       prefetchDoneForSessionRef.current = sessionId;
-      prefetchAllBeats(beats, { delayBetweenMs: 120 });
+      prefetchAllBeats(beats, {
+        delayBetweenMs: 120,
+        placement: captionPlacement,
+        yPct: PLACEMENT_TO_YPCT[captionPlacement],
+      });
     }, 1500);
 
     return () => {
@@ -500,7 +537,7 @@ export default function StoryEditorScreen() {
         prefetchTimeoutRef.current = null;
       }
     };
-  }, [sessionId, beats, prefetchAllBeats]);
+  }, [sessionId, beats, prefetchAllBeats, captionPlacement]);
 
   // Selection → deck scroll (only when selection changed externally, not from onMomentumScrollEnd)
   useEffect(() => {
@@ -701,6 +738,69 @@ export default function StoryEditorScreen() {
       initialQuery: shot?.searchQuery ?? "",
     });
   };
+
+  const requestPlacementPreview = useCallback(
+    (placement: CaptionPlacement) => {
+      if (selectedSentenceIndex === null) return;
+      if (!committedText.trim()) return;
+      const yPct = PLACEMENT_TO_YPCT[placement];
+      requestPreview(selectedSentenceIndex, committedText, { placement, yPct });
+    },
+    [selectedSentenceIndex, committedText, requestPreview]
+  );
+
+  const persistPlacement = useCallback(
+    async (placement: CaptionPlacement) => {
+      if (persistInFlightRef.current) {
+        pendingPlacementRef.current = placement;
+        return;
+      }
+
+      persistInFlightRef.current = true;
+      const yPct = PLACEMENT_TO_YPCT[placement];
+
+      try {
+        const res = await storyUpdateCaptionStyle({
+          sessionId,
+          overlayCaption: { placement, yPct },
+        });
+        if (!res?.ok && res?.success !== true) {
+          throw new Error(res?.message || "Failed to update caption placement");
+        }
+        lastPersistedPlacementRef.current = placement;
+        lastPersistedYPctRef.current = yPct;
+      } catch (error) {
+        console.error("[story] update caption placement error:", error);
+        const fallbackPlacement =
+          lastPersistedPlacementRef.current ?? "center";
+        pendingPlacementRef.current = null;
+        setCaptionPlacement(fallbackPlacement);
+        requestPlacementPreview(fallbackPlacement);
+        showError("Failed to update caption placement. Please try again.");
+        return;
+      } finally {
+        persistInFlightRef.current = false;
+        const pending = pendingPlacementRef.current;
+        if (pending && pending !== lastPersistedPlacementRef.current) {
+          pendingPlacementRef.current = null;
+          persistPlacement(pending);
+        } else {
+          pendingPlacementRef.current = null;
+        }
+      }
+    },
+    [sessionId, requestPlacementPreview, showError]
+  );
+
+  const handlePlacementChange = useCallback(
+    (nextPlacement: CaptionPlacement) => {
+      if (selectedSentenceIndex === null || !committedText.trim()) return;
+      setCaptionPlacement(nextPlacement);
+      requestPlacementPreview(nextPlacement);
+      persistPlacement(nextPlacement);
+    },
+    [selectedSentenceIndex, committedText, requestPlacementPreview, persistPlacement]
+  );
 
   const toggleEditorCollapsed = useCallback(() => {
     if (keyboardVisibleRef.current || keyboardVisible) return;
@@ -974,6 +1074,43 @@ export default function StoryEditorScreen() {
           </View>
           {!editorCollapsed && (
             <>
+              <View
+                style={[
+                  styles.placementRow,
+                  { backgroundColor: theme.backgroundSecondary },
+                ]}
+              >
+                {CAPTION_PLACEMENTS.map((placement) => {
+                  const isActive = captionPlacement === placement;
+                  const label =
+                    placement === "top"
+                      ? "Top"
+                      : placement === "center"
+                        ? "Center"
+                        : "Bottom";
+                  return (
+                    <Pressable
+                      key={placement}
+                      onPress={() => handlePlacementChange(placement)}
+                      style={({ pressed }) => [
+                        styles.placementButton,
+                        isActive && { backgroundColor: theme.link },
+                        pressed && !isActive ? { opacity: 0.7 } : null,
+                      ]}
+                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                    >
+                      <ThemedText
+                        style={[
+                          styles.placementButtonText,
+                          { color: isActive ? theme.buttonText : theme.text },
+                        ]}
+                      >
+                        {label}
+                      </ThemedText>
+                    </Pressable>
+                  );
+                })}
+              </View>
               <TextInput
                 ref={textInputRef}
                 style={[
@@ -1226,6 +1363,26 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: Spacing.sm,
+  },
+  placementRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderRadius: 10,
+    overflow: "hidden",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.12)",
+    marginBottom: Spacing.sm,
+  },
+  placementButton: {
+    flex: 1,
+    paddingVertical: Spacing.xs,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  placementButtonText: {
+    fontSize: 13,
+    fontWeight: "600",
+    opacity: 0.92,
   },
   beatLabelRowCollapsed: {
     marginHorizontal: Spacing.lg,

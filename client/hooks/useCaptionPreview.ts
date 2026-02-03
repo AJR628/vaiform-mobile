@@ -13,13 +13,15 @@ const CACHE_TTL_MS = 60_000;
 function hashStyleAndText(
   style: CaptionPreviewStyle | undefined,
   placement: string | undefined,
-  text: string
+  text: string,
+  yPct?: number
 ): string {
   const styleJson =
     style && typeof style === "object"
       ? JSON.stringify(style, Object.keys(style).sort())
       : "";
-  return `${styleJson}|${placement ?? ""}|${text}`;
+  const ySuffix = yPct === undefined ? "" : `|${yPct}`;
+  return `${styleJson}|${placement ?? ""}|${text}${ySuffix}`;
 }
 
 interface CacheEntry {
@@ -29,6 +31,7 @@ interface CacheEntry {
 
 export interface UseCaptionPreviewOptions {
   placement?: "top" | "center" | "bottom";
+  yPct?: number;
   style?: CaptionPreviewStyle;
 }
 
@@ -59,9 +62,9 @@ export function useCaptionPreview(
         (requestIdRef.current[sentenceIndex] ?? 0) + 1;
       const reqId = requestIdRef.current[sentenceIndex];
 
-      const { placement = "center", style } = options;
+      const { placement = "center", yPct, style } = options;
       const trimmed = text?.trim() ?? "";
-      const cacheKey = hashStyleAndText(style, placement, trimmed);
+      const cacheKey = hashStyleAndText(style, placement, trimmed, yPct);
 
       const now = Date.now();
       const cached = cacheRef.current.get(cacheKey);
@@ -88,6 +91,7 @@ export function useCaptionPreview(
       const body = buildCaptionPreviewPayload({
         text: trimmed || " ",
         placement,
+        yPct,
         style,
         frameW: 1080,
         frameH: 1920,
@@ -166,12 +170,14 @@ export function useCaptionPreview(
   const prefetchAllBeats = useCallback(
     async (
       beats: PrefetchBeat[],
-      opts?: { delayBetweenMs?: number }
+      opts?: { delayBetweenMs?: number; placement?: "top" | "center" | "bottom"; yPct?: number }
     ): Promise<void> => {
       const delayBetweenMs = opts?.delayBetweenMs ?? 120;
+      const placement = opts?.placement ?? "center";
+      const yPct = opts?.yPct;
       for (const beat of beats) {
         try {
-          await doOneRequest(beat.sentenceIndex, beat.text, { placement: "center" });
+          await doOneRequest(beat.sentenceIndex, beat.text, { placement, yPct });
         } catch {
           // continue to next beat
         }
