@@ -310,7 +310,7 @@ export default function StoryEditorScreen() {
   const [editorCollapsed, setEditorCollapsed] = useState(false);
   const [captionPlacement, setCaptionPlacement] = useState<CaptionPlacement>("center");
 
-  const { previewByIndex, isLoadingByIndex, requestPreview, prefetchAllBeats } =
+  const { previewByIndex, isLoadingByIndex, requestPreview, prefetchAllBeats, cancelPrefetch } =
     useCaptionPreview(sessionId, selectedSentenceIndex);
 
   const scrollX = useSharedValue(0);
@@ -744,7 +744,7 @@ export default function StoryEditorScreen() {
       if (selectedSentenceIndex === null) return;
       if (!committedText.trim()) return;
       const yPct = PLACEMENT_TO_YPCT[placement];
-      requestPreview(selectedSentenceIndex, committedText, { placement, yPct });
+      requestPreview(selectedSentenceIndex, committedText, { placement, yPct, immediate: true });
     },
     [selectedSentenceIndex, committedText, requestPreview]
   );
@@ -795,11 +795,16 @@ export default function StoryEditorScreen() {
   const handlePlacementChange = useCallback(
     (nextPlacement: CaptionPlacement) => {
       if (selectedSentenceIndex === null || !committedText.trim()) return;
+      if (prefetchTimeoutRef.current != null) {
+        clearTimeout(prefetchTimeoutRef.current);
+        prefetchTimeoutRef.current = null;
+      }
+      cancelPrefetch();
       setCaptionPlacement(nextPlacement);
       requestPlacementPreview(nextPlacement);
       persistPlacement(nextPlacement);
     },
-    [selectedSentenceIndex, committedText, requestPlacementPreview, persistPlacement]
+    [selectedSentenceIndex, committedText, cancelPrefetch, requestPlacementPreview, persistPlacement]
   );
 
   const toggleEditorCollapsed = useCallback(() => {

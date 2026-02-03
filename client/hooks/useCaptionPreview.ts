@@ -33,6 +33,8 @@ export interface UseCaptionPreviewOptions {
   placement?: "top" | "center" | "bottom";
   yPct?: number;
   style?: CaptionPreviewStyle;
+  /** When true, bypass debounce and run request immediately; clears any pending timer and in-flight request for this sentenceIndex to avoid late pop. */
+  immediate?: boolean;
 }
 
 export interface PrefetchBeat {
@@ -51,6 +53,8 @@ export function useCaptionPreview(
   const debounceTimersRef = useRef<Record<number, ReturnType<typeof setTimeout>>>({});
   const abortControllersRef = useRef<Record<number, AbortController>>({});
   const requestIdRef = useRef<Record<number, number>>({});
+  const prefetchRunIdRef = useRef(0);
+  const prefetchCurrentSentenceIndexRef = useRef<number | null>(null);
 
   const doOneRequest = useCallback(
     async (
@@ -152,16 +156,29 @@ export function useCaptionPreview(
       options: UseCaptionPreviewOptions = {}
     ) => {
       const trimmed = text?.trim() ?? "";
+      const { immediate, ...requestOptions } = options;
+
+      if (immediate) {
+        const existingTimer = debounceTimersRef.current[sentenceIndex];
+        if (existingTimer != null) {
+          clearTimeout(existingTimer);
+          delete debounceTimersRef.current[sentenceIndex];
+        }
+        const prevController = abortControllersRef.current[sentenceIndex];
+        if (prevController) prevController.abort();
+        doOneRequest(sentenceIndex, trimmed, requestOptions);
+        return;
+      }
 
       const existingTimer = debounceTimersRef.current[sentenceIndex];
-      if (existingTimer) {
+      if (existingTimer != null) {
         clearTimeout(existingTimer);
-        debounceTimersRef.current[sentenceIndex] = undefined;
+        delete debounceTimersRef.current[sentenceIndex];
       }
 
       debounceTimersRef.current[sentenceIndex] = setTimeout(() => {
-        debounceTimersRef.current[sentenceIndex] = undefined;
-        doOneRequest(sentenceIndex, trimmed, options);
+        delete debounceTimersRef.current[sentenceIndex];
+        doOneRequest(sentenceIndex, trimmed, requestOptions);
       }, DEBOUNCE_MS);
     },
     [doOneRequest]
@@ -172,25 +189,45 @@ export function useCaptionPreview(
       beats: PrefetchBeat[],
       opts?: { delayBetweenMs?: number; placement?: "top" | "center" | "bottom"; yPct?: number }
     ): Promise<void> => {
+      prefetchRunIdRef.current += 1;
+      const runId = prefetchRunIdRef.current;
       const delayBetweenMs = opts?.delayBetweenMs ?? 120;
       const placement = opts?.placement ?? "center";
       const yPct = opts?.yPct;
-      for (const beat of beats) {
-        try {
-          await doOneRequest(beat.sentenceIndex, beat.text, { placement, yPct });
-        } catch {
-          // continue to next beat
+      try {
+        for (const beat of beats) {
+          if (prefetchRunIdRef.current !== runId) break;
+          prefetchCurrentSentenceIndexRef.current = beat.sentenceIndex;
+          try {
+            await doOneRequest(beat.sentenceIndex, beat.text, { placement, yPct });
+          } catch {
+            // continue to next beat
+          }
+          if (prefetchRunIdRef.current !== runId) break;
+          await new Promise((r) => setTimeout(r, delayBetweenMs));
         }
-        await new Promise((r) => setTimeout(r, delayBetweenMs));
+      } finally {
+        prefetchCurrentSentenceIndexRef.current = null;
       }
     },
     [doOneRequest]
   );
+
+  const cancelPrefetch = useCallback(() => {
+    prefetchRunIdRef.current += 1;
+    const idx = prefetchCurrentSentenceIndexRef.current;
+    if (idx != null) {
+      const ctrl = abortControllersRef.current[idx];
+      if (ctrl) ctrl.abort();
+    }
+    prefetchCurrentSentenceIndexRef.current = null;
+  }, []);
 
   return {
     previewByIndex,
     isLoadingByIndex,
     requestPreview,
     prefetchAllBeats,
+    cancelPrefetch,
   };
 }
