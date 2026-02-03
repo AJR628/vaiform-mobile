@@ -112,6 +112,7 @@ export default function LoginScreen() {
         <Pressable
           style={({ pressed }) => [
             styles.googleButton,
+            { backgroundColor: theme.backgroundDefault },
             pressed && styles.buttonPressed,
           ]}
           onPress={handleGoogleSignIn}

@@ -14,6 +14,19 @@ import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ToastProvider } from "@/contexts/ToastContext";
 import { ActiveStorySessionProvider } from "@/contexts/ActiveStorySessionContext";
+import { Colors } from "@/constants/theme";
+
+const DarkTheme = {
+  dark: true,
+  colors: {
+    primary: Colors.dark.link,
+    background: Colors.dark.backgroundRoot,
+    card: Colors.dark.backgroundDefault,
+    text: Colors.dark.text,
+    border: Colors.dark.backgroundTertiary,
+    notification: Colors.dark.link,
+  },
+};
 
 export default function App() {
   return (
@@ -23,14 +36,14 @@ export default function App() {
           <SafeAreaProvider>
             <GestureHandlerRootView style={styles.root}>
               <KeyboardProvider>
-                <NavigationContainer>
+                <NavigationContainer theme={DarkTheme}>
                   <ToastProvider>
                     <ActiveStorySessionProvider>
                       <RootStackNavigator />
                     </ActiveStorySessionProvider>
                   </ToastProvider>
                 </NavigationContainer>
-                <StatusBar style="auto" />
+                <StatusBar style="light" />
               </KeyboardProvider>
             </GestureHandlerRootView>
           </SafeAreaProvider>
