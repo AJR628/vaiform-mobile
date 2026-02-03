@@ -1,6 +1,6 @@
 import React from "react";
 import { StyleSheet } from "react-native";
-import { NavigationContainer } from "@react-navigation/native";
+import { DarkTheme as NavDarkTheme, NavigationContainer } from "@react-navigation/native";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
@@ -16,15 +16,20 @@ import { ToastProvider } from "@/contexts/ToastContext";
 import { ActiveStorySessionProvider } from "@/contexts/ActiveStorySessionContext";
 import { Colors } from "@/constants/theme";
 
-const DarkTheme = {
-  dark: true,
+const vaiformNavDarkColors = {
+  primary: Colors.dark.link,
+  background: Colors.dark.backgroundRoot,
+  card: Colors.dark.backgroundDefault,
+  text: Colors.dark.text,
+  border: Colors.dark.backgroundTertiary,
+  notification: Colors.dark.link,
+};
+
+const VaiformNavDarkTheme = {
+  ...NavDarkTheme,
   colors: {
-    primary: Colors.dark.link,
-    background: Colors.dark.backgroundRoot,
-    card: Colors.dark.backgroundDefault,
-    text: Colors.dark.text,
-    border: Colors.dark.backgroundTertiary,
-    notification: Colors.dark.link,
+    ...NavDarkTheme.colors,
+    ...vaiformNavDarkColors,
   },
 };
 
@@ -36,7 +41,7 @@ export default function App() {
           <SafeAreaProvider>
             <GestureHandlerRootView style={styles.root}>
               <KeyboardProvider>
-                <NavigationContainer theme={DarkTheme}>
+                <NavigationContainer theme={VaiformNavDarkTheme}>
                   <ToastProvider>
                     <ActiveStorySessionProvider>
                       <RootStackNavigator />
