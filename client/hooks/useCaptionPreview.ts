@@ -223,11 +223,37 @@ export function useCaptionPreview(
     prefetchCurrentSentenceIndexRef.current = null;
   }, []);
 
+  const resetPreviews = useCallback(() => {
+    const timers = debounceTimersRef.current;
+    for (const key of Object.keys(timers)) {
+      const timerId = timers[Number(key)];
+      if (timerId != null) clearTimeout(timerId);
+    }
+    debounceTimersRef.current = {};
+    const controllers = abortControllersRef.current;
+    for (const key of Object.keys(controllers)) {
+      const ctrl = controllers[Number(key)];
+      if (ctrl) ctrl.abort();
+    }
+    abortControllersRef.current = {};
+    requestIdRef.current = {};
+    prefetchRunIdRef.current += 1;
+    const idx = prefetchCurrentSentenceIndexRef.current;
+    if (idx != null) {
+      const ctrl = abortControllersRef.current[idx];
+      if (ctrl) ctrl.abort();
+    }
+    prefetchCurrentSentenceIndexRef.current = null;
+    setPreviewByIndex({});
+    setIsLoadingByIndex({});
+  }, []);
+
   return {
     previewByIndex,
     isLoadingByIndex,
     requestPreview,
     prefetchAllBeats,
     cancelPrefetch,
+    resetPreviews,
   };
 }

@@ -8,7 +8,10 @@ import {
   Keyboard,
   KeyboardAvoidingView,
   Platform,
+  Alert,
+  Pressable,
 } from "react-native";
+import { Feather } from "@expo/vector-icons";
 import { RouteProp, useRoute, useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useHeaderHeight } from "@react-navigation/elements";
@@ -22,7 +25,7 @@ import { Button } from "@/components/Button";
 import { useTheme } from "@/hooks/useTheme";
 import { useToast } from "@/contexts/ToastContext";
 import { Spacing } from "@/constants/theme";
-import { storyGet, storyPlan, storySearchAll, storyUpdateBeatText } from "@/api/client";
+import { storyGet, storyPlan, storySearchAll, storyUpdateBeatText, storyDeleteBeat } from "@/api/client";
 import { unwrapNormalized, extractBeats, StoryBeat } from "@/lib/storySession";
 
 import type { HomeStackParamList } from "@/navigation/HomeStackNavigator";
@@ -216,6 +219,21 @@ export default function ScriptScreen() {
     });
   };
 
+  const handleDeleteBeat = async (sentenceIndex: number) => {
+    const res = await storyDeleteBeat({ sessionId, sentenceIndex });
+    if (!res?.ok && res?.success !== true) {
+      showError(res?.message ?? "Failed to delete beat.");
+      return;
+    }
+    const fresh = await storyGet(sessionId);
+    if (fresh?.ok || fresh?.success === true) {
+      setSession(unwrapNormalized(fresh));
+    }
+    setEditingSentenceIndex(null);
+    setDraftTexts({});
+    setSavingSentenceIndex(null);
+  };
+
   const renderBeat = ({ item, index }: { item: StoryBeat; index: number }) => {
     const isEditing = editingSentenceIndex === item.sentenceIndex;
     const isSaving = savingSentenceIndex === item.sentenceIndex;
@@ -295,6 +313,31 @@ export default function ScriptScreen() {
           <ThemedText style={[styles.beatLabel, { color: theme.textSecondary }]}>
             Beat {item.sentenceIndex + 1}
           </ThemedText>
+          <Pressable
+            onPress={() => {
+              Alert.alert(
+                "Delete beat?",
+                "This beat will be removed. You can't undo.",
+                [
+                  { text: "Cancel", style: "cancel" },
+                  {
+                    text: "Delete",
+                    style: "destructive",
+                    onPress: () => handleDeleteBeat(item.sentenceIndex),
+                  },
+                ]
+              );
+            }}
+            disabled={editingSentenceIndex === item.sentenceIndex || savingSentenceIndex !== null}
+            style={({ pressed }) => [
+              styles.trashButton,
+              (editingSentenceIndex === item.sentenceIndex || savingSentenceIndex !== null) && styles.trashButtonDisabled,
+              pressed && !(editingSentenceIndex === item.sentenceIndex || savingSentenceIndex !== null) && { opacity: 0.7 },
+            ]}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Feather name="trash-2" size={16} color={theme.textSecondary} />
+          </Pressable>
         </View>
 
         {isEditing ? (
@@ -460,12 +503,23 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
   },
   beatCard: { padding: Spacing.md },
-  beatHeader: { marginBottom: 8 },
+  beatHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
   beatLabel: {
     fontSize: 12,
     fontWeight: "600",
     textTransform: "uppercase",
     letterSpacing: 0.5,
+  },
+  trashButton: {
+    padding: Spacing.xs,
+  },
+  trashButtonDisabled: {
+    opacity: 0.4,
   },
   beatText: { fontSize: 15, lineHeight: 21 },
   loadingContainer: { flex: 1, alignItems: "center", justifyContent: "center", gap: 10 },

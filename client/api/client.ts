@@ -605,6 +605,23 @@ export async function storyUpdateBeatText(body: {
 }
 
 /**
+ * POST /api/story/delete-beat - Delete beat (sentence + shot). Response is { sentences, shots } per spec; client refetches via storyGet for SSOT.
+ */
+export async function storyDeleteBeat(body: {
+  sessionId: string;
+  sentenceIndex: number;
+}): Promise<NormalizedResponse<{ sentences: string[]; shots: any[] }>> {
+  return apiRequestNormalized<{ sentences: string[]; shots: any[] }>(
+    "/api/story/delete-beat",
+    {
+      method: "POST",
+      body,
+      requireAuth: true,
+    }
+  );
+}
+
+/**
  * POST /api/story/search-shot - Search clips for single shot
  */
 export async function storySearchShot(body: {

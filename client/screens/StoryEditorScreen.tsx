@@ -46,6 +46,7 @@ import {
   storyUpdateBeatText,
   storyFinalize,
   storyUpdateCaptionStyle,
+  storyDeleteBeat,
   type CaptionPreviewMeta,
 } from "@/api/client";
 import * as Haptics from "expo-haptics";
@@ -310,7 +311,7 @@ export default function StoryEditorScreen() {
   const [editorCollapsed, setEditorCollapsed] = useState(false);
   const [captionPlacement, setCaptionPlacement] = useState<CaptionPlacement>("center");
 
-  const { previewByIndex, isLoadingByIndex, requestPreview, prefetchAllBeats, cancelPrefetch } =
+  const { previewByIndex, isLoadingByIndex, requestPreview, prefetchAllBeats, cancelPrefetch, resetPreviews } =
     useCaptionPreview(sessionId, selectedSentenceIndex);
 
   const scrollX = useSharedValue(0);
@@ -582,34 +583,6 @@ export default function StoryEditorScreen() {
     setActiveSessionId(sessionId);
   }, [sessionId, setActiveSessionId]);
 
-  // Header: Flow tabs, no back arrow (Create tab is primary escape), no header right.
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerRight: () => null,
-      headerLeft: () => null,
-      headerBackVisible: false,
-      headerBackTitleVisible: false,
-      headerTitle: () => (
-        <FlowTabsHeader
-          currentStep="storyboard"
-          onCreatePress={() => navigation.popToTop()}
-          onScriptPress={() => navigation.replace("Script", { sessionId })}
-          onRenderPress={handleRender}
-          onSpeechPress={() => showWarning("Coming soon.")}
-          renderDisabled={!canRender || isRendering || keyboardVisible}
-        />
-      ),
-    });
-  }, [
-    navigation,
-    sessionId,
-    handleRender,
-    canRender,
-    isRendering,
-    keyboardVisible,
-    showWarning,
-  ]);
-
   // Deck FlatList memoization — must be before any early return (Rules of Hooks)
   const flatListExtraData = useMemo(
     () => ({ previewByIndex, selectedSentenceIndex, isLoadingByIndex }),
@@ -737,6 +710,46 @@ export default function StoryEditorScreen() {
       sentenceIndex,
       initialQuery: shot?.searchQuery ?? "",
     });
+  };
+
+  const handleDeleteBeat = (deletedIndex: number) => {
+    setReplaceModalForIndex(null);
+    Alert.alert(
+      "Delete beat?",
+      "This beat and its clip will be removed.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            const res = await storyDeleteBeat({ sessionId, sentenceIndex: deletedIndex });
+            if (!res?.ok && res?.success !== true) {
+              showError(res?.message ?? "Failed to delete beat.");
+              return;
+            }
+            const fresh = await storyGet(sessionId);
+            if (!fresh?.ok && fresh?.success !== true) {
+              showError(fresh?.message ?? "Failed to reload storyboard.");
+              return;
+            }
+            const unwrappedSession = unwrapSession(fresh);
+            setSession(unwrappedSession);
+            const newBeats = extractBeats(unwrappedSession);
+            setBeatTexts(
+              Object.fromEntries(newBeats.map((b) => [b.sentenceIndex, b.text]))
+            );
+            setSelectedSentenceIndex(
+              newBeats.length > 0
+                ? newBeats[Math.min(deletedIndex, newBeats.length - 1)].sentenceIndex
+                : null
+            );
+            prefetchDoneForSessionRef.current = null;
+            resetPreviews();
+          },
+        },
+      ]
+    );
   };
 
   const requestPlacementPreview = useCallback(
@@ -913,6 +926,33 @@ export default function StoryEditorScreen() {
     );
   }, [credits, doRender, showError]);
 
+  // Header: Flow tabs, no back arrow (Create tab is primary escape), no header right.
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => null,
+      headerLeft: () => null,
+      headerBackVisible: false,
+      headerBackTitleVisible: false,
+      headerTitle: () => (
+        <FlowTabsHeader
+          currentStep="storyboard"
+          onCreatePress={() => navigation.popToTop()}
+          onScriptPress={() => navigation.replace("Script", { sessionId })}
+          onRenderPress={handleRender}
+          onSpeechPress={() => showWarning("Coming soon.")}
+          renderDisabled={!canRender || isRendering || keyboardVisible}
+        />
+      ),
+    });
+  }, [
+    navigation,
+    sessionId,
+    handleRender,
+    canRender,
+    isRendering,
+    keyboardVisible,
+    showWarning,
+  ]);
 
   if (isLoading) {
     return (
@@ -1192,7 +1232,7 @@ export default function StoryEditorScreen() {
         </View>
       </Modal>
 
-      {/* Replace Clip Modal */}
+      {/* Beat Actions Modal (long-press on deck card) */}
       <Modal
         visible={replaceModalForIndex !== null}
         transparent
@@ -1207,7 +1247,9 @@ export default function StoryEditorScreen() {
             style={[styles.modalContent, { backgroundColor: theme.backgroundDefault }]}
             onPress={(e) => e.stopPropagation()}
           >
-            <ThemedText style={styles.modalTitle}>Replace Clip</ThemedText>
+            <ThemedText style={styles.modalTitle}>
+              Beat {replaceModalForIndex !== null ? replaceModalForIndex + 1 : ""}
+            </ThemedText>
             <View style={styles.modalButtons}>
               <Pressable
                 style={[
@@ -1235,6 +1277,23 @@ export default function StoryEditorScreen() {
                   style={[styles.modalButtonText, { color: theme.buttonText }]}
                 >
                   Replace Clip
+                </ThemedText>
+              </Pressable>
+              <Pressable
+                style={[
+                  styles.modalButton,
+                  { backgroundColor: theme.backgroundSecondary },
+                ]}
+                onPress={() => {
+                  if (replaceModalForIndex !== null) {
+                    handleDeleteBeat(replaceModalForIndex);
+                  }
+                }}
+              >
+                <ThemedText
+                  style={[styles.modalButtonText, { color: theme.link }]}
+                >
+                  Delete Beat
                 </ThemedText>
               </Pressable>
             </View>
