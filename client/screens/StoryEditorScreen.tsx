@@ -51,6 +51,7 @@ import {
 } from "@/api/client";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
+import * as Crypto from "expo-crypto";
 import { Linking } from "react-native";
 import type { SharedValue } from "react-native-reanimated";
 import type { StorySession } from "@/types/story";
@@ -70,6 +71,24 @@ const PLACEMENT_TO_YPCT: Record<CaptionPlacement, number> = {
   center: 0.5,
   bottom: 0.9,
 };
+
+function formatUuidFromBytes(bytes: Uint8Array): string {
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return [
+    hex.slice(0, 8),
+    hex.slice(8, 12),
+    hex.slice(12, 16),
+    hex.slice(16, 20),
+    hex.slice(20, 32),
+  ].join("-");
+}
+
+async function createRenderAttemptIdempotencyKey(): Promise<string> {
+  const bytes = await Crypto.getRandomBytesAsync(16);
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  return formatUuidFromBytes(bytes);
+}
 
 /**
  * Unwrap session from NormalizedResponse shape
@@ -339,6 +358,7 @@ export default function StoryEditorScreen() {
   const pendingPlacementRef = useRef<CaptionPlacement | null>(null);
   const lastPersistedPlacementRef = useRef<CaptionPlacement>("center");
   const lastPersistedYPctRef = useRef<number>(PLACEMENT_TO_YPCT.center);
+  const activeRenderAttemptKeyRef = useRef<string | null>(null);
 
   const [deckAreaH, setDeckAreaH] = useState(0);
   const [draftText, setDraftText] = useState("");
@@ -470,7 +490,7 @@ export default function StoryEditorScreen() {
           "")
       : "";
 
-  // Sync draftText when selection changes (not when beatTexts changes — avoid clobbering active typing)
+  // Sync draftText when selection changes (not when beatTexts changes - avoid clobbering active typing)
   useEffect(() => {
     if (selectedSentenceIndex === null) return;
     if (isEditingRef.current) return;
@@ -540,7 +560,7 @@ export default function StoryEditorScreen() {
     };
   }, [sessionId, beats, prefetchAllBeats, captionPlacement]);
 
-  // Selection → deck scroll (only when selection changed externally, not from onMomentumScrollEnd)
+  // Selection -> deck scroll (only when selection changed externally, not from onMomentumScrollEnd)
   useEffect(() => {
     if (selectionFromDeckRef.current) {
       selectionFromDeckRef.current = false;
@@ -583,7 +603,7 @@ export default function StoryEditorScreen() {
     setActiveSessionId(sessionId);
   }, [sessionId, setActiveSessionId]);
 
-  // Deck FlatList memoization — must be before any early return (Rules of Hooks)
+  // Deck FlatList memoization - must be before any early return (Rules of Hooks)
   const flatListExtraData = useMemo(
     () => ({ previewByIndex, selectedSentenceIndex, isLoadingByIndex }),
     [previewByIndex, selectedSentenceIndex, isLoadingByIndex]
@@ -835,8 +855,18 @@ export default function StoryEditorScreen() {
     setIsRendering(true);
     setShowRenderingModal(true);
 
+    let shouldClearActiveRenderAttemptKey = false;
+
     try {
-      let result = await storyFinalize({ sessionId });
+      const idempotencyKey =
+        activeRenderAttemptKeyRef.current ??
+        await createRenderAttemptIdempotencyKey();
+      activeRenderAttemptKeyRef.current = idempotencyKey;
+
+      let result = await storyFinalize(
+        { sessionId },
+        { idempotencyKey }
+      );
       let retryCount = 0;
       const maxRetries = 1;
 
@@ -844,11 +874,16 @@ export default function StoryEditorScreen() {
       while (!result.ok && result.retryAfter && retryCount < maxRetries) {
         showWarning(`Server busy. Retrying in ${result.retryAfter}s...`);
         await new Promise((resolve) => setTimeout(resolve, result.retryAfter! * 1000));
-        result = await storyFinalize({ sessionId });
+        result = await storyFinalize(
+          { sessionId },
+          { idempotencyKey }
+        );
         retryCount++;
       }
 
       if (!result.ok) {
+        shouldClearActiveRenderAttemptKey = true;
+
         // Handle different error cases
         if (result.code === "INSUFFICIENT_CREDITS" || result.status === 402) {
           showError("Not enough credits. You need 20 credits to render.");
@@ -867,8 +902,10 @@ export default function StoryEditorScreen() {
         return;
       }
 
+      shouldClearActiveRenderAttemptKey = true;
+
       // Success: navigate to ShortDetail
-      if (result.ok && result.shortId) {
+      if (result.shortId) {
         setShowRenderingModal(false);
         showSuccess("Video rendered successfully!");
 
@@ -895,10 +932,14 @@ export default function StoryEditorScreen() {
         }
       }
     } catch (error) {
+      shouldClearActiveRenderAttemptKey = true;
       console.error("[story] render error:", error);
       showError("An unexpected error occurred. Please try again.");
       setShowRenderingModal(false);
     } finally {
+      if (shouldClearActiveRenderAttemptKey) {
+        activeRenderAttemptKeyRef.current = null;
+      }
       setIsRendering(false);
     }
   }, [
@@ -909,7 +950,6 @@ export default function StoryEditorScreen() {
     navigation,
     refreshCredits,
   ]);
-
   const handleRender = useCallback(() => {
     if (credits < 20) {
       showError("Not enough credits. You need 20 credits to render.");

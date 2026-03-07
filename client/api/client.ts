@@ -68,9 +68,9 @@ export function isApiError(error: unknown): error is ApiError {
   );
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Normalized response types
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 export interface NormalizedSuccess<T> {
   ok: true;
@@ -242,9 +242,9 @@ export function getApiBaseUrl(): string {
   return API_BASE_URL;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Types
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 export interface UserProfile {
   uid: string;
@@ -306,9 +306,9 @@ export interface ShortDetail {
   createdAt: string;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Caption preview (server-measured flow)
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 /** Style whitelist for caption preview: typography, color/effects, layout only. */
 export interface CaptionPreviewStyle {
@@ -421,7 +421,7 @@ export interface CaptionPreviewOptions {
 }
 
 /**
- * POST /api/caption/preview — server-measured caption preview. Returns data.meta.rasterUrl (base64 data URL).
+ * POST /api/caption/preview - server-measured caption preview. Returns data.meta.rasterUrl (base64 data URL).
  */
 export async function captionPreview(
   body: CaptionPreviewRequestBody,
@@ -453,9 +453,9 @@ export async function captionPreview(
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Typed API functions
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 /**
  * POST /api/users/ensure - Create or fetch user profile (idempotent)
@@ -517,9 +517,9 @@ export async function getShortDetail(
   });
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Story API functions
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 /**
  * POST /api/story/start - Create new story session
@@ -673,14 +673,25 @@ export async function storyUpdateCaptionStyle(body: {
  * POST /api/story/finalize - Render final video (blocking, 2-10 minutes)
  * Special handling: extracts shortId from top-level response and retryAfter from 503 headers
  */
-export async function storyFinalize(body: {
-  sessionId: string;
-}): Promise<NormalizedResponse<StorySession> & { shortId?: string | null; retryAfter?: number }> {
+export async function storyFinalize(
+  body: {
+    sessionId: string;
+  },
+  options: {
+    idempotencyKey: string;
+  }
+): Promise<NormalizedResponse<StorySession> & { shortId?: string | null; retryAfter?: number }> {
+  const idempotencyKey = options.idempotencyKey?.trim();
+  if (!idempotencyKey) {
+    throw new Error("storyFinalize requires a non-empty idempotencyKey option");
+  }
+
   const url = `${API_BASE_URL}/api/story/finalize`;
 
   const requestHeaders: Record<string, string> = {
     "Content-Type": "application/json",
     "x-client": "mobile",
+    "X-Idempotency-Key": idempotencyKey,
   };
 
   const idToken = await getIdToken();
