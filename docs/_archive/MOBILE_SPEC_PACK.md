@@ -1,3 +1,9 @@
+- Status: ARCHIVE
+- Owner repo: mobile
+- Source of truth for: historical investigation context only; not active contract or usage truth
+- Canonical counterpart/source: docs/MOBILE_USED_SURFACES.md and backend canonical docs in ../vaiform-1/docs/
+- Last verified against: historical repo state only
+
 # Vaiform Mobile Spec Pack
 
 This file contains the mobile API specification for the Vaiform backend.

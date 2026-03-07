@@ -1,3 +1,9 @@
+- Status: ARCHIVE
+- Owner repo: mobile
+- Source of truth for: historical investigation context only; not active contract or usage truth
+- Canonical counterpart/source: docs/MOBILE_USED_SURFACES.md and backend canonical docs in ../vaiform-1/docs/
+- Last verified against: historical repo state only
+
 # Vaiform Mobile Integration Audit - Full Report
 
 **Generated:** January 24, 2026  
@@ -11,29 +17,29 @@
 The mobile app has successfully implemented the **core Article Explainer pipeline** (story creation, editing, rendering) which represents the primary feature. Authentication, API infrastructure, and shorts library viewing are fully functional. However, several secondary features remain unimplemented, including beat insertion/deletion, voice/TTS selection, and profile management.
 
 **Overall Completion Status:**
-- ✅ **Core Story Pipeline:** ~85% complete (render flow implemented)
-- ✅ **Authentication & Infrastructure:** ~95% complete
-- ✅ **Shorts Library:** ~90% complete (viewing + detail with retry logic)
-- ❌ **Beat Editing (Insert/Delete):** 0% complete
-- ❌ **Voice & TTS:** 0% complete
-- ⚠️ **Profile/Settings:** ~5% complete (stub only)
-- ⚠️ **Error Handling:** ~60% complete (basic handling, missing specific code mappings)
+- âœ… **Core Story Pipeline:** ~85% complete (render flow implemented)
+- âœ… **Authentication & Infrastructure:** ~95% complete
+- âœ… **Shorts Library:** ~90% complete (viewing + detail with retry logic)
+- âŒ **Beat Editing (Insert/Delete):** 0% complete
+- âŒ **Voice & TTS:** 0% complete
+- âš ï¸ **Profile/Settings:** ~5% complete (stub only)
+- âš ï¸ **Error Handling:** ~60% complete (basic handling, missing specific code mappings)
 
 ---
 
-## 1. Implemented Integration Points ✅
+## 1. Implemented Integration Points âœ…
 
 ### 1.1 Authentication & User Management
 
-**Status:** ✅ **Fully Implemented**
+**Status:** âœ… **Fully Implemented**
 
 **Endpoints:**
-- ✅ `POST /api/users/ensure` - `ensureUser()` in `client/api/client.ts:301-312`
-- ✅ `GET /credits` - `getCredits()` in `client/api/client.ts:318-323`
+- âœ… `POST /api/users/ensure` - `ensureUser()` in `client/api/client.ts:301-312`
+- âœ… `GET /credits` - `getCredits()` in `client/api/client.ts:318-323`
 
 **Implementation Details:**
 - **Location:** `client/contexts/AuthContext.tsx`
-- **Flow:** Firebase auth state change → `ensureUser()` → stores `UserProfile` in context
+- **Flow:** Firebase auth state change â†’ `ensureUser()` â†’ stores `UserProfile` in context
 - **Token Management:** `getIdToken()` with caching (1-hour TTL) in `client/api/client.ts:12-33`
 - **Credits:** Fetched via `refreshCredits()` and stored in `userProfile.credits`
 - **Semantics:** Uses `uid`, `email`, `plan`, `credits`, `isMember` from backend response
@@ -55,23 +61,23 @@ onAuthStateChanged(auth, async (firebaseUser) => {
 
 ### 1.2 Story Pipeline - Core Flow
 
-**Status:** ✅ **Fully Implemented**
+**Status:** âœ… **Fully Implemented**
 
 **Endpoints Implemented:**
-- ✅ `POST /api/story/start` - `storyStart()` in `client/api/client.ts:365-375`
-- ✅ `POST /api/story/generate` - `storyGenerate()` in `client/api/client.ts:380-390`
-- ✅ `POST /api/story/plan` - `storyPlan()` in `client/api/client.ts:395-403`
-- ✅ `POST /api/story/search` - `storySearchAll()` in `client/api/client.ts:408-416`
-- ✅ `GET /api/story/:sessionId` - `storyGet()` in `client/api/client.ts:421-428`
-- ✅ `POST /api/story/update-beat-text` - `storyUpdateBeatText()` in `client/api/client.ts:433-443`
-- ✅ `POST /api/story/search-shot` - `storySearchShot()` in `client/api/client.ts:448-459`
-- ✅ `POST /api/story/update-shot` - `storyUpdateShot()` in `client/api/client.ts:464-474`
-- ✅ `POST /api/story/finalize` - `storyFinalize()` in `client/api/client.ts:480-572`
+- âœ… `POST /api/story/start` - `storyStart()` in `client/api/client.ts:365-375`
+- âœ… `POST /api/story/generate` - `storyGenerate()` in `client/api/client.ts:380-390`
+- âœ… `POST /api/story/plan` - `storyPlan()` in `client/api/client.ts:395-403`
+- âœ… `POST /api/story/search` - `storySearchAll()` in `client/api/client.ts:408-416`
+- âœ… `GET /api/story/:sessionId` - `storyGet()` in `client/api/client.ts:421-428`
+- âœ… `POST /api/story/update-beat-text` - `storyUpdateBeatText()` in `client/api/client.ts:433-443`
+- âœ… `POST /api/story/search-shot` - `storySearchShot()` in `client/api/client.ts:448-459`
+- âœ… `POST /api/story/update-shot` - `storyUpdateShot()` in `client/api/client.ts:464-474`
+- âœ… `POST /api/story/finalize` - `storyFinalize()` in `client/api/client.ts:480-572`
 
 **Implementation Flow:**
 
 1. **Create Flow (HomeScreen):**
-   - User enters link/idea → `storyStart()` → `storyGenerate()` → `storyPlan()` → `storySearchAll()`
+   - User enters link/idea â†’ `storyStart()` â†’ `storyGenerate()` â†’ `storyPlan()` â†’ `storySearchAll()`
    - Navigates to `StoryEditor` with `sessionId`
    - **Location:** `client/screens/HomeScreen.tsx:49-141`
 
@@ -82,12 +88,12 @@ onAuthStateChanged(auth, async (firebaseUser) => {
    - **Location:** `client/screens/StoryEditorScreen.tsx:132-193`
 
 3. **Beat Editing:**
-   - Inline text editing → `storyUpdateBeatText()` on blur
+   - Inline text editing â†’ `storyUpdateBeatText()` on blur
    - Optimistic UI updates (no refetch on success)
    - **Location:** `client/screens/StoryEditorScreen.tsx:257-288`
 
 4. **Clip Replacement:**
-   - "Replace Clip" button → navigates to `ClipSearch` modal
+   - "Replace Clip" button â†’ navigates to `ClipSearch` modal
    - `ClipSearchModal` calls `storySearchShot()` then `storyUpdateShot()` on selection
    - Returns to editor, refreshes via `useFocusEffect` when `shouldRefreshRef.current` is true
    - **Location:** `client/screens/StoryEditorScreen.tsx:290-299`, `client/screens/ClipSearchModal.tsx:58-114`
@@ -110,11 +116,11 @@ onAuthStateChanged(auth, async (firebaseUser) => {
 
 ### 1.3 Shorts Library
 
-**Status:** ✅ **Fully Implemented with Advanced Features**
+**Status:** âœ… **Fully Implemented with Advanced Features**
 
 **Endpoints:**
-- ✅ `GET /api/shorts/mine` - `getMyShorts()` in `client/api/client.ts:330-342`
-- ✅ `GET /api/shorts/:id` - `getShortDetail()` in `client/api/client.ts:349-356`
+- âœ… `GET /api/shorts/mine` - `getMyShorts()` in `client/api/client.ts:330-342`
+- âœ… `GET /api/shorts/:id` - `getShortDetail()` in `client/api/client.ts:349-356`
 
 **Implementation:**
 
@@ -143,15 +149,15 @@ onAuthStateChanged(auth, async (firebaseUser) => {
 
 ### 1.4 API Client Infrastructure
 
-**Status:** ✅ **Fully Implemented**
+**Status:** âœ… **Fully Implemented**
 
 **Key Features:**
-- ✅ Base URL: `EXPO_PUBLIC_API_BASE_URL` with fallback (line 5-7)
-- ✅ Token injection: `Authorization: Bearer <token>` via `getIdToken()`
-- ✅ Client header: `x-client: mobile` on all requests (lines 129, 184, 487)
-- ✅ Response normalization: Handles both `{ success: true, data }` and `{ ok: true, data }` patterns
-- ✅ Error handling: Typed `ApiError` with `isAuthError`, `isRateLimited`, `isServerError` flags
-- ✅ Network error detection
+- âœ… Base URL: `EXPO_PUBLIC_API_BASE_URL` with fallback (line 5-7)
+- âœ… Token injection: `Authorization: Bearer <token>` via `getIdToken()`
+- âœ… Client header: `x-client: mobile` on all requests (lines 129, 184, 487)
+- âœ… Response normalization: Handles both `{ success: true, data }` and `{ ok: true, data }` patterns
+- âœ… Error handling: Typed `ApiError` with `isAuthError`, `isRateLimited`, `isServerError` flags
+- âœ… Network error detection
 
 **Functions:**
 - `apiRequest<T>()` - Throws on HTTP errors
@@ -165,12 +171,12 @@ onAuthStateChanged(auth, async (firebaseUser) => {
 
 ### 1.5 Navigation Structure
 
-**Status:** ✅ **Complete**
+**Status:** âœ… **Complete**
 
 **Structure:**
 - Tab Navigator: Home, Library, Settings
-- Home Stack: Home → StoryEditor → ClipSearch
-- Library Stack: Library → ShortDetail
+- Home Stack: Home â†’ StoryEditor â†’ ClipSearch
+- Library Stack: Library â†’ ShortDetail
 - Root Stack: Auth gating
 
 **Navigation Params:**
@@ -184,7 +190,7 @@ onAuthStateChanged(auth, async (firebaseUser) => {
 
 ### 1.6 UI Components & Theming
 
-**Status:** ✅ **Foundation Complete**
+**Status:** âœ… **Foundation Complete**
 
 **Components:**
 - Themed components (`ThemedView`, `ThemedText`)
@@ -197,20 +203,20 @@ onAuthStateChanged(auth, async (firebaseUser) => {
 
 ---
 
-## 2. Missing Integration Points ❌
+## 2. Missing Integration Points âŒ
 
 ### 2.1 Beat Editing - Insert/Delete
 
-**Status:** ❌ **Not Implemented**
+**Status:** âŒ **Not Implemented**
 
 **Missing Endpoints:**
-- ❌ `POST /api/story/insert-beat` - No `storyInsertBeat()` function
-- ❌ `POST /api/story/delete-beat` - No `storyDeleteBeat()` function
+- âŒ `POST /api/story/insert-beat` - No `storyInsertBeat()` function
+- âŒ `POST /api/story/delete-beat` - No `storyDeleteBeat()` function
 
 **Missing UI:**
-- ❌ "Add Beat" button in StoryEditor
-- ❌ Delete affordance per beat
-- ❌ Insert beat modal/input
+- âŒ "Add Beat" button in StoryEditor
+- âŒ Delete affordance per beat
+- âŒ Insert beat modal/input
 
 **Impact:** **MEDIUM** - Users cannot add or remove beats from stories. Core editing flow works but lacks flexibility.
 
@@ -223,17 +229,17 @@ onAuthStateChanged(auth, async (firebaseUser) => {
 
 ### 2.2 Voice & TTS Selection
 
-**Status:** ❌ **Not Implemented**
+**Status:** âŒ **Not Implemented**
 
 **Missing Endpoints:**
-- ❌ `GET /api/voice/voices` - No `getVoices()` function
-- ❌ `POST /api/voice/preview` - No `previewVoice()` function
-- ❌ `POST /api/tts/preview` - No `previewTTS()` function
+- âŒ `GET /api/voice/voices` - No `getVoices()` function
+- âŒ `POST /api/voice/preview` - No `previewVoice()` function
+- âŒ `POST /api/tts/preview` - No `previewTTS()` function
 
 **Missing UI:**
-- ❌ Voice picker component
-- ❌ Voice preview player
-- ❌ Integration in editor
+- âŒ Voice picker component
+- âŒ Voice preview player
+- âŒ Integration in editor
 
 **Impact:** **HIGH** - Voice selection is part of story creation flow per spec. Required for MVP if backend supports voice selection in `finalize`.
 
@@ -246,7 +252,7 @@ onAuthStateChanged(auth, async (firebaseUser) => {
 
 ### 2.3 Profile Screen
 
-**Status:** ⚠️ **Stub Only (5% Complete)**
+**Status:** âš ï¸ **Stub Only (5% Complete)**
 
 **Current State:**
 - Empty screen with only layout structure
@@ -255,12 +261,12 @@ onAuthStateChanged(auth, async (firebaseUser) => {
 - No sign out button
 
 **Missing:**
-- ❌ `GET /api/user/me` - No `getUserProfile()` function
-- ❌ User avatar/email display
-- ❌ Credit balance display
-- ❌ Plan badge
-- ❌ "Buy Credits" deep link
-- ❌ Sign out button
+- âŒ `GET /api/user/me` - No `getUserProfile()` function
+- âŒ User avatar/email display
+- âŒ Credit balance display
+- âŒ Plan badge
+- âŒ "Buy Credits" deep link
+- âŒ Sign out button
 
 **Impact:** **MEDIUM** - Users need to see credits and manage account. Can be added later but should be in MVP.
 
@@ -270,7 +276,7 @@ onAuthStateChanged(auth, async (firebaseUser) => {
 
 ### 2.4 Input Type "Paragraph"
 
-**Status:** ⚠️ **Partially Implemented**
+**Status:** âš ï¸ **Partially Implemented**
 
 **Current State:**
 - API supports `inputType: "link" | "idea" | "paragraph"`
@@ -285,7 +291,7 @@ onAuthStateChanged(auth, async (firebaseUser) => {
 
 ### 2.5 Clip Search Pagination
 
-**Status:** ⚠️ **Partially Implemented**
+**Status:** âš ï¸ **Partially Implemented**
 
 **Current State:**
 - `page` and `hasMore` state exist in `ClipSearchModal`
@@ -301,7 +307,7 @@ onAuthStateChanged(auth, async (firebaseUser) => {
 
 ### 2.6 Editor Auto Plan/Search
 
-**Status:** ⚠️ **Not Implemented**
+**Status:** âš ï¸ **Not Implemented**
 
 **Spec Requirement:**
 - If `status === "story_generated"` on editor load, auto-trigger `plan` then `search`
@@ -319,7 +325,7 @@ onAuthStateChanged(auth, async (firebaseUser) => {
 
 ### 2.7 Credits Display in UI
 
-**Status:** ⚠️ **Partially Implemented**
+**Status:** âš ï¸ **Partially Implemented**
 
 **Current State:**
 - Credits fetched and stored in `AuthContext.userProfile.credits`
@@ -332,19 +338,19 @@ onAuthStateChanged(auth, async (firebaseUser) => {
 
 ---
 
-### 2.8 Error Code → UI Mapping
+### 2.8 Error Code â†’ UI Mapping
 
-**Status:** ⚠️ **Partially Implemented**
+**Status:** âš ï¸ **Partially Implemented**
 
 **Current State:**
 - Generic error handling exists
 - Basic toast messages
 - **Missing specific mappings per spec section 7:**
-  - `402 INSUFFICIENT_CREDITS` → "Buy Credits" CTA (partially implemented in render flow)
-  - `429 RATE_LIMIT_EXCEEDED` → Disable button for 60s
-  - `429 SCRIPT_LIMIT_REACHED` → Show upgrade CTA
-  - `503 SERVER_BUSY` → Auto-retry with delay (implemented in render flow)
-  - `404 NOT_FOUND` (session expired) → Navigate back with message
+  - `402 INSUFFICIENT_CREDITS` â†’ "Buy Credits" CTA (partially implemented in render flow)
+  - `429 RATE_LIMIT_EXCEEDED` â†’ Disable button for 60s
+  - `429 SCRIPT_LIMIT_REACHED` â†’ Show upgrade CTA
+  - `503 SERVER_BUSY` â†’ Auto-retry with delay (implemented in render flow)
+  - `404 NOT_FOUND` (session expired) â†’ Navigate back with message
 
 **Impact:** **MEDIUM** - Better UX, but basic error handling works for now.
 
@@ -367,7 +373,7 @@ onAuthStateChanged(auth, async (firebaseUser) => {
 ### 3.2 Helper Functions (SSOT)
 
 **Session Unwrapping:**
-- **Status:** ⚠️ **DUPLICATED** - Needs consolidation
+- **Status:** âš ï¸ **DUPLICATED** - Needs consolidation
 - **Locations:**
   - `StoryEditorScreen.tsx:43-48`
   - `ClipSearchModal.tsx:36-41`
@@ -375,13 +381,13 @@ onAuthStateChanged(auth, async (firebaseUser) => {
 - **Action Required:** Extract to shared utility (e.g., `client/lib/session-helpers.ts`)
 
 **Beat Extraction:**
-- **Status:** ✅ **SSOT** - Single implementation
+- **Status:** âœ… **SSOT** - Single implementation
 - **Location:** `StoryEditorScreen.tsx:53-80`
 - **Function:** `extractBeats(session: any): Beat[]`
 - **Logic:** Primary: `session.story.sentences`, Fallback: `session.sentences` or `session.beats`
 
 **Shot Selection:**
-- **Status:** ✅ **SSOT** - Single implementation
+- **Status:** âœ… **SSOT** - Single implementation
 - **Location:** `StoryEditorScreen.tsx:85-99`
 - **Function:** `getSelectedShot(session: any, sentenceIndex: number): any | null`
 - **Logic:** Handles both array and map shapes for `shots`
@@ -421,19 +427,19 @@ onAuthStateChanged(auth, async (firebaseUser) => {
 
 | Method | Path | Function | Status |
 |--------|------|----------|--------|
-| POST | `/api/users/ensure` | `ensureUser()` | ✅ |
-| GET | `/credits` | `getCredits()` | ✅ |
-| POST | `/api/story/start` | `storyStart()` | ✅ |
-| POST | `/api/story/generate` | `storyGenerate()` | ✅ |
-| POST | `/api/story/plan` | `storyPlan()` | ✅ |
-| POST | `/api/story/search` | `storySearchAll()` | ✅ |
-| GET | `/api/story/:sessionId` | `storyGet()` | ✅ |
-| POST | `/api/story/update-beat-text` | `storyUpdateBeatText()` | ✅ |
-| POST | `/api/story/search-shot` | `storySearchShot()` | ✅ |
-| POST | `/api/story/update-shot` | `storyUpdateShot()` | ✅ |
-| POST | `/api/story/finalize` | `storyFinalize()` | ✅ |
-| GET | `/api/shorts/mine` | `getMyShorts()` | ✅ |
-| GET | `/api/shorts/:id` | `getShortDetail()` | ✅ |
+| POST | `/api/users/ensure` | `ensureUser()` | âœ… |
+| GET | `/credits` | `getCredits()` | âœ… |
+| POST | `/api/story/start` | `storyStart()` | âœ… |
+| POST | `/api/story/generate` | `storyGenerate()` | âœ… |
+| POST | `/api/story/plan` | `storyPlan()` | âœ… |
+| POST | `/api/story/search` | `storySearchAll()` | âœ… |
+| GET | `/api/story/:sessionId` | `storyGet()` | âœ… |
+| POST | `/api/story/update-beat-text` | `storyUpdateBeatText()` | âœ… |
+| POST | `/api/story/search-shot` | `storySearchShot()` | âœ… |
+| POST | `/api/story/update-shot` | `storyUpdateShot()` | âœ… |
+| POST | `/api/story/finalize` | `storyFinalize()` | âœ… |
+| GET | `/api/shorts/mine` | `getMyShorts()` | âœ… |
+| GET | `/api/shorts/:id` | `getShortDetail()` | âœ… |
 
 **Total: 13/19 endpoints (68%)**
 
@@ -468,7 +474,7 @@ onAuthStateChanged(auth, async (firebaseUser) => {
 
 1. **Code Duplication:** `unwrapSession` duplicated in two files
 2. **Missing Types:** `StorySession` is `any` type (should be properly typed)
-3. **Error Mapping:** Missing specific error code → UI action mappings
+3. **Error Mapping:** Missing specific error code â†’ UI action mappings
 4. **Session Management:** No persistence (AsyncStorage) for resuming sessions
 5. **Credit Display:** Fetched but never shown to user
 
@@ -497,25 +503,25 @@ onAuthStateChanged(auth, async (firebaseUser) => {
 
 ### 7.1 Core Flow Verification
 
-- [x] Auth → ensure user on sign-in
-- [x] Home → create storyboard (start → generate → plan → search)
-- [x] Editor → load session and display beats
-- [x] Editor → edit beat text
-- [x] Editor → replace clip (search → select)
-- [x] Editor → render video (credit check → finalize → navigate)
-- [x] Library → list shorts with pagination
-- [x] Library → view short detail (dual path: list item + `shortId`)
+- [x] Auth â†’ ensure user on sign-in
+- [x] Home â†’ create storyboard (start â†’ generate â†’ plan â†’ search)
+- [x] Editor â†’ load session and display beats
+- [x] Editor â†’ edit beat text
+- [x] Editor â†’ replace clip (search â†’ select)
+- [x] Editor â†’ render video (credit check â†’ finalize â†’ navigate)
+- [x] Library â†’ list shorts with pagination
+- [x] Library â†’ view short detail (dual path: list item + `shortId`)
 
 ### 7.2 Missing Features Verification
 
-- [ ] Editor → insert beat
-- [ ] Editor → delete beat
-- [ ] Editor → voice selection (if supported)
-- [ ] Profile → display user info
-- [ ] Profile → buy credits link
-- [ ] Profile → sign out
-- [ ] Clip Search → load more pagination
-- [ ] Home → paragraph input type
+- [ ] Editor â†’ insert beat
+- [ ] Editor â†’ delete beat
+- [ ] Editor â†’ voice selection (if supported)
+- [ ] Profile â†’ display user info
+- [ ] Profile â†’ buy credits link
+- [ ] Profile â†’ sign out
+- [ ] Clip Search â†’ load more pagination
+- [ ] Home â†’ paragraph input type
 
 ---
 
@@ -524,10 +530,10 @@ onAuthStateChanged(auth, async (firebaseUser) => {
 The mobile app has successfully implemented the **core Article Explainer pipeline**, which is the primary feature. Users can create stories, edit beats, select clips, and render videos. The implementation follows the spec semantics closely and maintains consistency across the codebase.
 
 **Key Achievements:**
-- ✅ Complete story creation and editing flow
-- ✅ Render pipeline with credit checking and retry logic
-- ✅ Advanced ShortDetail retry with library fallback
-- ✅ Robust API client infrastructure
+- âœ… Complete story creation and editing flow
+- âœ… Render pipeline with credit checking and retry logic
+- âœ… Advanced ShortDetail retry with library fallback
+- âœ… Robust API client infrastructure
 
 **Remaining Work:**
 - Beat insertion/deletion (medium priority)

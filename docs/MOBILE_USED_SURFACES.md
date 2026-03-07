@@ -1,5 +1,11 @@
 # MOBILE_USED_SURFACES
 
+- Status: CANONICAL
+- Owner repo: mobile
+- Source of truth for: exact current mobile callers, payloads sent, response fields read, and known unwired spec endpoints in this repo
+- Canonical counterpart/source: backend contract truth lives in ../vaiform-1/docs/MOBILE_BACKEND_CONTRACT.md, ../vaiform-1/docs/MOBILE_HARDENING_PLAN.md, and ../vaiform-1/docs/LEGACY_WEB_SURFACES.md
+- Last verified against: both repos on 2026-03-07
+
 Generated from source on 2026-03-07.
 
 Scope: exact current mobile repo behavior only. This file describes what the app actually calls today, what it sends, what it reads back, and which spec-sheet endpoints are still unwired. It does not describe intended behavior unless the repo already implements it.
@@ -17,7 +23,7 @@ Scope: exact current mobile repo behavior only. This file describes what the app
 | Endpoint | Trigger | Payload sent | Response fields read now | Evidence |
 |---|---|---|---|---|
 | `POST /api/users/ensure` | Firebase auth state change after sign-in; runs once per UID | No body | On success, stores the whole `UserProfile` object in context. Downstream UI currently reads `userProfile.credits`; other returned fields are stored but not screen-read in this audit. Error path reads `ok`, `code`, `message`. | `client/contexts/AuthContext.tsx:58-85`, `client/api/client.ts:460-475`, `client/api/client.ts:250-257` |
-| `GET /credits` | `refreshCredits()` helper used from `SettingsScreen` and after successful render in `StoryEditorScreen` | No body | Reads `data.credits` only and merges it into `userProfile`. Error path reads `ok`, `code`, `message`. | `client/contexts/AuthContext.tsx:87-103`, `client/api/client.ts:477-485`, `client/api/client.ts:259-263` |
+| `GET /api/credits` | `refreshCredits()` helper used from `SettingsScreen` and after successful render in `StoryEditorScreen` | No body | Reads `data.credits` only and merges it into `userProfile`. Error path reads `ok`, `code`, `message`. | `client/contexts/AuthContext.tsx:87-103`, `client/api/client.ts:477-485`, `client/api/client.ts:259-263` |
 
 ## Screen-by-Screen Backend Usage
 
@@ -48,7 +54,7 @@ Scope: exact current mobile repo behavior only. This file describes what the app
 | `POST /api/story/delete-beat` | Delete confirmation from the beat actions modal | `{ sessionId, sentenceIndex: deletedIndex }` | Reads only `ok`, `success`, `message`; immediately refetches `GET /api/story/:sessionId`, then rebuilds local beat text state from the refetched session. | `client/screens/StoryEditorScreen.tsx:715-749`, `client/api/client.ts:607-622` |
 | `POST /api/story/update-caption-style` | User taps Top / Center / Bottom placement control | `{ sessionId, overlayCaption: { placement, yPct } }` | Reads only `ok`, `success`, `message`. The returned `overlayCaption` is not consumed; the screen relies on local optimistic state and fallback refs. | `client/screens/StoryEditorScreen.tsx:765-820`, `client/api/client.ts:655-670` |
 | `POST /api/story/finalize` | Render confirmation in the storyboard header | Body stays exactly `{ sessionId }`. Header now includes `X-Idempotency-Key`, generated when a real finalize attempt begins, stored in a stable ref for the active attempt, and reused for the built-in 503 retry. | Reads `ok`, `retryAfter`, `code`, `status`, `message`, and `shortId`. It does not read `data`. On success it refreshes credits and cross-navigates to `LibraryTab -> ShortDetail` with `{ shortId }`. | `client/screens/StoryEditorScreen.tsx:834-927`, `client/api/client.ts:672-760` |
-| `GET /credits` | Indirect, after successful finalize, via `refreshCredits()` | No body | Reads `data.credits` through `AuthContext.refreshCredits()`. | `client/screens/StoryEditorScreen.tsx:875-880`, `client/contexts/AuthContext.tsx:87-103`, `client/api/client.ts:477-485` |
+| `GET /api/credits` | Indirect, after successful finalize, via `refreshCredits()` | No body | Reads `data.credits` through `AuthContext.refreshCredits()`. | `client/screens/StoryEditorScreen.tsx:912-918`, `client/contexts/AuthContext.tsx:87-103`, `client/api/client.ts:477-485` |
 
 ### `ClipSearchModal`
 
@@ -76,7 +82,7 @@ Current `ShortDetailScreen` UI reads these fields from the resolved `short` obje
 
 | Endpoint | Trigger | Payload sent | Response fields read now | Evidence |
 |---|---|---|---|---|
-| `GET /credits` | "Refresh credits" button, via `refreshCredits()` | No body | Reads `data.credits` through `AuthContext`, then renders `userProfile?.credits` in the settings card. | `client/screens/SettingsScreen.tsx:42-58`, `client/screens/SettingsScreen.tsx:121-145`, `client/contexts/AuthContext.tsx:87-103`, `client/api/client.ts:477-485` |
+| `GET /api/credits` | "Refresh credits" button, via `refreshCredits()` | No body | Reads `data.credits` through `AuthContext`, then renders `userProfile?.credits` in the settings card. | `client/screens/SettingsScreen.tsx:42-58`, `client/screens/SettingsScreen.tsx:121-145`, `client/contexts/AuthContext.tsx:87-103`, `client/api/client.ts:477-485` |
 
 ## Live Endpoints Missing From `vaiform-mobile-spec-sheet`
 

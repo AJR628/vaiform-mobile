@@ -1,3 +1,9 @@
+- Status: ARCHIVE
+- Owner repo: mobile
+- Source of truth for: historical investigation context only; not active contract or usage truth
+- Canonical counterpart/source: docs/MOBILE_USED_SURFACES.md and backend canonical docs in ../vaiform-1/docs/
+- Last verified against: historical repo state only
+
 # Vaiform Mobile Integration Audit Report
 
 **Generated:** January 2026  
@@ -11,28 +17,28 @@
 The mobile app has a solid foundation with authentication, API client infrastructure, and shorts library viewing implemented. However, **the core Article Explainer pipeline (story creation, editing, rendering) is completely missing**. This represents the primary feature gap that needs to be addressed.
 
 **Completion Status:**
-- ✅ **Infrastructure & Auth:** ~90% complete
-- ✅ **Shorts Library:** ~80% complete (viewing works, missing some polish)
-- ❌ **Story Pipeline:** 0% complete (not started)
-- ❌ **Voice/TTS:** 0% complete (not started)
-- ⚠️ **Profile/Settings:** ~10% complete (stubs only)
+- âœ… **Infrastructure & Auth:** ~90% complete
+- âœ… **Shorts Library:** ~80% complete (viewing works, missing some polish)
+- âŒ **Story Pipeline:** 0% complete (not started)
+- âŒ **Voice/TTS:** 0% complete (not started)
+- âš ï¸ **Profile/Settings:** ~10% complete (stubs only)
 
 ---
 
-## 1. What's Wired In ✅
+## 1. What's Wired In âœ…
 
 ### 1.1 Authentication & User Management
 
-**Status:** ✅ **Fully Implemented**
+**Status:** âœ… **Fully Implemented**
 
 **Implemented:**
-- ✅ Firebase Authentication integration (`client/lib/firebase.ts`)
-- ✅ Google Sign-In (web + native via OAuth)
-- ✅ Email/Password sign-in
-- ✅ `POST /api/users/ensure` - Called automatically on auth state change
-- ✅ Token management with caching (`getIdToken`, `clearTokenCache`)
-- ✅ Auth context with user profile state (`AuthContext.tsx`)
-- ✅ Login screen with error handling (`LoginScreen.tsx`)
+- âœ… Firebase Authentication integration (`client/lib/firebase.ts`)
+- âœ… Google Sign-In (web + native via OAuth)
+- âœ… Email/Password sign-in
+- âœ… `POST /api/users/ensure` - Called automatically on auth state change
+- âœ… Token management with caching (`getIdToken`, `clearTokenCache`)
+- âœ… Auth context with user profile state (`AuthContext.tsx`)
+- âœ… Login screen with error handling (`LoginScreen.tsx`)
 
 **Location:**
 - `client/contexts/AuthContext.tsx` - Full auth flow
@@ -49,16 +55,16 @@ The mobile app has a solid foundation with authentication, API client infrastruc
 
 ### 1.2 API Client Infrastructure
 
-**Status:** ✅ **Fully Implemented**
+**Status:** âœ… **Fully Implemented**
 
 **Implemented:**
-- ✅ Base API client with normalized response handling (`client/api/client.ts`)
-- ✅ Automatic token injection via `Authorization: Bearer <token>`
-- ✅ `x-client: mobile` header on all requests
-- ✅ Response normalization for both `{ success: true, data }` and `{ ok: true, data }` patterns
-- ✅ Error handling with typed `ApiError` interface
-- ✅ Network error detection and handling
-- ✅ Health check endpoint (`GET /health`)
+- âœ… Base API client with normalized response handling (`client/api/client.ts`)
+- âœ… Automatic token injection via `Authorization: Bearer <token>`
+- âœ… `x-client: mobile` header on all requests
+- âœ… Response normalization for both `{ success: true, data }` and `{ ok: true, data }` patterns
+- âœ… Error handling with typed `ApiError` interface
+- âœ… Network error detection and handling
+- âœ… Health check endpoint (`GET /health`)
 
 **Location:**
 - `client/api/client.ts` - Core API client (354 lines)
@@ -78,17 +84,17 @@ The mobile app has a solid foundation with authentication, API client infrastruc
 
 ### 1.3 Credits System
 
-**Status:** ✅ **Partially Implemented** (Backend wired, UI missing)
+**Status:** âœ… **Partially Implemented** (Backend wired, UI missing)
 
 **Implemented:**
-- ✅ `GET /credits` endpoint function (`getCredits()`)
-- ✅ Credits stored in `AuthContext.userProfile.credits`
-- ✅ `refreshCredits()` function available in AuthContext
+- âœ… `GET /credits` endpoint function (`getCredits()`)
+- âœ… Credits stored in `AuthContext.userProfile.credits`
+- âœ… `refreshCredits()` function available in AuthContext
 
 **Missing:**
-- ❌ Credit balance display in UI (not shown anywhere)
-- ❌ Credit check before render operations
-- ❌ "Buy Credits" deep link to web
+- âŒ Credit balance display in UI (not shown anywhere)
+- âŒ Credit check before render operations
+- âŒ "Buy Credits" deep link to web
 
 **Location:**
 - `client/api/client.ts` - `getCredits()` function
@@ -103,18 +109,18 @@ The mobile app has a solid foundation with authentication, API client infrastruc
 
 ### 1.4 Shorts Library (Viewing)
 
-**Status:** ✅ **Mostly Implemented**
+**Status:** âœ… **Mostly Implemented**
 
 **Implemented:**
-- ✅ `GET /api/shorts/mine` - List user's shorts with pagination
-- ✅ `GET /api/shorts/:id` - Get short detail (function exists, not used in detail screen)
-- ✅ Library screen with grid/list view (`LibraryScreen.tsx`)
-- ✅ Short detail screen with video player (`ShortDetailScreen.tsx`)
-- ✅ Pagination support (cursor-based)
-- ✅ Status badges (ready, processing, failed)
-- ✅ Video playback using Expo AV
-- ✅ Empty state handling
-- ✅ Loading states
+- âœ… `GET /api/shorts/mine` - List user's shorts with pagination
+- âœ… `GET /api/shorts/:id` - Get short detail (function exists, not used in detail screen)
+- âœ… Library screen with grid/list view (`LibraryScreen.tsx`)
+- âœ… Short detail screen with video player (`ShortDetailScreen.tsx`)
+- âœ… Pagination support (cursor-based)
+- âœ… Status badges (ready, processing, failed)
+- âœ… Video playback using Expo AV
+- âœ… Empty state handling
+- âœ… Loading states
 
 **Location:**
 - `client/api/client.ts` - `getMyShorts()`, `getShortDetail()`
@@ -122,10 +128,10 @@ The mobile app has a solid foundation with authentication, API client infrastruc
 - `client/screens/ShortDetailScreen.tsx` - Detail view with video player
 
 **Missing/Issues:**
-- ⚠️ `ShortDetailScreen` receives `short` via route params but doesn't fetch fresh data via `getShortDetail()`
-- ⚠️ No share functionality
-- ⚠️ No delete functionality
-- ⚠️ No pull-to-refresh (only manual "Load More")
+- âš ï¸ `ShortDetailScreen` receives `short` via route params but doesn't fetch fresh data via `getShortDetail()`
+- âš ï¸ No share functionality
+- âš ï¸ No delete functionality
+- âš ï¸ No pull-to-refresh (only manual "Load More")
 
 **Notes:**
 - Video player correctly handles Firebase Storage URLs
@@ -136,13 +142,13 @@ The mobile app has a solid foundation with authentication, API client infrastruc
 
 ### 1.5 Navigation Structure
 
-**Status:** ✅ **Basic Structure Complete**
+**Status:** âœ… **Basic Structure Complete**
 
 **Implemented:**
-- ✅ Tab navigation (Home, Library, Settings)
-- ✅ Stack navigators for each tab
-- ✅ Library stack with ShortDetail screen
-- ✅ Root stack with auth gating
+- âœ… Tab navigation (Home, Library, Settings)
+- âœ… Stack navigators for each tab
+- âœ… Library stack with ShortDetail screen
+- âœ… Root stack with auth gating
 
 **Location:**
 - `client/navigation/MainTabNavigator.tsx`
@@ -151,24 +157,24 @@ The mobile app has a solid foundation with authentication, API client infrastruc
 - `client/navigation/RootStackNavigator.tsx`
 
 **Missing:**
-- ❌ Story Editor screen (not in navigation)
-- ❌ Create/Input screen (not in navigation)
-- ❌ Clip Search modal (not in navigation)
+- âŒ Story Editor screen (not in navigation)
+- âŒ Create/Input screen (not in navigation)
+- âŒ Clip Search modal (not in navigation)
 
 ---
 
 ### 1.6 UI Components & Theming
 
-**Status:** ✅ **Foundation Complete**
+**Status:** âœ… **Foundation Complete**
 
 **Implemented:**
-- ✅ Themed components (`ThemedView`, `ThemedText`)
-- ✅ Toast system (`ToastContext`, `Toast` component)
-- ✅ Card component
-- ✅ Button component
-- ✅ Error boundary
-- ✅ Keyboard-aware scroll view
-- ✅ Theme system with dark mode support
+- âœ… Themed components (`ThemedView`, `ThemedText`)
+- âœ… Toast system (`ToastContext`, `Toast` component)
+- âœ… Card component
+- âœ… Button component
+- âœ… Error boundary
+- âœ… Keyboard-aware scroll view
+- âœ… Theme system with dark mode support
 
 **Location:**
 - `client/components/` - All reusable components
@@ -177,37 +183,37 @@ The mobile app has a solid foundation with authentication, API client infrastruc
 
 ---
 
-## 2. What's NOT Wired In ❌
+## 2. What's NOT Wired In âŒ
 
 ### 2.1 Story Pipeline (Core Feature)
 
-**Status:** ❌ **0% Complete - Not Started**
+**Status:** âŒ **0% Complete - Not Started**
 
 **Missing Endpoints:**
-- ❌ `POST /api/story/start` - Create new story session
-- ❌ `POST /api/story/generate` - Generate script from input
-- ❌ `POST /api/story/plan` - Generate visual shot plan
-- ❌ `POST /api/story/search` - Search clips for all shots
-- ❌ `POST /api/story/search-shot` - Search clips for single shot
-- ❌ `POST /api/story/update-shot` - Swap selected clip
-- ❌ `POST /api/story/update-script` - Update all sentences
-- ❌ `POST /api/story/update-beat-text` - Edit single beat text
-- ❌ `POST /api/story/insert-beat` - Insert new beat
-- ❌ `POST /api/story/delete-beat` - Delete beat
-- ❌ `POST /api/story/finalize` - Render final video (20 credits)
-- ❌ `GET /api/story/:sessionId` - Get session state
+- âŒ `POST /api/story/start` - Create new story session
+- âŒ `POST /api/story/generate` - Generate script from input
+- âŒ `POST /api/story/plan` - Generate visual shot plan
+- âŒ `POST /api/story/search` - Search clips for all shots
+- âŒ `POST /api/story/search-shot` - Search clips for single shot
+- âŒ `POST /api/story/update-shot` - Swap selected clip
+- âŒ `POST /api/story/update-script` - Update all sentences
+- âŒ `POST /api/story/update-beat-text` - Edit single beat text
+- âŒ `POST /api/story/insert-beat` - Insert new beat
+- âŒ `POST /api/story/delete-beat` - Delete beat
+- âŒ `POST /api/story/finalize` - Render final video (20 credits)
+- âŒ `GET /api/story/:sessionId` - Get session state
 
 **Missing Screens:**
-- ❌ Create/Input Screen - User enters link/idea/paragraph
-- ❌ Editor Screen - Edit beats, select clips, manage story
-- ❌ Clip Search Modal - Browse and select video clips
-- ❌ Rendering Modal - Show progress during video render
+- âŒ Create/Input Screen - User enters link/idea/paragraph
+- âŒ Editor Screen - Edit beats, select clips, manage story
+- âŒ Clip Search Modal - Browse and select video clips
+- âŒ Rendering Modal - Show progress during video render
 
 **Missing Types:**
-- ❌ `StorySession` interface
-- ❌ `ShotPlan` interface
-- ❌ `Shot` interface
-- ❌ `Clip` interface
+- âŒ `StorySession` interface
+- âŒ `ShotPlan` interface
+- âŒ `Shot` interface
+- âŒ `Clip` interface
 
 **Impact:**
 - **CRITICAL** - This is the core feature of the app. Without this, users cannot create videos.
@@ -216,17 +222,17 @@ The mobile app has a solid foundation with authentication, API client infrastruc
 
 ### 2.2 Voice & TTS
 
-**Status:** ❌ **0% Complete - Not Started**
+**Status:** âŒ **0% Complete - Not Started**
 
 **Missing Endpoints:**
-- ❌ `GET /api/voice/voices` - List available voices
-- ❌ `POST /api/voice/preview` - Preview voice with sample
-- ❌ `POST /api/tts/preview` - Generate TTS audio
+- âŒ `GET /api/voice/voices` - List available voices
+- âŒ `POST /api/voice/preview` - Preview voice with sample
+- âŒ `POST /api/tts/preview` - Generate TTS audio
 
 **Missing UI:**
-- ❌ Voice picker component
-- ❌ Voice preview player
-- ❌ TTS preview functionality
+- âŒ Voice picker component
+- âŒ Voice preview player
+- âŒ TTS preview functionality
 
 **Impact:**
 - **HIGH** - Voice selection is part of the story creation flow. Required for MVP.
@@ -235,18 +241,18 @@ The mobile app has a solid foundation with authentication, API client infrastruc
 
 ### 2.3 User Profile
 
-**Status:** ⚠️ **10% Complete - Stub Only**
+**Status:** âš ï¸ **10% Complete - Stub Only**
 
 **Implemented:**
-- ✅ Profile screen exists (`ProfileScreen.tsx`)
+- âœ… Profile screen exists (`ProfileScreen.tsx`)
 
 **Missing:**
-- ❌ `GET /api/user/me` - Fetch full user profile
-- ❌ Credit balance display
-- ❌ Plan badge display
-- ❌ "Buy Credits" button with deep link
-- ❌ Sign out button
-- ❌ User avatar/email display
+- âŒ `GET /api/user/me` - Fetch full user profile
+- âŒ Credit balance display
+- âŒ Plan badge display
+- âŒ "Buy Credits" button with deep link
+- âŒ Sign out button
+- âŒ User avatar/email display
 
 **Location:**
 - `client/screens/ProfileScreen.tsx` - Currently empty stub
@@ -258,7 +264,7 @@ The mobile app has a solid foundation with authentication, API client infrastruc
 
 ### 2.4 Home Screen (Create Flow)
 
-**Status:** ⚠️ **5% Complete - Stub Only**
+**Status:** âš ï¸ **5% Complete - Stub Only**
 
 **Current State:**
 - HomeScreen shows stub content (stats, activity, backend test)
@@ -267,11 +273,11 @@ The mobile app has a solid foundation with authentication, API client infrastruc
 - No "Create" button that starts story flow
 
 **Missing:**
-- ❌ Input type selector (Link / Idea / Write)
-- ❌ Text input area
-- ❌ "Create" button
-- ❌ Integration with `POST /api/story/start`
-- ❌ Navigation to Editor screen after creation
+- âŒ Input type selector (Link / Idea / Write)
+- âŒ Text input area
+- âŒ "Create" button
+- âŒ Integration with `POST /api/story/start`
+- âŒ Navigation to Editor screen after creation
 
 **Impact:**
 - **CRITICAL** - This is the entry point for story creation. Must be implemented.
@@ -280,21 +286,21 @@ The mobile app has a solid foundation with authentication, API client infrastruc
 
 ### 2.5 Error Handling & Toast Messages
 
-**Status:** ⚠️ **Partially Implemented**
+**Status:** âš ï¸ **Partially Implemented**
 
 **Implemented:**
-- ✅ Toast system exists
-- ✅ Basic error handling in API client
+- âœ… Toast system exists
+- âœ… Basic error handling in API client
 
 **Missing:**
-- ❌ Error code → user message mapping (per spec section 7)
-- ❌ Specific handling for:
-  - `402 INSUFFICIENT_CREDITS` → Show "Buy Credits" CTA
-  - `429 RATE_LIMIT_EXCEEDED` → Disable button for 60s
-  - `429 SCRIPT_LIMIT_REACHED` → Show upgrade CTA
-  - `503 SERVER_BUSY` → Auto-retry with delay
-  - `404 NOT_FOUND` (session expired) → Navigate back with message
-- ❌ Toast actions (e.g., "Buy Credits" button in toast)
+- âŒ Error code â†’ user message mapping (per spec section 7)
+- âŒ Specific handling for:
+  - `402 INSUFFICIENT_CREDITS` â†’ Show "Buy Credits" CTA
+  - `429 RATE_LIMIT_EXCEEDED` â†’ Disable button for 60s
+  - `429 SCRIPT_LIMIT_REACHED` â†’ Show upgrade CTA
+  - `503 SERVER_BUSY` â†’ Auto-retry with delay
+  - `404 NOT_FOUND` (session expired) â†’ Navigate back with message
+- âŒ Toast actions (e.g., "Buy Credits" button in toast)
 
 **Impact:**
 - **MEDIUM** - Better UX, but basic error handling works for now.
@@ -303,13 +309,13 @@ The mobile app has a solid foundation with authentication, API client infrastruc
 
 ### 2.6 Session Management
 
-**Status:** ❌ **Not Implemented**
+**Status:** âŒ **Not Implemented**
 
 **Missing:**
-- ❌ Session persistence (store sessionId in AsyncStorage)
-- ❌ Resume editing flow (check for existing sessions on app launch)
-- ❌ Session expiration handling (48-hour expiry)
-- ❌ Polling for render status (if needed)
+- âŒ Session persistence (store sessionId in AsyncStorage)
+- âŒ Resume editing flow (check for existing sessions on app launch)
+- âŒ Session expiration handling (48-hour expiry)
+- âŒ Polling for render status (if needed)
 
 **Impact:**
 - **MEDIUM** - Users should be able to resume editing. Can be added after MVP.
@@ -318,7 +324,7 @@ The mobile app has a solid foundation with authentication, API client infrastruc
 
 ## 3. Implementation Plan
 
-### Phase 1: Core Story Pipeline (MVP) 🔴 **PRIORITY**
+### Phase 1: Core Story Pipeline (MVP) ðŸ”´ **PRIORITY**
 
 **Goal:** Enable users to create a story from input and render a video.
 
@@ -333,36 +339,36 @@ The mobile app has a solid foundation with authentication, API client infrastruc
    - Navigate to Editor with `sessionId`
 
 2. **API Client - Story Endpoints** (`client/api/client.ts`)
-   - Add `startStory(input, inputType, styleKey?)` → `POST /api/story/start`
-   - Add `generateStory(sessionId)` → `POST /api/story/generate`
-   - Add `planStory(sessionId)` → `POST /api/story/plan`
-   - Add `searchClips(sessionId)` → `POST /api/story/search`
-   - Add `updateShot(sessionId, sentenceIndex, clipId)` → `POST /api/story/update-shot`
-   - Add `finalizeStory(sessionId)` → `POST /api/story/finalize`
-   - Add `getStorySession(sessionId)` → `GET /api/story/:sessionId`
+   - Add `startStory(input, inputType, styleKey?)` â†’ `POST /api/story/start`
+   - Add `generateStory(sessionId)` â†’ `POST /api/story/generate`
+   - Add `planStory(sessionId)` â†’ `POST /api/story/plan`
+   - Add `searchClips(sessionId)` â†’ `POST /api/story/search`
+   - Add `updateShot(sessionId, sentenceIndex, clipId)` â†’ `POST /api/story/update-shot`
+   - Add `finalizeStory(sessionId)` â†’ `POST /api/story/finalize`
+   - Add `getStorySession(sessionId)` â†’ `GET /api/story/:sessionId`
    - Add TypeScript interfaces: `StorySession`, `ShotPlan`, `Shot`, `Clip`
 
 3. **Editor Screen** (`EditorScreen.tsx`)
    - Load session via `GET /api/story/:sessionId`
    - Auto-trigger `plan` and `search` if status is `story_generated`
    - Display beats (sentences) with clip thumbnails
-   - "Select Clip" button per beat → opens Clip Search Modal
-   - "Render" button (bottom) → checks credits, calls `finalize`
+   - "Select Clip" button per beat â†’ opens Clip Search Modal
+   - "Render" button (bottom) â†’ checks credits, calls `finalize`
    - Show loading states during API calls
 
 4. **Clip Search Modal** (`ClipSearchModal.tsx`)
    - Search input (optional - can use server's search query)
    - Grid of clip thumbnails (2 columns)
    - "Load More" button for pagination
-   - Tap clip → call `update-shot`, close modal, refresh editor
+   - Tap clip â†’ call `update-shot`, close modal, refresh editor
 
 5. **Rendering Modal** (`RenderingModal.tsx`)
    - Full-screen modal with spinner
    - "Rendering your video..." message
    - Estimated time: "This usually takes 2-5 minutes"
    - Handle long request (15-minute timeout)
-   - On success → navigate to ShortDetail with `shortId`
-   - On error → show error, allow retry
+   - On success â†’ navigate to ShortDetail with `shortId`
+   - On error â†’ show error, allow retry
 
 6. **Navigation Updates**
    - Add `CreateScreen` to HomeStack
@@ -377,21 +383,21 @@ The mobile app has a solid foundation with authentication, API client infrastruc
 
 ---
 
-### Phase 2: Voice Selection & TTS 🔵 **HIGH PRIORITY**
+### Phase 2: Voice Selection & TTS ðŸ”µ **HIGH PRIORITY**
 
 **Goal:** Allow users to select voice and preview TTS.
 
 **Tasks:**
 
 1. **API Client - Voice Endpoints** (`client/api/client.ts`)
-   - Add `getVoices()` → `GET /api/voice/voices`
-   - Add `previewVoice(voiceId, text?)` → `POST /api/voice/preview`
-   - Add `previewTTS(text, voiceId, options?)` → `POST /api/tts/preview`
+   - Add `getVoices()` â†’ `GET /api/voice/voices`
+   - Add `previewVoice(voiceId, text?)` â†’ `POST /api/voice/preview`
+   - Add `previewTTS(text, voiceId, options?)` â†’ `POST /api/tts/preview`
    - Add TypeScript interfaces: `Voice`, `VoicePreviewResponse`
 
 2. **Voice Picker Component** (`VoicePicker.tsx`)
    - List of voices (grouped by category: male/female)
-   - Play button per voice → calls `previewVoice`
+   - Play button per voice â†’ calls `previewVoice`
    - Selected state
    - Audio playback using Expo AV
 
@@ -407,21 +413,21 @@ The mobile app has a solid foundation with authentication, API client infrastruc
 
 ---
 
-### Phase 3: Beat Editing 🔵 **MEDIUM PRIORITY**
+### Phase 3: Beat Editing ðŸ”µ **MEDIUM PRIORITY**
 
 **Goal:** Allow users to edit, add, and delete beats.
 
 **Tasks:**
 
 1. **API Client - Beat Endpoints** (`client/api/client.ts`)
-   - Add `updateBeatText(sessionId, sentenceIndex, text)` → `POST /api/story/update-beat-text`
-   - Add `insertBeat(sessionId, insertAfterIndex, text)` → `POST /api/story/insert-beat`
-   - Add `deleteBeat(sessionId, sentenceIndex)` → `POST /api/story/delete-beat`
+   - Add `updateBeatText(sessionId, sentenceIndex, text)` â†’ `POST /api/story/update-beat-text`
+   - Add `insertBeat(sessionId, insertAfterIndex, text)` â†’ `POST /api/story/insert-beat`
+   - Add `deleteBeat(sessionId, sentenceIndex)` â†’ `POST /api/story/delete-beat`
 
 2. **Editor Screen Updates**
    - Make beat text editable (inline edit or modal)
-   - "Add Beat" button → opens input modal
-   - Delete button per beat → confirmation, then delete
+   - "Add Beat" button â†’ opens input modal
+   - Delete button per beat â†’ confirmation, then delete
    - Auto-refresh session after edits
 
 **Estimated Time:** 1-2 days
@@ -431,19 +437,19 @@ The mobile app has a solid foundation with authentication, API client infrastruc
 
 ---
 
-### Phase 4: Profile & Credits Display 🟡 **MEDIUM PRIORITY**
+### Phase 4: Profile & Credits Display ðŸŸ¡ **MEDIUM PRIORITY**
 
 **Goal:** Show user profile, credits, and account management.
 
 **Tasks:**
 
 1. **API Client - User Endpoint** (`client/api/client.ts`)
-   - Add `getUserProfile()` → `GET /api/user/me`
+   - Add `getUserProfile()` â†’ `GET /api/user/me`
 
 2. **Profile Screen** (`ProfileScreen.tsx`)
    - Display user avatar, email, plan badge
    - Large credit balance display
-   - "Buy Credits" button → deep link to web
+   - "Buy Credits" button â†’ deep link to web
    - Sign out button
 
 3. **Credit Display in Navigation**
@@ -457,14 +463,14 @@ The mobile app has a solid foundation with authentication, API client infrastruc
 
 ---
 
-### Phase 5: Error Handling & Polish 🟢 **LOW PRIORITY**
+### Phase 5: Error Handling & Polish ðŸŸ¢ **LOW PRIORITY**
 
 **Goal:** Improve error handling and user experience.
 
 **Tasks:**
 
 1. **Error Code Mapping**
-   - Create error code → user message mapping (per spec section 7)
+   - Create error code â†’ user message mapping (per spec section 7)
    - Handle specific codes: 402, 429, 503, 404
    - Toast actions (e.g., "Buy Credits" button)
 
@@ -554,8 +560,8 @@ To maintain consistency and alignment with the backend spec, follow these rules 
 - Pass `sessionId` or `short` object via route params
 
 **Rule 10: Deep Linking**
-- Use `Linking.openURL()` for "Buy Credits" → web checkout
-- Use navigation params for internal deep links (e.g., `shortId` → ShortDetail)
+- Use `Linking.openURL()` for "Buy Credits" â†’ web checkout
+- Use navigation params for internal deep links (e.g., `shortId` â†’ ShortDetail)
 
 ---
 

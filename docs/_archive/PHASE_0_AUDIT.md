@@ -1,8 +1,14 @@
+- Status: ARCHIVE
+- Owner repo: mobile
+- Source of truth for: historical investigation context only; not active contract or usage truth
+- Canonical counterpart/source: docs/MOBILE_USED_SURFACES.md and backend canonical docs in ../vaiform-1/docs/
+- Last verified against: historical repo state only
+
 # Phase 0 Audit: SSOT Wiring & Guardrails
 
 **Date:** 2026-01-23  
 **Purpose:** Lock semantics and prevent drift before adding new endpoints/UI  
-**Status:** ✅ Audit Complete
+**Status:** âœ… Audit Complete
 
 ---
 
@@ -11,10 +17,10 @@
 This audit verifies Single Source of Truth (SSOT) patterns, confirms guardrails are in place, and documents which functions/files are canonical to prevent duplication in future phases.
 
 **Key Findings:**
-- ✅ `x-client: mobile` header attached to all API calls
-- ⚠️ `unwrapSession` duplicated (needs consolidation in future phase)
-- ✅ `getShortDetail` and `storyFinalize` exist but are not yet called (as expected per spec)
-- ✅ Core API wrapper (`client/api/client.ts`) is SSOT for all requests
+- âœ… `x-client: mobile` header attached to all API calls
+- âš ï¸ `unwrapSession` duplicated (needs consolidation in future phase)
+- âœ… `getShortDetail` and `storyFinalize` exist but are not yet called (as expected per spec)
+- âœ… Core API wrapper (`client/api/client.ts`) is SSOT for all requests
 
 ---
 
@@ -31,9 +37,9 @@ This audit verifies Single Source of Truth (SSOT) patterns, confirms guardrails 
 - `normalizeResponse<T>()` - Response normalization (handles both `{ success: true, data }` and `{ ok: true, data }`)
 
 **Guardrails:**
-- ✅ All requests include `x-client: mobile` header (lines 129, 184, 487)
-- ✅ All authed requests use `getIdToken()` → `Authorization: Bearer <token>`
-- ✅ Base URL: `EXPO_PUBLIC_API_BASE_URL` with fallback (line 5-7)
+- âœ… All requests include `x-client: mobile` header (lines 129, 184, 487)
+- âœ… All authed requests use `getIdToken()` â†’ `Authorization: Bearer <token>`
+- âœ… Base URL: `EXPO_PUBLIC_API_BASE_URL` with fallback (line 5-7)
 
 **Rule:** Do not create duplicate API wrappers. All API calls must go through `apiRequest` or `apiRequestNormalized`.
 
@@ -69,7 +75,7 @@ function unwrapSession(res: any): any {
 **Function:** `extractBeats(session: any): Beat[]`
 
 **Logic:**
-- Primary: `session.story.sentences` → map to beats
+- Primary: `session.story.sentences` â†’ map to beats
 - Fallback: `session.sentences` or `session.beats`
 
 **Rule:** This is the canonical beat extraction. Do not duplicate elsewhere.
@@ -94,7 +100,7 @@ function unwrapSession(res: any): any {
 
 ### 2.1 `x-client: mobile` Header
 
-**Status:** ✅ Verified
+**Status:** âœ… Verified
 
 **Locations:**
 - `apiRequest()` - line 129
@@ -113,7 +119,7 @@ rg "x-client" client/
 
 ### 2.2 Authorization Header
 
-**Status:** ✅ Verified
+**Status:** âœ… Verified
 
 **Implementation:**
 - `getIdToken()` fetches and caches Firebase ID token
@@ -128,7 +134,7 @@ rg "x-client" client/
 
 ### 3.1 `getShortDetail(id: string)`
 
-**Status:** ✅ Exists but not called (per spec)
+**Status:** âœ… Exists but not called (per spec)
 
 **Location:** `client/api/client.ts` (lines 349-356)
 
@@ -148,7 +154,7 @@ rg "getShortDetail\(" client/
 
 ### 3.2 `storyFinalize(body: { sessionId: string })`
 
-**Status:** ✅ Exists but not called (per spec)
+**Status:** âœ… Exists but not called (per spec)
 
 **Location:** `client/api/client.ts` (lines 480-552)
 
@@ -187,7 +193,7 @@ rg "storyFinalize\(" client/
 
 ## 5. Guardrails Checklist
 
-### ✅ Implemented
+### âœ… Implemented
 
 - [x] `x-client: mobile` header on all requests
 - [x] `Authorization: Bearer <token>` on all authed requests
@@ -195,11 +201,11 @@ rg "storyFinalize\(" client/
 - [x] Base URL from env var with fallback
 - [x] Token caching and refresh logic
 
-### ⚠️ Needs Attention (Future Phases)
+### âš ï¸ Needs Attention (Future Phases)
 
 - [ ] Extract `unwrapSession` to shared utility
 - [ ] Add 15-minute timeout to `storyFinalize` fetch
-- [ ] Implement error code → UI mapping (402, 429, 503 per spec)
+- [ ] Implement error code â†’ UI mapping (402, 429, 503 per spec)
 - [ ] Add credit check before render (gate on `userProfile.credits >= 20`)
 
 ---
@@ -243,20 +249,20 @@ rg "EXPO_PUBLIC_API_BASE_URL|API_BASE_URL" client/
 
 ### Do Not:
 
-1. ❌ Create duplicate API wrappers (use `apiRequest` / `apiRequestNormalized`)
-2. ❌ Add new `unwrapSession` implementations (extract to shared helper first)
-3. ❌ Rename `sessionId` → `storyId` or `sentenceIndex` → `beatIndex`
-4. ❌ Bypass `getIdToken()` for auth tokens
-5. ❌ Hardcode API base URL (use `EXPO_PUBLIC_API_BASE_URL`)
-6. ❌ Create duplicate beat extraction or shot selection logic
+1. âŒ Create duplicate API wrappers (use `apiRequest` / `apiRequestNormalized`)
+2. âŒ Add new `unwrapSession` implementations (extract to shared helper first)
+3. âŒ Rename `sessionId` â†’ `storyId` or `sentenceIndex` â†’ `beatIndex`
+4. âŒ Bypass `getIdToken()` for auth tokens
+5. âŒ Hardcode API base URL (use `EXPO_PUBLIC_API_BASE_URL`)
+6. âŒ Create duplicate beat extraction or shot selection logic
 
 ### Do:
 
-1. ✅ Use `apiRequestNormalized` for all new API calls
-2. ✅ Reuse `extractBeats` and `getSelectedShot` from StoryEditorScreen
-3. ✅ Follow exact spec semantics (`sessionId`, `sentenceIndex`, `clipId`)
-4. ✅ Include `x-client: mobile` (already enforced by wrappers)
-5. ✅ Use `normalizeResponse` pattern for response handling
+1. âœ… Use `apiRequestNormalized` for all new API calls
+2. âœ… Reuse `extractBeats` and `getSelectedShot` from StoryEditorScreen
+3. âœ… Follow exact spec semantics (`sessionId`, `sentenceIndex`, `clipId`)
+4. âœ… Include `x-client: mobile` (already enforced by wrappers)
+5. âœ… Use `normalizeResponse` pattern for response handling
 
 ---
 
@@ -273,7 +279,7 @@ rg "EXPO_PUBLIC_API_BASE_URL|API_BASE_URL" client/
 - Update StoryEditorScreen and ClipSearchModal to import shared helper
 
 **Phase 3:** Error Handling
-- Implement error code → UI mapping (402, 429, 503)
+- Implement error code â†’ UI mapping (402, 429, 503)
 - Add retry logic for 503 responses
 - Add "Buy Credits" CTA for 402 errors
 

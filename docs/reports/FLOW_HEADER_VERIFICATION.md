@@ -1,4 +1,10 @@
-# FlowTabsHeader persistence — verification audits
+- Status: WORKING_REPORT
+- Owner repo: mobile
+- Source of truth for: point-in-time verification or planning context only; not canonical route truth
+- Canonical counterpart/source: docs/MOBILE_USED_SURFACES.md and backend canonical docs in ../vaiform-1/docs/
+- Last verified against: mobile repo state at time of report creation
+
+# FlowTabsHeader persistence â€” verification audits
 
 Run after implementing the FlowTabsHeader SSOT + Render confirm plan.
 
@@ -15,9 +21,9 @@ Run after implementing the FlowTabsHeader SSOT + Render confirm plan.
 ## 3. StoryEditor header flicker
 
 - **Check**: StoryEditor shows a momentary "Storyboard Editor" title before its setOptions runs (header flicker).
-- **Result**: Yes — Stack previously set `headerTitle: "Storyboard Editor"` so the initial paint showed that string until the screen’s useLayoutEffect ran. **Mitigation applied**: StoryEditor’s Stack options now use `headerTitle: () => null` so the initial paint shows an empty title; setOptions then applies FlowTabsHeader. No "Storyboard Editor" flash.
+- **Result**: Yes â€” Stack previously set `headerTitle: "Storyboard Editor"` so the initial paint showed that string until the screenâ€™s useLayoutEffect ran. **Mitigation applied**: StoryEditorâ€™s Stack options now use `headerTitle: () => null` so the initial paint shows an empty title; setOptions then applies FlowTabsHeader. No "Storyboard Editor" flash.
 
-## 4. Script ↔ Storyboard via replace()
+## 4. Script â†” Storyboard via replace()
 
-- **Check**: Switching Script ↔ Storyboard via replace() preserves the bottom tabs and does not create duplicate stack entries.
+- **Check**: Switching Script â†” Storyboard via replace() preserves the bottom tabs and does not create duplicate stack entries.
 - **Result**: Confirmed. `navigation.replace("StoryEditor", { sessionId })` and `navigation.replace("Script", { sessionId })` replace the current screen on the **Home stack**; the stack stays [Home, Script] or [Home, StoryEditor]. The bottom tab bar is owned by the tab navigator, not the stack, so tabs are preserved. No duplicate stack entries.
