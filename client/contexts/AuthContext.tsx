@@ -20,6 +20,7 @@ import {
 import * as WebBrowser from "expo-web-browser";
 import * as AuthSession from "expo-auth-session";
 import { Platform } from "react-native";
+
 import { auth } from "@/lib/firebase";
 import { clearTokenCache, ensureUser, getCredits, UserProfile } from "@/api/client";
 
@@ -45,6 +46,24 @@ interface AuthProviderProps {
 }
 
 const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
+const BOOTSTRAP_ERROR_MESSAGE = "Couldn't finish account setup. Please sign in again.";
+
+function buildProfileFromCredits(
+  firebaseUser: User,
+  credits: number,
+  previousProfile: UserProfile | null,
+  emailOverride?: string | null
+): UserProfile {
+  return {
+    uid: firebaseUser.uid,
+    email: emailOverride || firebaseUser.email || previousProfile?.email || "",
+    plan: previousProfile?.plan || "free",
+    isMember: previousProfile?.isMember ?? false,
+    subscriptionStatus: previousProfile?.subscriptionStatus ?? null,
+    credits,
+    freeShortsUsed: previousProfile?.freeShortsUsed ?? 0,
+  };
+}
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
@@ -52,36 +71,87 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Track which UID we've already ensured to avoid duplicate calls
   const ensuredUidRef = useRef<string | null>(null);
+  const authChangeIdRef = useRef(0);
+  const userProfileRef = useRef<UserProfile | null>(null);
+
+  useEffect(() => {
+    userProfileRef.current = userProfile;
+  }, [userProfile]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      setUser(firebaseUser);
-      setIsLoading(false);
+      const authChangeId = ++authChangeIdRef.current;
+      const isStale = () => authChangeId !== authChangeIdRef.current;
 
-      // Call ensureUser once per unique UID
-      if (firebaseUser && ensuredUidRef.current !== firebaseUser.uid) {
-        console.log(`[auth] SIGNED_IN uid=${firebaseUser.uid}`);
-        ensuredUidRef.current = firebaseUser.uid;
-        try {
-          const result = await ensureUser();
-          if (result.ok) {
-            setUserProfile(result.data);
-          } else {
-            console.error("[auth] ensureUser failed:", result.code, result.message);
-          }
-        } catch (err) {
-          console.error("[auth] ensureUser error:", err);
-        }
-      } else if (!firebaseUser) {
-        // User signed out
+      if (!firebaseUser) {
         ensuredUidRef.current = null;
+        setUser(null);
         setUserProfile(null);
+        setIsLoading(false);
+        return;
+      }
+
+      setIsLoading(true);
+      setError(null);
+
+      if (ensuredUidRef.current === firebaseUser.uid && userProfileRef.current) {
+        setUser(firebaseUser);
+        setIsLoading(false);
+        return;
+      }
+
+      const failBootstrap = async (
+        logLabel: string,
+        requestId: string | null | undefined,
+        detail: string
+      ) => {
+        if (isStale()) return;
+        const requestIdSuffix = requestId ? ` requestId=${requestId}` : "";
+        console.error(`${logLabel}${requestIdSuffix}: ${detail}`);
+        clearTokenCache();
+        ensuredUidRef.current = null;
+        setUser(null);
+        setUserProfile(null);
+        setError(BOOTSTRAP_ERROR_MESSAGE);
+        try {
+          await firebaseSignOut(auth);
+        } catch (signOutError) {
+          console.error("[auth] bootstrap signOut failed:", signOutError);
+        }
+        if (!isStale()) {
+          setIsLoading(false);
+        }
+      };
+
+      try {
+        const result = await ensureUser();
+        if (isStale()) return;
+
+        if (!result.ok) {
+          await failBootstrap(
+            "[auth] ensureUser failed",
+            result.requestId,
+            `${result.code} ${result.message}`
+          );
+          return;
+        }
+
+        ensuredUidRef.current = firebaseUser.uid;
+        setUser(firebaseUser);
+        setUserProfile(result.data);
+        setIsLoading(false);
+      } catch (err) {
+        if (isStale()) return;
+        const detail = err instanceof Error ? err.message : "Unknown error";
+        await failBootstrap("[auth] ensureUser error", null, detail);
       }
     });
 
-    return unsubscribe;
+    return () => {
+      authChangeIdRef.current += 1;
+      unsubscribe();
+    };
   }, []);
 
   const refreshCredits = useCallback(async () => {
@@ -90,12 +160,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const result = await getCredits();
       if (result.ok) {
         setUserProfile((prev) =>
-          prev ? { ...prev, credits: result.data.credits } : null
+          prev
+            ? { ...prev, credits: result.data.credits }
+            : buildProfileFromCredits(user, result.data.credits, null, result.data.email)
         );
-      } else {
-        console.error("[auth] refreshCredits failed:", result.code, result.message);
-        throw new Error(result.message);
+        return;
       }
+
+      const requestIdSuffix = result.requestId ? ` requestId=${result.requestId}` : "";
+      console.error(
+        `[auth] refreshCredits failed${requestIdSuffix}: ${result.code} ${result.message}`
+      );
+      throw new Error(result.message);
     } catch (err) {
       console.error("[auth] refreshCredits error:", err);
       throw err;
@@ -109,9 +185,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       await signInWithEmailAndPassword(auth, email, password);
     } catch (err: any) {
       setError(getAuthErrorMessage(err.code));
-      throw err;
-    } finally {
       setIsLoading(false);
+      throw err;
     }
   }, []);
 
@@ -122,67 +197,75 @@ export function AuthProvider({ children }: AuthProviderProps) {
       await createUserWithEmailAndPassword(auth, email, password);
     } catch (err: any) {
       setError(getAuthErrorMessage(err.code));
-      throw err;
-    } finally {
       setIsLoading(false);
+      throw err;
     }
   }, []);
 
   const signInWithGoogle = useCallback(async () => {
     setError(null);
+    setIsLoading(true);
     try {
       if (Platform.OS === "web") {
         const provider = new GoogleAuthProvider();
         await signInWithPopup(auth, provider);
-      } else {
-        if (!GOOGLE_WEB_CLIENT_ID) {
-          setError("Google Sign-In is not configured. Please add your Google client IDs.");
-          return;
-        }
-
-        const redirectUri = AuthSession.makeRedirectUri({
-          scheme: "vaiform",
-        });
-
-        const discovery = {
-          authorizationEndpoint: "https://accounts.google.com/o/oauth2/v2/auth",
-          tokenEndpoint: "https://oauth2.googleapis.com/token",
-        };
-
-        const authRequest = new AuthSession.AuthRequest({
-          clientId: GOOGLE_WEB_CLIENT_ID,
-          scopes: ["openid", "profile", "email"],
-          redirectUri,
-          responseType: AuthSession.ResponseType.IdToken,
-        });
-
-        const result = await authRequest.promptAsync(discovery);
-
-        if (result.type === "success" && result.params.id_token) {
-          const credential = GoogleAuthProvider.credential(result.params.id_token);
-          await signInWithCredential(auth, credential);
-        } else if (result.type === "cancel") {
-          return;
-        } else {
-          throw new Error("Google sign-in failed");
-        }
+        return;
       }
+
+      if (!GOOGLE_WEB_CLIENT_ID) {
+        setError("Google Sign-In is not configured. Please add your Google client IDs.");
+        setIsLoading(false);
+        return;
+      }
+
+      const redirectUri = AuthSession.makeRedirectUri({
+        scheme: "vaiform",
+      });
+
+      const discovery = {
+        authorizationEndpoint: "https://accounts.google.com/o/oauth2/v2/auth",
+        tokenEndpoint: "https://oauth2.googleapis.com/token",
+      };
+
+      const authRequest = new AuthSession.AuthRequest({
+        clientId: GOOGLE_WEB_CLIENT_ID,
+        scopes: ["openid", "profile", "email"],
+        redirectUri,
+        responseType: AuthSession.ResponseType.IdToken,
+      });
+
+      const result = await authRequest.promptAsync(discovery);
+
+      if (result.type === "success" && result.params.id_token) {
+        const credential = GoogleAuthProvider.credential(result.params.id_token);
+        await signInWithCredential(auth, credential);
+        return;
+      }
+
+      if (result.type === "cancel") {
+        setIsLoading(false);
+        return;
+      }
+
+      throw new Error("Google sign-in failed");
     } catch (err: any) {
       console.error("Google sign-in error:", err);
       setError("Google sign-in failed. Please try again.");
+      setIsLoading(false);
       throw err;
     }
   }, []);
 
   const signOut = useCallback(async () => {
     setError(null);
+    setIsLoading(true);
     try {
       clearTokenCache();
       ensuredUidRef.current = null;
-      setUserProfile(null);
       await firebaseSignOut(auth);
     } catch (err: any) {
       setError("Sign out failed. Please try again.");
+      setIsLoading(false);
       throw err;
     }
   }, []);

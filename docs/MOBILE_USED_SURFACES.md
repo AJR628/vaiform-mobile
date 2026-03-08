@@ -12,8 +12,10 @@ Scope: exact current mobile repo behavior only. This file describes what the app
 
 ## Ground Rules
 
-- Authenticated API traffic is centralized in `client/api/client.ts`. Current live calls use `Authorization: Bearer <Firebase ID token>`, `Content-Type: application/json`, and `x-client: mobile` (`client/api/client.ts:125-174`, `client/api/client.ts:179-235`).
-- The app-wide React Query client exists, but no screen currently issues requests through `client/lib/query-client.ts`; the live surface is the hand-written API client plus a few direct media URL probes (`client/App.tsx:34-47`, `client/lib/query-client.ts`).
+- Authenticated API traffic is centralized in `client/api/client.ts`. Current live calls use `Authorization: Bearer <Firebase ID token>`, `Content-Type: application/json`, and `x-client: mobile`, and normalized responses now preserve backend `requestId` (`client/api/client.ts:147-260`).
+- The app-wide React Query client exists, but no screen currently issues requests through `client/lib/query-client.ts`; the live surface is the hand-written API client plus a few direct media URL probes (`client/App.tsx:36-57`, `client/lib/query-client.ts`).
+- Auth bootstrap no longer treats Firebase auth alone as app-ready. `AuthContext` now waits for `POST /api/users/ensure` before exposing the signed-in app state, and signs back out on provisioning failure (`client/contexts/AuthContext.tsx:82-149`, `client/navigation/RootStackNavigator.tsx:20-60`).
+- Persisted active story session state is now scoped by UID, so sign-out/account-switch does not reuse another account's active session (`client/contexts/ActiveStorySessionContext.tsx:28-89`, `client/navigation/HomeStackNavigator.tsx:30-57`).
 - `ShortDetailScreen` also probes returned media URLs with `HEAD` and fallback `Range` requests. Those hit the asset URL returned by shorts endpoints, not a Vaiform API route (`client/screens/ShortDetailScreen.tsx:397-425`).
 
 ## Shared / Context-Mediated Surfaces
@@ -22,8 +24,8 @@ Scope: exact current mobile repo behavior only. This file describes what the app
 
 | Endpoint | Trigger | Payload sent | Response fields read now | Evidence |
 |---|---|---|---|---|
-| `POST /api/users/ensure` | Firebase auth state change after sign-in; runs once per UID | No body | On success, stores the whole `UserProfile` object in context. Downstream UI currently reads `userProfile.credits`; other returned fields are stored but not screen-read in this audit. Error path reads `ok`, `code`, `message`. | `client/contexts/AuthContext.tsx:58-85`, `client/api/client.ts:460-475`, `client/api/client.ts:250-257` |
-| `GET /api/credits` | `refreshCredits()` helper used from `SettingsScreen` and after successful render in `StoryEditorScreen` | No body | Reads `data.credits` only and merges it into `userProfile`. Error path reads `ok`, `code`, `message`. | `client/contexts/AuthContext.tsx:87-103`, `client/api/client.ts:477-485`, `client/api/client.ts:259-263` |
+| `POST /api/users/ensure` | Firebase auth state change after sign-in; runs once per UID before the app leaves bootstrap loading | No body | On success, stores the whole `UserProfile` object in context. Downstream UI currently reads `userProfile.credits`; other returned fields are stored but not screen-read in this audit. Error path reads `ok`, `code`, `message`, `requestId`, and bootstrap signs back out instead of entering the app half-provisioned. | `client/contexts/AuthContext.tsx:82-149`, `client/api/client.ts:491-496`, `client/api/client.ts:77-145` |
+| `GET /api/credits` | `refreshCredits()` helper used from `SettingsScreen` and after successful render in `StoryEditorScreen` | No body | Reads `data.credits`. If `userProfile` is unexpectedly null, it now seeds a minimal profile instead of preserving `null`. Error path reads `ok`, `code`, `message`, `requestId`. | `client/contexts/AuthContext.tsx:157-179`, `client/api/client.ts:501-505`, `client/api/client.ts:77-145` |
 
 ## Screen-by-Screen Backend Usage
 

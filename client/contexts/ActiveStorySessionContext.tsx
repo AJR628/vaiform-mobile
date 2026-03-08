@@ -8,7 +8,9 @@ import React, {
 } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
-const STORAGE_KEY = "@vaiform/activeStorySessionId";
+import { useAuth } from "@/contexts/AuthContext";
+
+const STORAGE_KEY_PREFIX = "@vaiform/activeStorySessionId:";
 
 interface ActiveStorySessionContextType {
   activeSessionId: string | null;
@@ -24,35 +26,67 @@ interface ActiveStorySessionProviderProps {
 }
 
 export function ActiveStorySessionProvider({ children }: ActiveStorySessionProviderProps) {
+  const { user } = useAuth();
+  const storageKey = user?.uid ? `${STORAGE_KEY_PREFIX}${user.uid}` : null;
   const [activeSessionId, setActiveSessionIdState] = useState<string | null>(null);
   const [isHydrated, setIsHydrated] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
-    AsyncStorage.getItem(STORAGE_KEY).then((stored) => {
-      if (!cancelled) {
-        setActiveSessionIdState(stored || null);
-        setIsHydrated(true);
-      }
-    });
+
+    if (!storageKey) {
+      setActiveSessionIdState(null);
+      setIsHydrated(true);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setIsHydrated(false);
+    setActiveSessionIdState(null);
+
+    AsyncStorage.getItem(storageKey)
+      .then((stored) => {
+        if (!cancelled) {
+          setActiveSessionIdState(stored || null);
+          setIsHydrated(true);
+        }
+      })
+      .catch((error) => {
+        console.error("[active-session] hydrate failed:", error);
+        if (!cancelled) {
+          setActiveSessionIdState(null);
+          setIsHydrated(true);
+        }
+      });
+
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [storageKey]);
 
-  const setActiveSessionId = useCallback((id: string | null) => {
-    setActiveSessionIdState(id);
-    if (id) {
-      AsyncStorage.setItem(STORAGE_KEY, id);
-    } else {
-      AsyncStorage.removeItem(STORAGE_KEY);
-    }
-  }, []);
+  const setActiveSessionId = useCallback(
+    (id: string | null) => {
+      setActiveSessionIdState(id);
+      if (!storageKey) return;
+
+      const request = id
+        ? AsyncStorage.setItem(storageKey, id)
+        : AsyncStorage.removeItem(storageKey);
+      request.catch((error) => {
+        console.error("[active-session] persist failed:", error);
+      });
+    },
+    [storageKey]
+  );
 
   const clearActiveSessionId = useCallback(() => {
     setActiveSessionIdState(null);
-    AsyncStorage.removeItem(STORAGE_KEY);
-  }, []);
+    if (!storageKey) return;
+    AsyncStorage.removeItem(storageKey).catch((error) => {
+      console.error("[active-session] clear failed:", error);
+    });
+  }, [storageKey]);
 
   return (
     <ActiveStorySessionContext.Provider

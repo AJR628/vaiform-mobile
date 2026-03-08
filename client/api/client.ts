@@ -1,10 +1,12 @@
 import { auth } from "@/lib/firebase";
 import type { StorySession, StoryFinalizeResponse } from "@/types/story";
 
-// Normalize base URL to remove trailing slash (prevents double slashes in paths)
-const API_BASE_URL = (
-  process.env.EXPO_PUBLIC_API_BASE_URL || "https://your-vaiform-backend.com"
-).replace(/\/$/, "");
+// Normalize base URL to remove trailing slash (prevents double slashes in paths).
+const apiBaseUrlEnv = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
+if (!apiBaseUrlEnv) {
+  throw new Error("Missing required EXPO_PUBLIC_API_BASE_URL");
+}
+const API_BASE_URL = apiBaseUrlEnv.replace(/\/$/, "");
 
 const API_LOG =
   __DEV__ && (process.env.EXPO_PUBLIC_API_LOG === "1");
@@ -75,6 +77,7 @@ export function isApiError(error: unknown): error is ApiError {
 export interface NormalizedSuccess<T> {
   ok: true;
   data: T;
+  requestId: string | null;
 }
 
 export interface NormalizedError {
@@ -82,9 +85,23 @@ export interface NormalizedError {
   status: number;
   code: string;
   message: string;
+  requestId: string | null;
 }
 
 export type NormalizedResponse<T> = NormalizedSuccess<T> | NormalizedError;
+
+function getEnvelopeRequestId(
+  obj: Record<string, unknown>,
+  fallback: string | null
+): string | null {
+  if (typeof obj.requestId === "string") {
+    return obj.requestId;
+  }
+  if (obj.requestId === null) {
+    return null;
+  }
+  return fallback;
+}
 
 /**
  * Normalize API responses that use either { success: true, data } or { ok: true } envelopes.
@@ -94,31 +111,37 @@ export type NormalizedResponse<T> = NormalizedSuccess<T> | NormalizedError;
  */
 export function normalizeResponse<T>(
   json: unknown,
-  status: number
+  status: number,
+  requestIdFallback: string | null = null
 ): NormalizedResponse<T> {
   if (typeof json !== "object" || json === null) {
-    return { ok: false, status, code: "INVALID_RESPONSE", message: "Invalid response format" };
+    return {
+      ok: false,
+      status,
+      code: "INVALID_RESPONSE",
+      message: "Invalid response format",
+      requestId: requestIdFallback,
+    };
   }
 
   const obj = json as Record<string, unknown>;
+  const requestId = getEnvelopeRequestId(obj, requestIdFallback);
 
   // Handle success:true envelope
   if (obj.success === true) {
-    // If data field exists, return it; otherwise return whole object as data
     const data = obj.data !== undefined ? obj.data : obj;
-    return { ok: true, data: data as T };
+    return { ok: true, data: data as T, requestId };
   }
 
   // Handle ok:true envelope
   if (obj.ok === true) {
     const data = obj.data !== undefined ? obj.data : obj;
-    return { ok: true, data: data as T };
+    return { ok: true, data: data as T, requestId };
   }
 
-  // Error response
   const code = (obj.code || obj.error || "UNKNOWN_ERROR") as string;
   const message = (obj.message || obj.detail || "Unknown error") as string;
-  return { ok: false, status, code, message };
+  return { ok: false, status, code, message, requestId };
 }
 
 export async function apiRequest<T = unknown>(
@@ -212,12 +235,7 @@ export async function apiRequestNormalized<T = unknown>(
       signal,
     });
 
-    const isCaptionPreview = endpoint.includes("/api/caption/preview");
-    const shouldLog = API_LOG && !isCaptionPreview;
-    if (shouldLog) {
-      console.log(`[api] ${method} ${endpoint} ${response.status} hasAuthHeader=${hasAuthHeader}`);
-    }
-
+    const responseRequestId = response.headers.get("x-request-id");
     const contentType = response.headers.get("content-type");
     let json: unknown = null;
     if (contentType && contentType.includes("application/json")) {
@@ -227,10 +245,19 @@ export async function apiRequestNormalized<T = unknown>(
       json = { message: text };
     }
 
-    return normalizeResponse<T>(json, response.status);
+    const normalized = normalizeResponse<T>(json, response.status, responseRequestId);
+    const isCaptionPreview = endpoint.includes("/api/caption/preview");
+    const shouldLog = API_LOG && !isCaptionPreview;
+    if (shouldLog) {
+      console.log(
+        `[api] ${method} ${endpoint} ${response.status} requestId=${normalized.requestId ?? "n/a"} hasAuthHeader=${hasAuthHeader}`
+      );
+    }
+
+    return normalized;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Network error";
-    return { ok: false, status: 0, code: "NETWORK_ERROR", message };
+    return { ok: false, status: 0, code: "NETWORK_ERROR", message, requestId: null };
   }
 }
 
@@ -251,7 +278,7 @@ export interface UserProfile {
   email: string;
   plan: string;
   isMember: boolean;
-  subscriptionStatus: string;
+  subscriptionStatus: string | null;
   credits: number;
   freeShortsUsed: number;
 }
@@ -461,17 +488,10 @@ export async function captionPreview(
  * POST /api/users/ensure - Create or fetch user profile (idempotent)
  */
 export async function ensureUser(): Promise<NormalizedResponse<UserProfile>> {
-  const result = await apiRequestNormalized<UserProfile>("/api/users/ensure", {
+  return apiRequestNormalized<UserProfile>("/api/users/ensure", {
     method: "POST",
     requireAuth: true,
   });
-
-  // Default plan to "free" if not provided
-  if (result.ok && result.data && !result.data.plan) {
-    result.data.plan = "free";
-  }
-
-  return result;
 }
 
 /**
@@ -721,15 +741,13 @@ export async function storyFinalize(
           status: 0,
           code: "TIMEOUT",
           message: "Request timed out after 15 minutes",
+          requestId: null,
         };
       }
       throw fetchError;
     }
 
-    if (API_LOG) {
-      console.log(`[api] POST /api/story/finalize ${response.status}`);
-    }
-
+    const responseRequestId = response.headers.get("x-request-id");
     const contentType = response.headers.get("content-type");
     let json: unknown = null;
     if (contentType && contentType.includes("application/json")) {
@@ -748,10 +766,14 @@ export async function storyFinalize(
       }
     }
 
-    // Normalize response using existing function
-    const normalized = normalizeResponse<StorySession>(json, response.status);
+    const normalized = normalizeResponse<StorySession>(json, response.status, responseRequestId);
 
-    // Extract shortId from raw response if success
+    if (API_LOG) {
+      console.log(
+        `[api] POST /api/story/finalize ${response.status} requestId=${normalized.requestId ?? "n/a"}`
+      );
+    }
+
     let shortId: string | null | undefined;
     if (typeof json === "object" && json !== null) {
       const rawResponse = json as StoryFinalizeResponse;
@@ -776,6 +798,7 @@ export async function storyFinalize(
       status: 0,
       code: "NETWORK_ERROR",
       message,
+      requestId: null,
     };
   }
 }
