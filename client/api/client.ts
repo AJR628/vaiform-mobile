@@ -89,7 +89,7 @@ export type NormalizedResponse<T> = NormalizedSuccess<T> | NormalizedError;
 /**
  * Normalize API responses that use either { success: true, data } or { ok: true } envelopes.
  * - If success:true and data exists => return data
- * - If success:true and NO data => return whole object as data (for /api/credits where credits is top-level)
+ * - If success:true and NO data => return whole object as data (defensive fallback for non-standard success payloads)
  * - Handle ok:true pattern if encountered
  */
 export function normalizeResponse<T>(
@@ -475,7 +475,7 @@ export async function ensureUser(): Promise<NormalizedResponse<UserProfile>> {
 }
 
 /**
- * GET /api/credits - Fetch current credits (credits is top-level in response)
+ * GET /api/credits - Fetch current credits from the standard success envelope
  */
 export async function getCredits(): Promise<NormalizedResponse<CreditsResponse>> {
   return apiRequestNormalized<CreditsResponse>("/api/credits", {
