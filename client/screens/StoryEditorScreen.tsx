@@ -72,6 +72,25 @@ const PLACEMENT_TO_YPCT: Record<CaptionPlacement, number> = {
   bottom: 0.9,
 };
 
+interface RenderRecoveryState {
+  state?: "pending" | "done" | "failed" | string;
+  attemptId?: string | null;
+  shortId?: string | null;
+  startedAt?: string | null;
+  updatedAt?: string | null;
+  finishedAt?: string | null;
+  failedAt?: string | null;
+  code?: string | null;
+  message?: string | null;
+}
+
+const DEFAULT_RENDERING_MODAL_TITLE = "Rendering your video...";
+const DEFAULT_RENDERING_MODAL_SUBTEXT = "This usually takes 2-5 minutes";
+const RECOVERY_RENDERING_MODAL_TITLE = "Checking render status...";
+const RECOVERY_RENDERING_MODAL_SUBTEXT = "Connection interrupted. We're checking the same render attempt.";
+const RENDER_RECOVERY_POLL_DELAY_MS = 3000;
+const RENDER_RECOVERY_MAX_ATTEMPTS = 20;
+
 function formatUuidFromBytes(bytes: Uint8Array): string {
   const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
   return [
@@ -98,6 +117,42 @@ function unwrapSession(res: any): any {
   if (res?.data && (res?.ok === true || res?.success === true)) return res.data;
   // Some wrappers return session directly (defensive fallback)
   return res;
+}
+
+function getRenderRecovery(session: any): RenderRecoveryState | null {
+  const renderRecovery = session?.renderRecovery;
+  if (!renderRecovery || typeof renderRecovery !== "object") return null;
+  return renderRecovery as RenderRecoveryState;
+}
+
+function getRenderRecoveryShortId(
+  session: any,
+  renderRecovery: RenderRecoveryState | null
+): string | null {
+  if (
+    typeof renderRecovery?.shortId === "string" &&
+    renderRecovery.shortId.trim().length > 0
+  ) {
+    return renderRecovery.shortId.trim();
+  }
+  if (
+    typeof session?.finalVideo?.jobId === "string" &&
+    session.finalVideo.jobId.trim().length > 0
+  ) {
+    return session.finalVideo.jobId.trim();
+  }
+  return null;
+}
+
+function isRenderRecoveryForAttempt(
+  renderRecovery: RenderRecoveryState | null,
+  attemptId: string
+): boolean {
+  return (
+    !!renderRecovery &&
+    typeof renderRecovery.attemptId === "string" &&
+    renderRecovery.attemptId === attemptId
+  );
 }
 
 /**
@@ -325,6 +380,12 @@ export default function StoryEditorScreen() {
   const [replaceModalForIndex, setReplaceModalForIndex] = useState<number | null>(null);
   const [isRendering, setIsRendering] = useState(false);
   const [showRenderingModal, setShowRenderingModal] = useState(false);
+  const [renderingModalTitle, setRenderingModalTitle] = useState(
+    DEFAULT_RENDERING_MODAL_TITLE
+  );
+  const [renderingModalSubtext, setRenderingModalSubtext] = useState(
+    DEFAULT_RENDERING_MODAL_SUBTEXT
+  );
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [editorH, setEditorH] = useState(120);
   const [editorCollapsed, setEditorCollapsed] = useState(false);
@@ -851,9 +912,97 @@ export default function StoryEditorScreen() {
     setTimeout(() => textInputRef.current?.focus(), 50);
   }, []);
 
+  const completeRenderSuccess = useCallback(
+    async (shortId: string, successMessage: string) => {
+      setShowRenderingModal(false);
+      showSuccess(successMessage);
+
+      try {
+        await refreshCredits();
+      } catch (err) {
+        console.warn("[story] Failed to refresh credits after render:", err);
+      }
+
+      const tabNavigator = navigation.getParent();
+      if (__DEV__) {
+        console.log("[nav-verify] parent routeNames:", tabNavigator?.getState()?.routeNames);
+      }
+      if (tabNavigator) {
+        tabNavigator.navigate("LibraryTab", {
+          screen: "ShortDetail",
+          params: { shortId },
+        });
+      } else {
+        console.warn("[story] Could not access tab navigator for cross-stack navigation");
+        showError("Render succeeded, but navigation failed. Please check your Library.");
+      }
+    },
+    [navigation, refreshCredits, showError, showSuccess]
+  );
+
+  const recoverRenderAttempt = useCallback(
+    async (attemptId: string): Promise<"done" | "failed" | "pending"> => {
+      setRenderingModalTitle(RECOVERY_RENDERING_MODAL_TITLE);
+      setRenderingModalSubtext(RECOVERY_RENDERING_MODAL_SUBTEXT);
+
+      for (
+        let pollAttempt = 0;
+        pollAttempt < RENDER_RECOVERY_MAX_ATTEMPTS;
+        pollAttempt += 1
+      ) {
+        const res = await storyGet(sessionId);
+        if (res?.ok || res?.success === true) {
+          const recoveredSession = unwrapSession(res);
+          setSession(recoveredSession);
+
+          const renderRecovery = getRenderRecovery(recoveredSession);
+          if (isRenderRecoveryForAttempt(renderRecovery, attemptId)) {
+            if (renderRecovery?.state === "done") {
+              const recoveredShortId = getRenderRecoveryShortId(
+                recoveredSession,
+                renderRecovery
+              );
+              if (recoveredShortId) {
+                await completeRenderSuccess(
+                  recoveredShortId,
+                  "Video rendered successfully!"
+                );
+                return "done";
+              }
+              showError(
+                "Render finished, but the short is not ready yet. Please check your Library."
+              );
+              return "failed";
+            }
+
+            if (renderRecovery?.state === "failed") {
+              showError(renderRecovery.message || "Render failed. Please try again.");
+              return "failed";
+            }
+          }
+        }
+
+        if (pollAttempt < RENDER_RECOVERY_MAX_ATTEMPTS - 1) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, RENDER_RECOVERY_POLL_DELAY_MS)
+          );
+        }
+      }
+
+      showWarning(
+        "Render is still processing. Tap Render again to resume this same attempt, or check your Library shortly."
+      );
+      setShowRenderingModal(false);
+      return "pending";
+    },
+    [completeRenderSuccess, sessionId, showError, showWarning]
+  );
+
   const doRender = useCallback(async () => {
     setIsRendering(true);
     setShowRenderingModal(true);
+    setRenderingModalTitle(DEFAULT_RENDERING_MODAL_TITLE);
+    setRenderingModalSubtext(DEFAULT_RENDERING_MODAL_SUBTEXT);
 
     let shouldClearActiveRenderAttemptKey = false;
 
@@ -882,19 +1031,29 @@ export default function StoryEditorScreen() {
       }
 
       if (!result.ok) {
+        if (
+          result.code === "TIMEOUT" ||
+          result.code === "NETWORK_ERROR" ||
+          result.code === "IDEMPOTENT_IN_PROGRESS" ||
+          result.status === 0 ||
+          result.status === 409
+        ) {
+          const recoveryResult = await recoverRenderAttempt(idempotencyKey);
+          shouldClearActiveRenderAttemptKey = recoveryResult !== "pending";
+          if (recoveryResult !== "pending") {
+            setShowRenderingModal(false);
+          }
+          return;
+        }
+
         shouldClearActiveRenderAttemptKey = true;
 
-        // Handle different error cases
         if (result.code === "INSUFFICIENT_CREDITS" || result.status === 402) {
           showError("Not enough credits. You need 20 credits to render.");
           Linking.openURL("https://vaiform.com/pricing");
         } else if (result.code === "NOT_FOUND" || result.status === 404) {
           showError("Session not found. Please start a new video.");
           navigation.goBack();
-        } else if (result.code === "TIMEOUT") {
-          showError("Request timed out. Please try again.");
-        } else if (result.code === "NETWORK_ERROR" || result.status === 0) {
-          showError("Network error. Please check your connection and try again.");
         } else {
           showError(result.message || "Render failed. Please try again.");
         }
@@ -904,33 +1063,19 @@ export default function StoryEditorScreen() {
 
       shouldClearActiveRenderAttemptKey = true;
 
-      // Success: navigate to ShortDetail
-      if (result.shortId) {
-        setShowRenderingModal(false);
-        showSuccess("Video rendered successfully!");
+      const resolvedShortId =
+        result.shortId ||
+        getRenderRecoveryShortId(result.data, getRenderRecovery(result.data));
 
-        // Refresh credits to show updated balance
-        try {
-          await refreshCredits();
-        } catch (err) {
-          console.warn("[story] Failed to refresh credits after render:", err);
-          // Don't block navigation on credit refresh failure
-        }
-
-        const tabNavigator = navigation.getParent();
-        if (__DEV__) {
-          console.log("[nav-verify] parent routeNames:", tabNavigator?.getState()?.routeNames);
-        }
-        if (tabNavigator) {
-          tabNavigator.navigate("LibraryTab", {
-            screen: "ShortDetail",
-            params: { shortId: result.shortId },
-          });
-        } else {
-          console.warn("[story] Could not access tab navigator for cross-stack navigation");
-          showError("Render succeeded, but navigation failed. Please check your Library.");
-        }
+      if (resolvedShortId) {
+        await completeRenderSuccess(resolvedShortId, "Video rendered successfully!");
+        return;
       }
+
+      showError(
+        "Render finished, but the short is not ready yet. Please check your Library."
+      );
+      setShowRenderingModal(false);
     } catch (error) {
       shouldClearActiveRenderAttemptKey = true;
       console.error("[story] render error:", error);
@@ -941,14 +1086,16 @@ export default function StoryEditorScreen() {
         activeRenderAttemptKeyRef.current = null;
       }
       setIsRendering(false);
+      setRenderingModalTitle(DEFAULT_RENDERING_MODAL_TITLE);
+      setRenderingModalSubtext(DEFAULT_RENDERING_MODAL_SUBTEXT);
     }
   }, [
+    completeRenderSuccess,
+    navigation,
+    recoverRenderAttempt,
     sessionId,
     showError,
     showWarning,
-    showSuccess,
-    navigation,
-    refreshCredits,
   ]);
   const handleRender = useCallback(() => {
     if (credits < 20) {
@@ -1264,9 +1411,9 @@ export default function StoryEditorScreen() {
         <View style={styles.renderingModalOverlay}>
           <View style={[styles.renderingModalContent, { backgroundColor: theme.backgroundDefault }]}>
             <ActivityIndicator size="large" color={theme.link} />
-            <ThemedText style={styles.renderingModalTitle}>Rendering your video...</ThemedText>
+            <ThemedText style={styles.renderingModalTitle}>{renderingModalTitle}</ThemedText>
             <ThemedText style={[styles.renderingModalSubtext, { color: theme.tabIconDefault }]}>
-              This usually takes 2-5 minutes
+              {renderingModalSubtext}
             </ThemedText>
           </View>
         </View>
