@@ -4,7 +4,7 @@
 - Owner repo: mobile
 - Source of truth for: mobile-side pointer to backend-owned contract docs and local alignment rules for this repo
 - Canonical counterpart/source: ../vaiform-1/docs/MOBILE_BACKEND_CONTRACT.md, ../vaiform-1/docs/MOBILE_HARDENING_PLAN.md, ../vaiform-1/docs/LEGACY_WEB_SURFACES.md
-- Last verified against: both repos on 2026-03-07
+- Last verified against: both repos on 2026-03-12
 
 This file is not a second canonical contract document. The backend repo owns backend/mobile contract truth.
 
@@ -26,8 +26,8 @@ If backend route behavior changes, update the backend canonical docs first. Upda
 
 ## Current Local Alignment Note
 
-- Credits path used by mobile is GET /api/credits.
-- Current mobile readers are AuthContext.refreshCredits(), surfaced by SettingsScreen and post-render refresh in StoryEditorScreen.
-- Current field read by mobile is data.credits.
+- Active billing path used by mobile is GET /api/usage.
+- Current mobile readers are AuthContext bootstrap + refreshUsage(), surfaced by SettingsScreen and post-render refresh in StoryEditorScreen.
+- Current billing fields read by mobile are `data.usage.availableSec` and session `billingEstimate.estimatedSec`.
 - Do not reintroduce GET /credits, backend aliases, or a global /api base-URL convention in this repo.
-- Auth bootstrap remains ensureUser()-driven in this repo; this note does not redefine that flow.
+- Auth bootstrap remains ensureUser()-driven in this repo, but app readiness now also depends on the canonical usage fetch.

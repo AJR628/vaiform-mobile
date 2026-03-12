@@ -14,6 +14,7 @@ import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollV
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/contexts/ToastContext";
 import { useTheme } from "@/hooks/useTheme";
+import { formatRenderTimeLeft } from "@/lib/renderUsage";
 import { Spacing, BorderRadius } from "@/constants/theme";
 
 const COLORS = {
@@ -32,29 +33,29 @@ export default function SettingsScreen() {
   const headerHeight = useHeaderHeight();
   const tabBarHeight = useBottomTabBarHeight();
   const { theme } = useTheme();
-  const { user, userProfile, signOut, refreshCredits } = useAuth();
+  const { user, usageSnapshot, signOut, refreshUsage } = useAuth();
   const { showSuccess, showError } = useToast();
 
-  const [isRefreshingCredits, setIsRefreshingCredits] = useState(false);
+  const [isRefreshingUsage, setIsRefreshingUsage] = useState(false);
 
   const appVersion = Constants.expoConfig?.version || "1.0.0";
 
-  const handleRefreshCredits = async () => {
-    setIsRefreshingCredits(true);
+  const handleRefreshUsage = async () => {
+    setIsRefreshingUsage(true);
     try {
-      await refreshCredits();
-      showSuccess("Credits refreshed!");
+      await refreshUsage();
+      showSuccess("Render time refreshed!");
       if (Platform.OS !== "web") {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
     } catch (err) {
-      const message = err instanceof Error ? err.message : "Failed to refresh credits";
+      const message = err instanceof Error ? err.message : "Failed to refresh render time";
       showError(message);
       if (Platform.OS !== "web") {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       }
     } finally {
-      setIsRefreshingCredits(false);
+      setIsRefreshingUsage(false);
     }
   };
 
@@ -123,25 +124,25 @@ export default function SettingsScreen() {
           <Card style={styles.settingsCard}>
             <View style={styles.settingsRow}>
               <View style={styles.settingsIconContainer}>
-                <Feather name="credit-card" size={20} color={COLORS.primary} />
+                <Feather name="clock" size={20} color={COLORS.primary} />
               </View>
               <View style={styles.settingsContent}>
-                <ThemedText style={styles.settingsLabel}>Credits</ThemedText>
+                <ThemedText style={styles.settingsLabel}>Render Time</ThemedText>
                 <ThemedText style={styles.settingsValue}>
-                  {userProfile?.credits ?? "—"} credits
+                  {formatRenderTimeLeft(usageSnapshot?.usage?.availableSec)}
                 </ThemedText>
               </View>
               <Pressable
-                onPress={handleRefreshCredits}
-                disabled={isRefreshingCredits}
+                onPress={handleRefreshUsage}
+                disabled={isRefreshingUsage}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 style={({ pressed }) => [
                   styles.refreshButton,
                   pressed && styles.refreshButtonPressed,
                 ]}
-                testID="button-refresh-credits"
+                testID="button-refresh-usage"
               >
-                {isRefreshingCredits ? (
+                {isRefreshingUsage ? (
                   <ActivityIndicator size="small" color={COLORS.primary} />
                 ) : (
                   <Feather name="refresh-cw" size={18} color={COLORS.primary} />

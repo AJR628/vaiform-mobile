@@ -283,10 +283,36 @@ export interface UserProfile {
   freeShortsUsed: number;
 }
 
-export interface CreditsResponse {
-  uid: string;
-  email: string;
-  credits: number;
+export interface UsageMembership {
+  status: string;
+  kind: string;
+  billingCadence: string;
+  startedAt: string | null;
+  expiresAt: string | null;
+  canceledAt: string | null;
+}
+
+export interface UsageLedger {
+  billingUnit: "sec";
+  periodStartAt: string | null;
+  periodEndAt: string | null;
+  cycleIncludedSec: number;
+  cycleUsedSec: number;
+  cycleReservedSec: number;
+  availableSec: number;
+}
+
+export interface UsageSnapshot {
+  plan: string;
+  membership: UsageMembership;
+  usage: UsageLedger;
+}
+
+export interface ShortBilling {
+  estimatedSec?: number;
+  billedSec?: number;
+  settledAt?: string;
+  source?: string;
 }
 
 export interface ShortItem {
@@ -325,11 +351,7 @@ export interface ShortDetail {
     text?: string;
     author?: string;
   };
-  credits?: {
-    before?: number;
-    after?: number;
-    cost?: number;
-  };
+  billing?: ShortBilling;
   createdAt: string;
 }
 
@@ -495,10 +517,10 @@ export async function ensureUser(): Promise<NormalizedResponse<UserProfile>> {
 }
 
 /**
- * GET /api/credits - Fetch current credits from the standard success envelope
+ * GET /api/usage - Fetch canonical billing usage from the standard success envelope
  */
-export async function getCredits(): Promise<NormalizedResponse<CreditsResponse>> {
-  return apiRequestNormalized<CreditsResponse>("/api/credits", {
+export async function getUsage(): Promise<NormalizedResponse<UsageSnapshot>> {
+  return apiRequestNormalized<UsageSnapshot>("/api/usage", {
     method: "GET",
     requireAuth: true,
   });

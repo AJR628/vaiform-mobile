@@ -22,19 +22,26 @@ import * as AuthSession from "expo-auth-session";
 import { Platform } from "react-native";
 
 import { auth } from "@/lib/firebase";
-import { clearTokenCache, ensureUser, getCredits, UserProfile } from "@/api/client";
+import {
+  clearTokenCache,
+  ensureUser,
+  getUsage,
+  UserProfile,
+  UsageSnapshot,
+} from "@/api/client";
 
 WebBrowser.maybeCompleteAuthSession();
 
 interface AuthContextType {
   user: User | null;
   userProfile: UserProfile | null;
+  usageSnapshot: UsageSnapshot | null;
   isLoading: boolean;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signUpWithEmail: (email: string, password: string) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
-  refreshCredits: () => Promise<void>;
+  refreshUsage: () => Promise<void>;
   error: string | null;
   clearError: () => void;
 }
@@ -48,36 +55,25 @@ interface AuthProviderProps {
 const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID;
 const BOOTSTRAP_ERROR_MESSAGE = "Couldn't finish account setup. Please sign in again.";
 
-function buildProfileFromCredits(
-  firebaseUser: User,
-  credits: number,
-  previousProfile: UserProfile | null,
-  emailOverride?: string | null
-): UserProfile {
-  return {
-    uid: firebaseUser.uid,
-    email: emailOverride || firebaseUser.email || previousProfile?.email || "",
-    plan: previousProfile?.plan || "free",
-    isMember: previousProfile?.isMember ?? false,
-    subscriptionStatus: previousProfile?.subscriptionStatus ?? null,
-    credits,
-    freeShortsUsed: previousProfile?.freeShortsUsed ?? 0,
-  };
-}
-
 export function AuthProvider({ children }: AuthProviderProps) {
   const [user, setUser] = useState<User | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [usageSnapshot, setUsageSnapshot] = useState<UsageSnapshot | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const ensuredUidRef = useRef<string | null>(null);
   const authChangeIdRef = useRef(0);
   const userProfileRef = useRef<UserProfile | null>(null);
+  const usageSnapshotRef = useRef<UsageSnapshot | null>(null);
 
   useEffect(() => {
     userProfileRef.current = userProfile;
   }, [userProfile]);
+
+  useEffect(() => {
+    usageSnapshotRef.current = usageSnapshot;
+  }, [usageSnapshot]);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
@@ -88,6 +84,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         ensuredUidRef.current = null;
         setUser(null);
         setUserProfile(null);
+        setUsageSnapshot(null);
         setIsLoading(false);
         return;
       }
@@ -95,7 +92,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setIsLoading(true);
       setError(null);
 
-      if (ensuredUidRef.current === firebaseUser.uid && userProfileRef.current) {
+      if (
+        ensuredUidRef.current === firebaseUser.uid &&
+        userProfileRef.current &&
+        usageSnapshotRef.current
+      ) {
         setUser(firebaseUser);
         setIsLoading(false);
         return;
@@ -113,6 +114,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         ensuredUidRef.current = null;
         setUser(null);
         setUserProfile(null);
+        setUsageSnapshot(null);
         setError(BOOTSTRAP_ERROR_MESSAGE);
         try {
           await firebaseSignOut(auth);
@@ -137,14 +139,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
           return;
         }
 
+        const usageResult = await getUsage();
+        if (isStale()) return;
+
+        if (!usageResult.ok) {
+          await failBootstrap(
+            "[auth] getUsage failed",
+            usageResult.requestId,
+            `${usageResult.code} ${usageResult.message}`
+          );
+          return;
+        }
+
         ensuredUidRef.current = firebaseUser.uid;
         setUser(firebaseUser);
         setUserProfile(result.data);
+        setUsageSnapshot(usageResult.data);
         setIsLoading(false);
       } catch (err) {
         if (isStale()) return;
         const detail = err instanceof Error ? err.message : "Unknown error";
-        await failBootstrap("[auth] ensureUser error", null, detail);
+        await failBootstrap("[auth] ensureUser/getUsage error", null, detail);
       }
     });
 
@@ -154,26 +169,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
   }, []);
 
-  const refreshCredits = useCallback(async () => {
+  const refreshUsage = useCallback(async () => {
     if (!user) return;
     try {
-      const result = await getCredits();
+      const result = await getUsage();
       if (result.ok) {
-        setUserProfile((prev) =>
-          prev
-            ? { ...prev, credits: result.data.credits }
-            : buildProfileFromCredits(user, result.data.credits, null, result.data.email)
-        );
+        setUsageSnapshot(result.data);
         return;
       }
 
       const requestIdSuffix = result.requestId ? ` requestId=${result.requestId}` : "";
       console.error(
-        `[auth] refreshCredits failed${requestIdSuffix}: ${result.code} ${result.message}`
+        `[auth] refreshUsage failed${requestIdSuffix}: ${result.code} ${result.message}`
       );
       throw new Error(result.message);
     } catch (err) {
-      console.error("[auth] refreshCredits error:", err);
+      console.error("[auth] refreshUsage error:", err);
       throw err;
     }
   }, [user]);
@@ -262,6 +273,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       clearTokenCache();
       ensuredUidRef.current = null;
+      setUsageSnapshot(null);
       await firebaseSignOut(auth);
     } catch (err: any) {
       setError("Sign out failed. Please try again.");
@@ -277,12 +289,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
       value={{
         user,
         userProfile,
+        usageSnapshot,
         isLoading,
         signInWithEmail,
         signUpWithEmail,
         signInWithGoogle,
         signOut,
-        refreshCredits,
+        refreshUsage,
         error,
         clearError,
       }}

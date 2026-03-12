@@ -52,9 +52,13 @@ import {
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Crypto from "expo-crypto";
-import { Linking } from "react-native";
 import type { SharedValue } from "react-native-reanimated";
 import type { StorySession } from "@/types/story";
+import {
+  formatRenderTimeAmount,
+  getEstimatedUsageSec,
+  getSettledBilledSec,
+} from "@/lib/renderUsage";
 
 type StoryEditorRouteProp = RouteProp<HomeStackParamList, "StoryEditor">;
 
@@ -153,6 +157,12 @@ function isRenderRecoveryForAttempt(
     typeof renderRecovery.attemptId === "string" &&
     renderRecovery.attemptId === attemptId
   );
+}
+
+function getInsufficientRenderTimeMessage(estimatedSec: number, availableSec: number): string {
+  return `Not enough render time. Estimated usage is ${formatRenderTimeAmount(
+    estimatedSec
+  )}. You have ${formatRenderTimeAmount(availableSec)} left.`;
 }
 
 /**
@@ -365,9 +375,8 @@ export default function StoryEditorScreen() {
   const { theme } = useTheme();
   const { showError, showWarning, showSuccess } = useToast();
   const { setActiveSessionId } = useActiveStorySession();
-  const { userProfile, refreshCredits } = useAuth();
-  const credits = userProfile?.credits ?? 0;
-  const canRender = credits >= 20;
+  const { usageSnapshot, refreshUsage } = useAuth();
+  const availableSec = usageSnapshot?.usage?.availableSec ?? 0;
   const tabBarHeight = useBottomTabBarHeight();
 
   const [session, setSession] = useState<StorySession | null>(null);
@@ -423,6 +432,8 @@ export default function StoryEditorScreen() {
 
   const [deckAreaH, setDeckAreaH] = useState(0);
   const [draftText, setDraftText] = useState("");
+  const estimatedSec = getEstimatedUsageSec(session);
+  const canRender = estimatedSec !== null && availableSec >= estimatedSec;
 
   const onDeckLayout = useCallback((e: LayoutChangeEvent) => {
     const h = e.nativeEvent.layout.height;
@@ -918,9 +929,9 @@ export default function StoryEditorScreen() {
       showSuccess(successMessage);
 
       try {
-        await refreshCredits();
+        await refreshUsage();
       } catch (err) {
-        console.warn("[story] Failed to refresh credits after render:", err);
+        console.warn("[story] Failed to refresh usage after render:", err);
       }
 
       const tabNavigator = navigation.getParent();
@@ -937,7 +948,7 @@ export default function StoryEditorScreen() {
         showError("Render succeeded, but navigation failed. Please check your Library.");
       }
     },
-    [navigation, refreshCredits, showError, showSuccess]
+    [navigation, refreshUsage, showError, showSuccess]
   );
 
   const recoverRenderAttempt = useCallback(
@@ -1048,9 +1059,10 @@ export default function StoryEditorScreen() {
 
         shouldClearActiveRenderAttemptKey = true;
 
-        if (result.code === "INSUFFICIENT_CREDITS" || result.status === 402) {
-          showError("Not enough credits. You need 20 credits to render.");
-          Linking.openURL("https://vaiform.com/pricing");
+        if (result.code === "INSUFFICIENT_RENDER_TIME" || result.status === 402) {
+          showError(
+            getInsufficientRenderTimeMessage(estimatedSec ?? 0, usageSnapshot?.usage?.availableSec ?? 0)
+          );
         } else if (result.code === "NOT_FOUND" || result.status === 404) {
           showError("Session not found. Please start a new video.");
           navigation.goBack();
@@ -1068,7 +1080,11 @@ export default function StoryEditorScreen() {
         getRenderRecoveryShortId(result.data, getRenderRecovery(result.data));
 
       if (resolvedShortId) {
-        await completeRenderSuccess(resolvedShortId, "Video rendered successfully!");
+        const billedSec = getSettledBilledSec(result.data);
+        const successMessage = billedSec
+          ? `Video rendered successfully! Used ${formatRenderTimeAmount(billedSec)} of render time.`
+          : "Video rendered successfully!";
+        await completeRenderSuccess(resolvedShortId, successMessage);
         return;
       }
 
@@ -1091,27 +1107,36 @@ export default function StoryEditorScreen() {
     }
   }, [
     completeRenderSuccess,
+    estimatedSec,
     navigation,
     recoverRenderAttempt,
     sessionId,
     showError,
     showWarning,
+    usageSnapshot?.usage?.availableSec,
   ]);
   const handleRender = useCallback(() => {
-    if (credits < 20) {
-      showError("Not enough credits. You need 20 credits to render.");
-      Linking.openURL("https://vaiform.com/pricing");
+    if (!usageSnapshot) {
+      showError("Render time is still loading. Please wait a moment and try again.");
+      return;
+    }
+    if (!estimatedSec) {
+      showError("Estimated usage is unavailable. Please reload this storyboard and try again.");
+      return;
+    }
+    if (availableSec < estimatedSec) {
+      showError(getInsufficientRenderTimeMessage(estimatedSec, availableSec));
       return;
     }
     Alert.alert(
       "Render now?",
-      "This will spend credits and start rendering.",
+      `Estimated usage is ${formatRenderTimeAmount(estimatedSec)} of render time.`,
       [
         { text: "Cancel", style: "cancel" },
         { text: "Render", onPress: () => doRender() },
       ]
     );
-  }, [credits, doRender, showError]);
+  }, [availableSec, doRender, estimatedSec, showError, usageSnapshot]);
 
   // Header: Flow tabs, no back arrow (Create tab is primary escape), no header right.
   useLayoutEffect(() => {
