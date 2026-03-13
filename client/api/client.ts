@@ -277,9 +277,6 @@ export interface UserProfile {
   uid: string;
   email: string;
   plan: string;
-  isMember: boolean;
-  subscriptionStatus: string | null;
-  credits: number;
   freeShortsUsed: number;
 }
 

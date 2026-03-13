@@ -4,9 +4,9 @@
 - Owner repo: mobile
 - Source of truth for: exact current mobile callers, payloads sent, response fields read, and known unwired spec endpoints in this repo
 - Canonical counterpart/source: backend contract truth lives in ../vaiform-1/docs/MOBILE_BACKEND_CONTRACT.md, ../vaiform-1/docs/MOBILE_HARDENING_PLAN.md, and ../vaiform-1/docs/LEGACY_WEB_SURFACES.md
-- Last verified against: both repos on 2026-03-12
+- Last verified against: both repos on 2026-03-13
 
-Generated from source on 2026-03-12.
+Generated from source on 2026-03-13.
 
 Scope: exact current mobile repo behavior only. This file describes what the app actually calls today, what it sends, what it reads back, and which spec-sheet endpoints are still unwired. It does not describe intended behavior unless the repo already implements it.
 
@@ -24,7 +24,7 @@ Scope: exact current mobile repo behavior only. This file describes what the app
 
 | Endpoint | Trigger | Payload sent | Response fields read now | Evidence |
 |---|---|---|---|---|
-| `POST /api/users/ensure` | Firebase auth state change after sign-in; runs once per UID before the app leaves bootstrap loading | No body | On success, stores the whole `UserProfile` object in context for auth/account bootstrap. Billing UI no longer reads `userProfile.credits`. Error path reads `ok`, `code`, `message`, `requestId`, and bootstrap signs back out instead of entering the app half-provisioned. | `client/contexts/AuthContext.tsx:78-170`, `client/api/client.ts:512-517`, `client/api/client.ts:77-145` |
+| `POST /api/users/ensure` | Firebase auth state change after sign-in; runs once per UID before the app leaves bootstrap loading | No body | On success, stores `{ uid, email, plan, freeShortsUsed }` in context for auth/account bootstrap. Billing UI uses `/api/usage` for account state. Error path reads `ok`, `code`, `message`, `requestId`, and bootstrap signs back out instead of entering the app half-provisioned. | `client/contexts/AuthContext.tsx:78-170`, `client/api/client.ts:509-514`, `client/api/client.ts:77-145` |
 | `GET /api/usage` | Auth bootstrap immediately after successful `ensureUser()`, plus `refreshUsage()` used from `SettingsScreen` and after successful render in `StoryEditorScreen` | No body | Reads `data.plan`, `data.membership`, and `data.usage.availableSec`. Context stores the whole usage snapshot; billing screens read server-owned usage state rather than credits. Error path reads `ok`, `code`, `message`, `requestId`. | `client/contexts/AuthContext.tsx:129-190`, `client/api/client.ts:519-527`, `client/api/client.ts:77-145` |
 
 ## Screen-by-Screen Backend Usage

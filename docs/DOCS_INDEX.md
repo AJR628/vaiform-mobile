@@ -4,7 +4,7 @@
 - Owner repo: mobile
 - Source of truth for: active mobile-repo docs ownership and where canonical backend/mobile truth lives
 - Canonical counterpart/source: ../vaiform-1/docs/MOBILE_BACKEND_CONTRACT.md, ../vaiform-1/docs/MOBILE_HARDENING_PLAN.md, ../vaiform-1/docs/LEGACY_WEB_SURFACES.md
-- Last verified against: both repos on 2026-03-07
+- Last verified against: both repos on 2026-03-13
 
 ## Active Root Docs
 
