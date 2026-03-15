@@ -629,19 +629,6 @@ export async function storyGet(
 }
 
 /**
- * POST /api/story/estimate - Refresh billing estimate at render intent
- */
-export async function storyEstimate(body: {
-  sessionId: string;
-}): Promise<NormalizedResponse<StorySession>> {
-  return apiRequestNormalized<StorySession>("/api/story/estimate", {
-    method: "POST",
-    body,
-    requireAuth: true,
-  });
-}
-
-/**
  * POST /api/story/update-beat-text - Edit single beat text
  */
 export async function storyUpdateBeatText(body: {

@@ -43,7 +43,6 @@ import { useActiveStorySession } from "@/contexts/ActiveStorySessionContext";
 import { Spacing } from "@/constants/theme";
 import {
   storyGet,
-  storyEstimate,
   storyUpdateBeatText,
   storyFinalize,
   storyUpdateCaptionStyle,
@@ -433,7 +432,6 @@ export default function StoryEditorScreen() {
 
   const [deckAreaH, setDeckAreaH] = useState(0);
   const [draftText, setDraftText] = useState("");
-  const [isRefreshingEstimate, setIsRefreshingEstimate] = useState(false);
   const estimatedSec = getEstimatedUsageSec(session);
   const canAttemptRender = Boolean(usageSnapshot);
 
@@ -783,6 +781,10 @@ export default function StoryEditorScreen() {
       }
 
       setBeatTexts((prev) => ({ ...prev, [sentenceIndex]: draft }));
+      const fresh = await storyGet(sessionId);
+      if (fresh?.ok || fresh?.success === true) {
+        setSession(unwrapSession(fresh));
+      }
       textInputRef.current?.blur();
       Keyboard.dismiss();
       // Keep selection so deck does not jump back to beat 1
@@ -1128,46 +1130,23 @@ export default function StoryEditorScreen() {
       showError("Render time is still loading. Please wait a moment and try again.");
       return;
     }
-    if (isRefreshingEstimate) {
-      return;
-    }
-
-    setIsRefreshingEstimate(true);
-    let refreshedSession: StorySession | null = session;
-    try {
-      const res = await storyEstimate({ sessionId });
-      if (!res?.ok && res?.success !== true) {
-        showError(res?.message || "Failed to refresh estimated usage. Please try again.");
-        return;
-      }
-      refreshedSession = unwrapSession(res);
-      setSession(refreshedSession);
-    } catch (error) {
-      console.error("[story] estimate refresh error:", error);
-      showError("Failed to refresh estimated usage. Please try again.");
-      return;
-    } finally {
-      setIsRefreshingEstimate(false);
-    }
-
-    const refreshedEstimatedSec = getEstimatedUsageSec(refreshedSession);
-    if (!refreshedEstimatedSec) {
+    if (!estimatedSec) {
       showError("Estimated usage is unavailable. Please reload this storyboard and try again.");
       return;
     }
-    if (availableSec < refreshedEstimatedSec) {
-      showError(getInsufficientRenderTimeMessage(refreshedEstimatedSec, availableSec));
+    if (availableSec < estimatedSec) {
+      showError(getInsufficientRenderTimeMessage(estimatedSec, availableSec));
       return;
     }
     Alert.alert(
       "Render now?",
-      `Estimated usage is ${formatRenderTimeAmount(refreshedEstimatedSec)} of render time.`,
+      `Estimated usage is ${formatRenderTimeAmount(estimatedSec)} of render time.`,
       [
         { text: "Cancel", style: "cancel" },
-        { text: "Render", onPress: () => void doRender(refreshedEstimatedSec) },
+        { text: "Render", onPress: () => void doRender(estimatedSec) },
       ]
     );
-  }, [availableSec, doRender, isRefreshingEstimate, session, sessionId, showError, usageSnapshot]);
+  }, [availableSec, doRender, estimatedSec, showError, usageSnapshot]);
 
   // Header: Flow tabs, no back arrow (Create tab is primary escape), no header right.
   useLayoutEffect(() => {
@@ -1183,7 +1162,7 @@ export default function StoryEditorScreen() {
           onScriptPress={() => navigation.replace("Script", { sessionId })}
           onRenderPress={handleRender}
           onSpeechPress={() => showWarning("Coming soon.")}
-          renderDisabled={!canAttemptRender || isRendering || isRefreshingEstimate || keyboardVisible}
+          renderDisabled={!canAttemptRender || isRendering || keyboardVisible}
         />
       ),
     });
@@ -1193,7 +1172,6 @@ export default function StoryEditorScreen() {
     handleRender,
     canAttemptRender,
     isRendering,
-    isRefreshingEstimate,
     keyboardVisible,
     showWarning,
   ]);

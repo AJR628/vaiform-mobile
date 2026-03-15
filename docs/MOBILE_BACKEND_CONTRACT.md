@@ -29,7 +29,7 @@ If backend route behavior changes, update the backend canonical docs first. Upda
 - Active billing path used by mobile is GET /api/usage.
 - Current mobile readers are AuthContext bootstrap + refreshUsage(), surfaced by SettingsScreen and post-render refresh in StoryEditorScreen.
 - Current billing fields read by mobile are `data.usage.availableSec` and session `billingEstimate.estimatedSec`.
-- StoryEditorScreen now refreshes `billingEstimate.estimatedSec` through render-intent `POST /api/story/estimate` immediately before the final render confirmation; mobile must not depend on backend-internal `billingEstimateProbe`.
+- StoryEditorScreen reads the current backend-owned session `billingEstimate.estimatedSec` when presenting render confirmation and does not call any separate estimate-refresh route before render.
 - Current `/api/users/ensure` profile shape used by mobile is `{ uid, email, plan, freeShortsUsed }`.
 - Do not reintroduce GET /credits, backend aliases, or a global /api base-URL convention in this repo.
 - Auth bootstrap remains ensureUser()-driven in this repo, but app readiness now also depends on the canonical usage fetch.
