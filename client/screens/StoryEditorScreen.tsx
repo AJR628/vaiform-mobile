@@ -43,6 +43,7 @@ import { useActiveStorySession } from "@/contexts/ActiveStorySessionContext";
 import { Spacing } from "@/constants/theme";
 import {
   storyGet,
+  storyEstimate,
   storyUpdateBeatText,
   storyFinalize,
   storyUpdateCaptionStyle,
@@ -432,8 +433,9 @@ export default function StoryEditorScreen() {
 
   const [deckAreaH, setDeckAreaH] = useState(0);
   const [draftText, setDraftText] = useState("");
+  const [isRefreshingEstimate, setIsRefreshingEstimate] = useState(false);
   const estimatedSec = getEstimatedUsageSec(session);
-  const canRender = estimatedSec !== null && availableSec >= estimatedSec;
+  const canAttemptRender = Boolean(usageSnapshot);
 
   const onDeckLayout = useCallback((e: LayoutChangeEvent) => {
     const h = e.nativeEvent.layout.height;
@@ -1009,7 +1011,7 @@ export default function StoryEditorScreen() {
     [completeRenderSuccess, sessionId, showError, showWarning]
   );
 
-  const doRender = useCallback(async () => {
+  const doRender = useCallback(async (reservedEstimateSec?: number | null) => {
     setIsRendering(true);
     setShowRenderingModal(true);
     setRenderingModalTitle(DEFAULT_RENDERING_MODAL_TITLE);
@@ -1060,8 +1062,13 @@ export default function StoryEditorScreen() {
         shouldClearActiveRenderAttemptKey = true;
 
         if (result.code === "INSUFFICIENT_RENDER_TIME" || result.status === 402) {
+          const estimateForError =
+            reservedEstimateSec ?? estimatedSec ?? getEstimatedUsageSec(session);
           showError(
-            getInsufficientRenderTimeMessage(estimatedSec ?? 0, usageSnapshot?.usage?.availableSec ?? 0)
+            getInsufficientRenderTimeMessage(
+              estimateForError ?? 0,
+              usageSnapshot?.usage?.availableSec ?? 0
+            )
           );
         } else if (result.code === "NOT_FOUND" || result.status === 404) {
           showError("Session not found. Please start a new video.");
@@ -1110,33 +1117,57 @@ export default function StoryEditorScreen() {
     estimatedSec,
     navigation,
     recoverRenderAttempt,
+    session,
     sessionId,
     showError,
     showWarning,
     usageSnapshot?.usage?.availableSec,
   ]);
-  const handleRender = useCallback(() => {
+  const handleRender = useCallback(async () => {
     if (!usageSnapshot) {
       showError("Render time is still loading. Please wait a moment and try again.");
       return;
     }
-    if (!estimatedSec) {
+    if (isRefreshingEstimate) {
+      return;
+    }
+
+    setIsRefreshingEstimate(true);
+    let refreshedSession: StorySession | null = session;
+    try {
+      const res = await storyEstimate({ sessionId });
+      if (!res?.ok && res?.success !== true) {
+        showError(res?.message || "Failed to refresh estimated usage. Please try again.");
+        return;
+      }
+      refreshedSession = unwrapSession(res);
+      setSession(refreshedSession);
+    } catch (error) {
+      console.error("[story] estimate refresh error:", error);
+      showError("Failed to refresh estimated usage. Please try again.");
+      return;
+    } finally {
+      setIsRefreshingEstimate(false);
+    }
+
+    const refreshedEstimatedSec = getEstimatedUsageSec(refreshedSession);
+    if (!refreshedEstimatedSec) {
       showError("Estimated usage is unavailable. Please reload this storyboard and try again.");
       return;
     }
-    if (availableSec < estimatedSec) {
-      showError(getInsufficientRenderTimeMessage(estimatedSec, availableSec));
+    if (availableSec < refreshedEstimatedSec) {
+      showError(getInsufficientRenderTimeMessage(refreshedEstimatedSec, availableSec));
       return;
     }
     Alert.alert(
       "Render now?",
-      `Estimated usage is ${formatRenderTimeAmount(estimatedSec)} of render time.`,
+      `Estimated usage is ${formatRenderTimeAmount(refreshedEstimatedSec)} of render time.`,
       [
         { text: "Cancel", style: "cancel" },
-        { text: "Render", onPress: () => doRender() },
+        { text: "Render", onPress: () => void doRender(refreshedEstimatedSec) },
       ]
     );
-  }, [availableSec, doRender, estimatedSec, showError, usageSnapshot]);
+  }, [availableSec, doRender, isRefreshingEstimate, session, sessionId, showError, usageSnapshot]);
 
   // Header: Flow tabs, no back arrow (Create tab is primary escape), no header right.
   useLayoutEffect(() => {
@@ -1152,7 +1183,7 @@ export default function StoryEditorScreen() {
           onScriptPress={() => navigation.replace("Script", { sessionId })}
           onRenderPress={handleRender}
           onSpeechPress={() => showWarning("Coming soon.")}
-          renderDisabled={!canRender || isRendering || keyboardVisible}
+          renderDisabled={!canAttemptRender || isRendering || isRefreshingEstimate || keyboardVisible}
         />
       ),
     });
@@ -1160,8 +1191,9 @@ export default function StoryEditorScreen() {
     navigation,
     sessionId,
     handleRender,
-    canRender,
+    canAttemptRender,
     isRendering,
+    isRefreshingEstimate,
     keyboardVisible,
     showWarning,
   ]);
