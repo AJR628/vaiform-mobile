@@ -4,13 +4,14 @@
 - Owner repo: mobile
 - Source of truth for: active mobile-repo docs ownership and where canonical backend/mobile truth lives
 - Canonical counterpart/source: ../vaiform-1/docs/CROSS_REPO_PRODUCTION_HARDENING_PLAN.md, ../vaiform-1/docs/MOBILE_BACKEND_CONTRACT.md, ../vaiform-1/docs/MOBILE_HARDENING_PLAN.md, ../vaiform-1/docs/LEGACY_WEB_SURFACES.md
-- Last verified against: both repos on 2026-03-13
+- Last verified against: both repos on 2026-03-16
 
 ## Active Root Docs
 
-- docs/MOBILE_USED_SURFACES.md — CANONICAL in the mobile repo for exact current mobile usage.
-- docs/MOBILE_BACKEND_CONTRACT.md — CONSUMER_NOTE only; points back to backend-owned canonical contract docs.
-- docs/DOCS_INDEX.md — CONSUMER_NOTE for ownership and navigation only.
+- README.md - repo front door; points here first.
+- docs/MOBILE_USED_SURFACES.md - CANONICAL in the mobile repo for exact current mobile usage.
+- docs/MOBILE_BACKEND_CONTRACT.md - CONSUMER_NOTE only; points back to backend-owned canonical contract docs.
+- docs/DOCS_INDEX.md - CONSUMER_NOTE for ownership and navigation only.
 
 ## Backend Canonical Truth
 
@@ -23,6 +24,7 @@ Canonical backend/mobile contract and hardening truth lives in the backend repo:
 
 ## Non-Canonical Historical Material
 
+- `vaiform-mobile-spec-sheet` is a stale root-level spec retained only for historical context and gap tracking.
 - docs/reports/ contains working reports and verification notes that may still be useful but are not contract truth.
 - docs/_archive/ contains superseded audits, plans, and stale spec-era documents kept only for history.
 

@@ -1,5 +1,11 @@
 # Vaiform Mobile Spec Pack
 
+> Stale Document Notice (2026-03-16)
+> This root-level spec is retained for historical context and gap tracking only.
+> It is not the mobile repo front door or current caller-truth.
+> Start at `README.md`, then `docs/DOCS_INDEX.md`, then `docs/MOBILE_USED_SURFACES.md`.
+> Backend contract and hardening truth lives in the backend repo's canonical docs.
+
 > **Target**: Expo (React Native) client consuming existing Vaiform backend  
 > **Generated**: January 2026  
 > **Source**: Codebase audit of `vaiform-1` repository
