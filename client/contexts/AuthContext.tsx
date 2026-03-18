@@ -29,6 +29,10 @@ import {
   UserProfile,
   UsageSnapshot,
 } from "@/api/client";
+import {
+  enrichFailureDiagnostic,
+  recordClientDiagnostic,
+} from "@/lib/diagnostics";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -131,6 +135,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
         if (isStale()) return;
 
         if (!result.ok) {
+          enrichFailureDiagnostic(
+            {
+              route: "/api/users/ensure",
+              requestId: result.requestId,
+              status: result.status,
+              code: result.code,
+            },
+            {
+              uid: firebaseUser.uid,
+              authChangeId,
+              stage: "ensureUser",
+            }
+          );
           await failBootstrap(
             "[auth] ensureUser failed",
             result.requestId,
@@ -143,6 +160,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
         if (isStale()) return;
 
         if (!usageResult.ok) {
+          enrichFailureDiagnostic(
+            {
+              route: "/api/usage",
+              requestId: usageResult.requestId,
+              status: usageResult.status,
+              code: usageResult.code,
+            },
+            {
+              uid: firebaseUser.uid,
+              authChangeId,
+              stage: "getUsage",
+            }
+          );
           await failBootstrap(
             "[auth] getUsage failed",
             usageResult.requestId,
@@ -159,6 +189,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
       } catch (err) {
         if (isStale()) return;
         const detail = err instanceof Error ? err.message : "Unknown error";
+        recordClientDiagnostic({
+          route: "auth.bootstrap",
+          code: "BOOTSTRAP_EXCEPTION",
+          message: detail,
+          context: {
+            uid: firebaseUser.uid,
+            authChangeId,
+          },
+        });
         await failBootstrap("[auth] ensureUser/getUsage error", null, detail);
       }
     });
@@ -177,6 +216,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setUsageSnapshot(result.data);
         return;
       }
+      enrichFailureDiagnostic(
+        {
+          route: "/api/usage",
+          requestId: result.requestId,
+          status: result.status,
+          code: result.code,
+        },
+        {
+          uid: user.uid,
+          stage: "refreshUsage",
+        }
+      );
 
       const requestIdSuffix = result.requestId ? ` requestId=${result.requestId}` : "";
       console.error(

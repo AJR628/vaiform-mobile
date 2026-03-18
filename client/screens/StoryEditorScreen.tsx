@@ -59,6 +59,10 @@ import {
   getEstimatedUsageSec,
   getSettledBilledSec,
 } from "@/lib/renderUsage";
+import {
+  enrichFailureDiagnostic,
+  recordClientDiagnostic,
+} from "@/lib/diagnostics";
 
 type StoryEditorRouteProp = RouteProp<HomeStackParamList, "StoryEditor">;
 
@@ -966,6 +970,22 @@ export default function StoryEditorScreen() {
         pollAttempt += 1
       ) {
         const res = await storyGet(sessionId);
+        if (!res.ok) {
+          enrichFailureDiagnostic(
+            {
+              route: `/api/story/${sessionId}`,
+              requestId: res.requestId,
+              status: res.status,
+              code: res.code,
+            },
+            {
+              sessionId,
+              attemptId,
+              pollAttempt,
+              stage: "recovery_poll",
+            }
+          );
+        }
         if (res?.ok || res?.success === true) {
           const recoveredSession = unwrapSession(res);
           setSession(recoveredSession);
@@ -1004,6 +1024,16 @@ export default function StoryEditorScreen() {
         }
       }
 
+      recordClientDiagnostic({
+        route: `/api/story/${sessionId}`,
+        code: "RECOVERY_PENDING",
+        message: "Render recovery remained pending after polling window.",
+        context: {
+          sessionId,
+          attemptId,
+          pollAttempts: RENDER_RECOVERY_MAX_ATTEMPTS,
+        },
+      });
       showWarning(
         "Render is still processing. Tap Render again to resume this same attempt, or check your Library shortly."
       );
@@ -1036,6 +1066,21 @@ export default function StoryEditorScreen() {
 
       // Handle 503 retry logic
       while (!result.ok && result.retryAfter && retryCount < maxRetries) {
+        enrichFailureDiagnostic(
+          {
+            route: "/api/story/finalize",
+            requestId: result.requestId,
+            status: result.status,
+            code: result.code,
+          },
+          {
+            sessionId,
+            attemptId: idempotencyKey,
+            retryCount,
+            retryAfterSec: result.retryAfter,
+            stage: "server_busy_retry",
+          }
+        );
         showWarning(`Server busy. Retrying in ${result.retryAfter}s...`);
         await new Promise((resolve) => setTimeout(resolve, result.retryAfter! * 1000));
         result = await storyFinalize(
@@ -1046,6 +1091,20 @@ export default function StoryEditorScreen() {
       }
 
       if (!result.ok) {
+        enrichFailureDiagnostic(
+          {
+            route: "/api/story/finalize",
+            requestId: result.requestId,
+            status: result.status,
+            code: result.code,
+          },
+          {
+            sessionId,
+            attemptId: idempotencyKey,
+            retryCount,
+            stage: "finalize_result",
+          }
+        );
         if (
           result.code === "TIMEOUT" ||
           result.code === "NETWORK_ERROR" ||
@@ -1100,9 +1159,28 @@ export default function StoryEditorScreen() {
       showError(
         "Render finished, but the short is not ready yet. Please check your Library."
       );
+      recordClientDiagnostic({
+        route: "/api/story/finalize",
+        code: "SHORT_ID_MISSING",
+        message: "Finalize succeeded without a resolvable shortId.",
+        requestId: result.requestId,
+        context: {
+          sessionId,
+          attemptId: idempotencyKey,
+        },
+      });
       setShowRenderingModal(false);
     } catch (error) {
       shouldClearActiveRenderAttemptKey = true;
+      recordClientDiagnostic({
+        route: "/api/story/finalize",
+        code: "UNEXPECTED_RENDER_EXCEPTION",
+        message: error instanceof Error ? error.message : "Unknown render error",
+        context: {
+          sessionId,
+          attemptId: activeRenderAttemptKeyRef.current,
+        },
+      });
       console.error("[story] render error:", error);
       showError("An unexpected error occurred. Please try again.");
       setShowRenderingModal(false);

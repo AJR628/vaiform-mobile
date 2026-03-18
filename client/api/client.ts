@@ -1,5 +1,6 @@
 import { auth } from "@/lib/firebase";
 import type { StorySession, StoryFinalizeResponse } from "@/types/story";
+import { recordApiFailure } from "@/lib/diagnostics";
 
 // Normalize base URL to remove trailing slash (prevents double slashes in paths).
 const apiBaseUrlEnv = process.env.EXPO_PUBLIC_API_BASE_URL?.trim();
@@ -89,6 +90,21 @@ export interface NormalizedError {
 }
 
 export type NormalizedResponse<T> = NormalizedSuccess<T> | NormalizedError;
+
+function recordNormalizedFailure(
+  route: string,
+  method: HttpMethod,
+  normalized: NormalizedError
+): void {
+  recordApiFailure({
+    route,
+    method,
+    status: normalized.status,
+    code: normalized.code,
+    message: normalized.message,
+    requestId: normalized.requestId,
+  });
+}
 
 function getEnvelopeRequestId(
   obj: Record<string, unknown>,
@@ -254,10 +270,22 @@ export async function apiRequestNormalized<T = unknown>(
       );
     }
 
+    if (!normalized.ok) {
+      recordNormalizedFailure(endpoint, method, normalized);
+    }
+
     return normalized;
   } catch (error) {
     const message = error instanceof Error ? error.message : "Network error";
-    return { ok: false, status: 0, code: "NETWORK_ERROR", message, requestId: null };
+    const normalized: NormalizedError = {
+      ok: false,
+      status: 0,
+      code: "NETWORK_ERROR",
+      message,
+      requestId: null,
+    };
+    recordNormalizedFailure(endpoint, method, normalized);
+    return normalized;
   }
 }
 
@@ -755,13 +783,15 @@ export async function storyFinalize(
     } catch (fetchError) {
       clearTimeout(timeoutId);
       if (fetchError instanceof Error && fetchError.name === "AbortError") {
-        return {
+        const timeoutFailure: NormalizedError = {
           ok: false,
           status: 0,
           code: "TIMEOUT",
           message: "Request timed out after 15 minutes",
           requestId: null,
         };
+        recordNormalizedFailure("/api/story/finalize", "POST", timeoutFailure);
+        return timeoutFailure;
       }
       throw fetchError;
     }
@@ -792,6 +822,9 @@ export async function storyFinalize(
         `[api] POST /api/story/finalize ${response.status} requestId=${normalized.requestId ?? "n/a"}`
       );
     }
+    if (!normalized.ok) {
+      recordNormalizedFailure("/api/story/finalize", "POST", normalized);
+    }
 
     let shortId: string | null | undefined;
     if (typeof json === "object" && json !== null) {
@@ -812,12 +845,16 @@ export async function storyFinalize(
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Network error";
-    return {
+    const normalized: NormalizedError = {
       ok: false,
       status: 0,
       code: "NETWORK_ERROR",
       message,
       requestId: null,
+    };
+    recordNormalizedFailure("/api/story/finalize", "POST", normalized);
+    return {
+      ...normalized,
     };
   }
 }

@@ -27,6 +27,10 @@ import { Spacing, BorderRadius } from "@/constants/theme";
 import { LibraryStackParamList } from "@/navigation/LibraryStackNavigator";
 import { getShortDetail, ShortDetail, ShortItem, getMyShorts } from "@/api/client";
 import { useToast } from "@/contexts/ToastContext";
+import {
+  enrichFailureDiagnostic,
+  recordClientDiagnostic,
+} from "@/lib/diagnostics";
 
 const COLORS = {
   primary: "#4A5FFF",
@@ -180,6 +184,22 @@ export default function ShortDetailScreen() {
 
       if (cancelled || !isMountedRef.current) return;
 
+      if (!result.ok) {
+        enrichFailureDiagnostic(
+          {
+            route: `/api/shorts/${shortId}`,
+            requestId: result.requestId,
+            status: result.status,
+            code: result.code,
+          },
+          {
+            shortId,
+            retryAttempt: attemptIndex,
+            stage: "detail_fetch",
+          }
+        );
+      }
+
       // SUCCESS
       if (result.ok && result.data) {
         if (isMountedRef.current) {
@@ -202,6 +222,17 @@ export default function ShortDetailScreen() {
 
       // 404 = pending availability (eventual consistency) OR backend mismatch
       if (!result.ok && result.status === 404) {
+        recordClientDiagnostic({
+          route: `/api/shorts/${shortId}`,
+          status: result.status,
+          code: "DETAIL_PENDING_RETRY",
+          message: "Short detail returned 404 during retry window.",
+          requestId: result.requestId,
+          context: {
+            shortId,
+            retryAttempt: attemptIndex,
+          },
+        });
         if (isMountedRef.current) {
           setIsPendingAvailability(true);
           setRetryAttempt(attemptIndex);
@@ -227,6 +258,22 @@ export default function ShortDetailScreen() {
               const listResult = await getMyShorts(undefined, 50);
               if (cancelled || !isMountedRef.current) return;
 
+              if (!listResult.ok) {
+                enrichFailureDiagnostic(
+                  {
+                    route: "/api/shorts/mine?limit=50",
+                    requestId: listResult.requestId,
+                    status: listResult.status,
+                    code: listResult.code,
+                  },
+                  {
+                    shortId,
+                    retryAttempt: attemptIndex,
+                    stage: "library_fallback",
+                  }
+                );
+              }
+
               // Verified: getMyShorts returns NormalizedResponse<ShortsListResponse>
               // ShortsListResponse = { items: ShortItem[], nextCursor?: string, hasMore: boolean }
               if (listResult.ok && listResult.data?.items) {
@@ -235,6 +282,15 @@ export default function ShortDetailScreen() {
                 );
 
                 if (foundShort) {
+                  recordClientDiagnostic({
+                    route: `/api/shorts/${shortId}`,
+                    code: "LIBRARY_FALLBACK_HIT",
+                    message: "Recovered short from library fallback.",
+                    context: {
+                      shortId,
+                      retryAttempt: attemptIndex,
+                    },
+                  });
                   if (isMountedRef.current) {
                     // Clear all pending/timeout flags BEFORE setParams
                     // This ensures UI state updates correctly
@@ -257,6 +313,15 @@ export default function ShortDetailScreen() {
                 }
               }
 
+              recordClientDiagnostic({
+                route: `/api/shorts/${shortId}`,
+                code: "LIBRARY_FALLBACK_MISS",
+                message: "Library fallback did not find the short yet.",
+                context: {
+                  shortId,
+                  retryAttempt: attemptIndex,
+                },
+              });
               if (__DEV__) {
                 console.log(
                   `[ShortDetail] fallback attempt ${attemptIndex + 1}: short not found in library list yet, shortId=${shortId}`
@@ -277,6 +342,17 @@ export default function ShortDetailScreen() {
 
         // If this was the last attempt, stop retrying but remain "pending"
         if (attemptIndex >= MAX_ATTEMPTS - 1) {
+          recordClientDiagnostic({
+            route: `/api/shorts/${shortId}`,
+            status: result.status,
+            code: "DETAIL_RETRY_TIMEOUT",
+            message: "Short detail retry window exhausted.",
+            requestId: result.requestId,
+            context: {
+              shortId,
+              retryAttempts: MAX_ATTEMPTS,
+            },
+          });
           if (isMountedRef.current) {
             setDidRetryTimeout(true);
             setIsLoadingDetail(false);
@@ -516,6 +592,21 @@ export default function ShortDetailScreen() {
     setRetryCount((prev) => prev + 1);
     try {
       const result = await getShortDetail(shortId);
+      if (!result.ok) {
+        enrichFailureDiagnostic(
+          {
+            route: `/api/shorts/${shortId}`,
+            requestId: result.requestId,
+            status: result.status,
+            code: result.code,
+          },
+          {
+            shortId,
+            retryCount,
+            stage: "manual_retry",
+          }
+        );
+      }
       if (result.ok && result.data) {
         setShortDetail(result.data);
       } else {
