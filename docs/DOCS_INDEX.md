@@ -27,6 +27,12 @@ Trust these first for current work:
 
 Do not start from reports, archives, or the root spec sheet unless one of the docs above sends you there.
 
+## Transport Ownership
+
+- `client/api/client.ts` is the active transport owner for the current mobile-used backend flows.
+- `client/lib/query-client.ts` and `QueryClientProvider` are present in the repo, but React Query is not the owning transport for those flows today.
+- Do not treat React Query as the live transport owner unless a later intentional migration plan says otherwise.
+
 ## Backend Canonical Truth
 
 Canonical backend/mobile contract and hardening truth lives in the backend repo:
