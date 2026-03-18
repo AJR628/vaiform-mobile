@@ -4,19 +4,19 @@
 - Owner repo: mobile
 - Source of truth for: exact current mobile callers, payloads sent, response fields read, and known unwired spec endpoints in this repo
 - Canonical counterpart/source: backend contract truth lives in ../vaiform-1/docs/MOBILE_BACKEND_CONTRACT.md, ../vaiform-1/docs/MOBILE_HARDENING_PLAN.md, and ../vaiform-1/docs/LEGACY_WEB_SURFACES.md
-- Last verified against: both repos on 2026-03-13
+- Last verified against: both repos on 2026-03-18
 
-Generated from source on 2026-03-13.
+Generated from source on 2026-03-18.
 
 Scope: exact current mobile repo behavior only. This file describes what the app actually calls today, what it sends, what it reads back, and which spec-sheet endpoints are still unwired. It does not describe intended behavior unless the repo already implements it.
 
 ## Ground Rules
 
-- Authenticated API traffic is centralized in `client/api/client.ts`. Current live calls use `Authorization: Bearer <Firebase ID token>`, `Content-Type: application/json`, and `x-client: mobile`, and normalized responses now preserve backend `requestId` (`client/api/client.ts:147-260`).
+- Authenticated API traffic is centralized in `client/api/client.ts`. Current live calls use `Authorization: Bearer <Firebase ID token>`, `Content-Type: application/json`, and `x-client: mobile`, and normalized responses now preserve backend `requestId` (`client/api/client.ts:163-241`, `client/api/client.ts:223-289`).
 - The app-wide React Query client exists, but no screen currently issues requests through `client/lib/query-client.ts`; the live surface is the hand-written API client plus a few direct media URL probes (`client/App.tsx:36-57`, `client/lib/query-client.ts`).
-- Auth bootstrap no longer treats Firebase auth alone as app-ready. `AuthContext` now waits for `POST /api/users/ensure` before exposing the signed-in app state, and signs back out on provisioning failure (`client/contexts/AuthContext.tsx:82-149`, `client/navigation/RootStackNavigator.tsx:20-60`).
+- Auth bootstrap no longer treats Firebase auth alone as app-ready. `AuthContext` now waits for `POST /api/users/ensure` before exposing the signed-in app state, and signs back out on provisioning failure (`client/contexts/AuthContext.tsx:133-202`, `client/navigation/RootStackNavigator.tsx:20-60`).
 - Persisted active story session state is now scoped by UID, so sign-out/account-switch does not reuse another account's active session (`client/contexts/ActiveStorySessionContext.tsx:28-89`, `client/navigation/HomeStackNavigator.tsx:30-57`).
-- `ShortDetailScreen` also probes returned media URLs with `HEAD` and fallback `Range` requests. Those hit the asset URL returned by shorts endpoints, not a Vaiform API route (`client/screens/ShortDetailScreen.tsx:397-425`).
+- `ShortDetailScreen` also probes returned media URLs with `HEAD` and fallback `Range` requests. Those hit the asset URL returned by shorts endpoints, not a Vaiform API route (`client/screens/ShortDetailScreen.tsx:443-492`).
 
 ## Shared / Context-Mediated Surfaces
 
@@ -75,10 +75,10 @@ Scope: exact current mobile repo behavior only. This file describes what the app
 
 | Endpoint | Trigger | Payload sent | Response fields read now | Evidence |
 |---|---|---|---|---|
-| `GET /api/shorts/:id` | When route params contain `shortId` and not `short`; also manual retry; also auto-retry when detail lacks `videoUrl` | No body | On success, stores `ShortDetail`, then adapts it into a `ShortItem`-like object by reading `id`, `videoUrl`, `coverImageUrl`, `durationSec`, `usedQuote.text`, `usedTemplate`, and `createdAt`. Backend detail now also returns compatibility `jobId`, but the screen still reads `id` and ignores `jobId`. Error path reads `ok`, `status`, `code`, `message`. | `client/screens/ShortDetailScreen.tsx:143-333`, `client/screens/ShortDetailScreen.tsx:335-380`, `client/screens/ShortDetailScreen.tsx:513-529`, `client/api/client.ts:291-307`, `client/api/client.ts:506-518` |
-| `GET /api/shorts/mine?limit=50` | Fallback during post-render eventual consistency: every other 404 attempt while waiting for `/api/shorts/:id` to become available | No body; query string is `limit=50` | Reads `data.items`, then filters by `item.id === shortId && item.status === "ready" && item.videoUrl`. If found, swaps route params to `{ short }` and stops using `/api/shorts/:id`. | `client/screens/ShortDetailScreen.tsx:212-276`, `client/api/client.ts:487-504` |
+| `GET /api/shorts/:id` | When route params contain `shortId` and not `short`; also manual retry; also auto-retry when detail lacks `videoUrl` | No body | On success, stores `ShortDetail`, then adapts it into a `ShortItem`-like object by reading `id`, `videoUrl`, `coverImageUrl`, `durationSec`, `usedQuote.text`, `usedTemplate`, and `createdAt`. Backend detail now also returns compatibility `jobId`, but the screen still reads `id` and ignores `jobId`. Error path reads `ok`, `status`, `code`, `message`. | `client/screens/ShortDetailScreen.tsx:183-345`, `client/screens/ShortDetailScreen.tsx:411-425`, `client/screens/ShortDetailScreen.tsx:594-602`, `client/api/client.ts:578-584` |
+| `GET /api/shorts/mine?limit=50` | Fallback during post-render eventual consistency: every other 404 attempt while waiting for `/api/shorts/:id` to become available | No body; query string is `limit=50` | Reads `data.items`, then filters by `item.id === shortId && item.status === "ready" && item.videoUrl`. If found, swaps route params to `{ short }` and stops using `/api/shorts/:id`. | `client/screens/ShortDetailScreen.tsx:243-316`, `client/api/client.ts:559-571` |
 
-Current `ShortDetailScreen` UI reads these fields from the resolved `short` object, whether it came from `LibraryScreen` or from the adapted detail response: `videoUrl`, `thumbUrl`, `coverImageUrl`, `quoteText`, `id`, `durationSec`, `template`, `mode`, `status`, and `createdAt` (`client/screens/ShortDetailScreen.tsx:382-425`, `client/screens/ShortDetailScreen.tsx:612-727`).
+Current `ShortDetailScreen` UI reads these fields from the resolved `short` object, whether it came from `LibraryScreen` or from the adapted detail response: `videoUrl`, `thumbUrl`, `coverImageUrl`, `quoteText`, `id`, `durationSec`, `template`, `mode`, `status`, and `createdAt` (`client/screens/ShortDetailScreen.tsx:640-770`).
 
 ### `SettingsScreen`
 

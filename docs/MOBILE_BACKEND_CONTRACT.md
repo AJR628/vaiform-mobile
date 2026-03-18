@@ -4,7 +4,7 @@
 - Owner repo: mobile
 - Source of truth for: mobile-side pointer to backend-owned contract docs and local alignment rules for this repo
 - Canonical counterpart/source: ../vaiform-1/docs/MOBILE_BACKEND_CONTRACT.md, ../vaiform-1/docs/MOBILE_HARDENING_PLAN.md, ../vaiform-1/docs/LEGACY_WEB_SURFACES.md
-- Last verified against: both repos on 2026-03-14
+- Last verified against: both repos on 2026-03-18
 
 This file is not a second canonical contract document. The backend repo owns backend/mobile contract truth.
 
