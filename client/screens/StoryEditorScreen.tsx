@@ -1011,9 +1011,17 @@ export default function StoryEditorScreen() {
   );
 
   const recoverRenderAttempt = useCallback(
-    async (attemptId: string): Promise<"done" | "failed" | "pending"> => {
-      setRenderingModalTitle(RECOVERY_RENDERING_MODAL_TITLE);
-      setRenderingModalSubtext(RECOVERY_RENDERING_MODAL_SUBTEXT);
+    async (
+      attemptId: string,
+      options?: { interrupted?: boolean }
+    ): Promise<"done" | "failed" | "pending"> => {
+      if (options?.interrupted) {
+        setRenderingModalTitle(RECOVERY_RENDERING_MODAL_TITLE);
+        setRenderingModalSubtext(RECOVERY_RENDERING_MODAL_SUBTEXT);
+      } else {
+        setRenderingModalTitle(DEFAULT_RENDERING_MODAL_TITLE);
+        setRenderingModalSubtext(DEFAULT_RENDERING_MODAL_SUBTEXT);
+      }
 
       for (
         let pollAttempt = 0;
@@ -1152,7 +1160,7 @@ export default function StoryEditorScreen() {
       setRenderingModalSubtext(RECOVERY_RENDERING_MODAL_SUBTEXT);
 
       try {
-        const recoveryResult = await recoverRenderAttempt(storedAttemptId);
+        const recoveryResult = await recoverRenderAttempt(storedAttemptId, { interrupted: true });
         if (cancelled) return;
         if (recoveryResult !== "pending") {
           await clearActiveRenderAttempt();
@@ -1255,7 +1263,9 @@ export default function StoryEditorScreen() {
           result.status === 409
         ) {
           await persistActiveRenderAttempt(recoveryAttemptId);
-          const recoveryResult = await recoverRenderAttempt(recoveryAttemptId);
+          const recoveryResult = await recoverRenderAttempt(recoveryAttemptId, {
+            interrupted: true,
+          });
           shouldClearActiveRenderAttemptKey = recoveryResult !== "pending";
           if (recoveryResult !== "pending") {
             await clearActiveRenderAttempt();
