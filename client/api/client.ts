@@ -380,6 +380,19 @@ export interface ShortDetail {
   createdAt: string;
 }
 
+export interface StoryFinalizePendingMeta {
+  state?: "pending" | string;
+  attemptId?: string | null;
+  pollSessionId?: string | null;
+}
+
+export type StoryFinalizeResult = NormalizedResponse<StorySession> & {
+  status: number;
+  shortId?: string | null;
+  retryAfter?: number;
+  finalize?: StoryFinalizePendingMeta | null;
+};
+
 // -----------------------------------------------------------------------------
 // Caption preview (server-measured flow)
 // -----------------------------------------------------------------------------
@@ -737,8 +750,8 @@ export async function storyUpdateCaptionStyle(body: {
 }
 
 /**
- * POST /api/story/finalize - Render final video (blocking, 2-10 minutes)
- * Special handling: extracts shortId from top-level response and retryAfter from 503 headers
+ * POST /api/story/finalize - Enqueue finalize or replay the current attempt.
+ * Special handling: extracts finalize metadata, shortId, and retryAfter from the finalize-specific envelope.
  */
 export async function storyFinalize(
   body: {
@@ -747,7 +760,7 @@ export async function storyFinalize(
   options: {
     idempotencyKey: string;
   }
-): Promise<NormalizedResponse<StorySession> & { shortId?: string | null; retryAfter?: number }> {
+): Promise<StoryFinalizeResult> {
   const idempotencyKey = options.idempotencyKey?.trim();
   if (!idempotencyKey) {
     throw new Error("storyFinalize requires a non-empty idempotencyKey option");
@@ -791,7 +804,11 @@ export async function storyFinalize(
           requestId: null,
         };
         recordNormalizedFailure("/api/story/finalize", "POST", timeoutFailure);
-        return timeoutFailure;
+        return {
+          ...timeoutFailure,
+          status: 0,
+          finalize: null,
+        };
       }
       throw fetchError;
     }
@@ -827,10 +844,31 @@ export async function storyFinalize(
     }
 
     let shortId: string | null | undefined;
+    let finalize: StoryFinalizePendingMeta | null = null;
     if (typeof json === "object" && json !== null) {
       const rawResponse = json as StoryFinalizeResponse;
       if (rawResponse.success === true && rawResponse.shortId !== undefined) {
         shortId = rawResponse.shortId;
+      }
+      if (rawResponse.finalize && typeof rawResponse.finalize === "object") {
+        finalize = {
+          state:
+            typeof rawResponse.finalize.state === "string"
+              ? rawResponse.finalize.state
+              : undefined,
+          attemptId:
+            typeof rawResponse.finalize.attemptId === "string"
+              ? rawResponse.finalize.attemptId
+              : rawResponse.finalize.attemptId === null
+                ? null
+                : undefined,
+          pollSessionId:
+            typeof rawResponse.finalize.pollSessionId === "string"
+              ? rawResponse.finalize.pollSessionId
+              : rawResponse.finalize.pollSessionId === null
+                ? null
+                : undefined,
+        };
       }
       // Also check body.retryAfter if header wasn't available
       if (retryAfter === undefined && rawResponse.retryAfter !== undefined) {
@@ -840,8 +878,10 @@ export async function storyFinalize(
 
     return {
       ...normalized,
+      status: response.status,
       shortId,
       retryAfter,
+      finalize,
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : "Network error";
@@ -855,6 +895,8 @@ export async function storyFinalize(
     recordNormalizedFailure("/api/story/finalize", "POST", normalized);
     return {
       ...normalized,
+      status: 0,
+      finalize: null,
     };
   }
 }

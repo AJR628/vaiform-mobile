@@ -14,6 +14,12 @@ export interface StoryFinalizeSuccess {
   jobId: string;
 }
 
+export interface StoryFinalizeEnvelopeMeta {
+  state?: "pending" | string;
+  attemptId?: string | null;
+  pollSessionId?: string | null;
+}
+
 /**
  * Full finalize response shape (before normalization)
  * Includes shortId at top level and retryAfter for 503 errors
@@ -26,6 +32,7 @@ export interface StoryFinalizeResponse {
     finalVideo: StoryFinalizeSuccess;
   };
   shortId?: string | null;
+  finalize?: StoryFinalizeEnvelopeMeta;
   error?: string;
   detail?: string;
   retryAfter?: number;

@@ -48,6 +48,7 @@ import {
   storyUpdateCaptionStyle,
   storyDeleteBeat,
   type CaptionPreviewMeta,
+  type StoryFinalizePendingMeta,
 } from "@/api/client";
 import * as Haptics from "expo-haptics";
 import { LinearGradient } from "expo-linear-gradient";
@@ -63,6 +64,11 @@ import {
   enrichFailureDiagnostic,
   recordClientDiagnostic,
 } from "@/lib/diagnostics";
+import {
+  clearStoredStoryFinalizeAttempt,
+  loadStoredStoryFinalizeAttempt,
+  storeStoryFinalizeAttempt,
+} from "@/lib/storyFinalizeAttemptStorage";
 
 type StoryEditorRouteProp = RouteProp<HomeStackParamList, "StoryEditor">;
 
@@ -167,6 +173,16 @@ function getInsufficientRenderTimeMessage(estimatedSec: number, availableSec: nu
   return `Not enough render time. Estimated usage is ${formatRenderTimeAmount(
     estimatedSec
   )}. You have ${formatRenderTimeAmount(availableSec)} left.`;
+}
+
+function getFinalizeAttemptId(
+  finalize: StoryFinalizePendingMeta | null | undefined,
+  fallbackAttemptId: string
+): string {
+  if (typeof finalize?.attemptId === "string" && finalize.attemptId.trim().length > 0) {
+    return finalize.attemptId.trim();
+  }
+  return fallbackAttemptId;
 }
 
 /**
@@ -379,7 +395,7 @@ export default function StoryEditorScreen() {
   const { theme } = useTheme();
   const { showError, showWarning, showSuccess } = useToast();
   const { setActiveSessionId } = useActiveStorySession();
-  const { usageSnapshot, refreshUsage } = useAuth();
+  const { user, usageSnapshot, refreshUsage } = useAuth();
   const availableSec = usageSnapshot?.usage?.availableSec ?? 0;
   const tabBarHeight = useBottomTabBarHeight();
 
@@ -433,11 +449,45 @@ export default function StoryEditorScreen() {
   const lastPersistedPlacementRef = useRef<CaptionPlacement>("center");
   const lastPersistedYPctRef = useRef<number>(PLACEMENT_TO_YPCT.center);
   const activeRenderAttemptKeyRef = useRef<string | null>(null);
+  const resumedStoredRenderAttemptRef = useRef<string | null>(null);
 
   const [deckAreaH, setDeckAreaH] = useState(0);
   const [draftText, setDraftText] = useState("");
   const estimatedSec = getEstimatedUsageSec(session);
   const canAttemptRender = Boolean(usageSnapshot);
+
+  const persistActiveRenderAttempt = useCallback(
+    async (attemptId: string) => {
+      activeRenderAttemptKeyRef.current = attemptId;
+      if (!user?.uid) return;
+      try {
+        await storeStoryFinalizeAttempt({
+          uid: user.uid,
+          sessionId,
+          attemptId,
+          startedAt: new Date().toISOString(),
+        });
+      } catch (error) {
+        console.error("[story] persist finalize attempt failed:", error);
+      }
+    },
+    [sessionId, user?.uid]
+  );
+
+  const clearActiveRenderAttempt = useCallback(async () => {
+    const previousAttemptId = activeRenderAttemptKeyRef.current;
+    activeRenderAttemptKeyRef.current = null;
+    resumedStoredRenderAttemptRef.current = null;
+    if (!user?.uid) return;
+    try {
+      await clearStoredStoryFinalizeAttempt(user.uid, sessionId);
+    } catch (error) {
+      console.error("[story] clear finalize attempt failed:", error);
+      if (previousAttemptId) {
+        activeRenderAttemptKeyRef.current = previousAttemptId;
+      }
+    }
+  }, [sessionId, user?.uid]);
 
   const onDeckLayout = useCallback((e: LayoutChangeEvent) => {
     const h = e.nativeEvent.layout.height;
@@ -933,6 +983,7 @@ export default function StoryEditorScreen() {
 
   const completeRenderSuccess = useCallback(
     async (shortId: string, successMessage: string) => {
+      await clearActiveRenderAttempt();
       setShowRenderingModal(false);
       showSuccess(successMessage);
 
@@ -956,7 +1007,7 @@ export default function StoryEditorScreen() {
         showError("Render succeeded, but navigation failed. Please check your Library.");
       }
     },
-    [navigation, refreshUsage, showError, showSuccess]
+    [clearActiveRenderAttempt, navigation, refreshUsage, showError, showSuccess]
   );
 
   const recoverRenderAttempt = useCallback(
@@ -1043,6 +1094,95 @@ export default function StoryEditorScreen() {
     [completeRenderSuccess, sessionId, showError, showWarning]
   );
 
+  useEffect(() => {
+    if (isLoading || !session || !user?.uid) return;
+
+    let cancelled = false;
+
+    const resumeStoredFinalizeAttempt = async () => {
+      const storedAttempt = await loadStoredStoryFinalizeAttempt(user.uid, sessionId);
+      if (cancelled || !storedAttempt) return;
+
+      const storedAttemptId = storedAttempt.attemptId;
+      const renderRecovery = getRenderRecovery(session);
+
+      if (!isRenderRecoveryForAttempt(renderRecovery, storedAttemptId)) {
+        await clearActiveRenderAttempt();
+        return;
+      }
+
+      activeRenderAttemptKeyRef.current = storedAttemptId;
+
+      if (renderRecovery?.state === "done") {
+        const recoveredShortId = getRenderRecoveryShortId(session, renderRecovery);
+        if (recoveredShortId) {
+          const billedSec = getSettledBilledSec(session);
+          const successMessage = billedSec
+            ? `Video rendered successfully! Used ${formatRenderTimeAmount(billedSec)} of render time.`
+            : "Video rendered successfully!";
+          await completeRenderSuccess(recoveredShortId, successMessage);
+          return;
+        }
+        await clearActiveRenderAttempt();
+        showError(
+          "Render finished, but the short is not ready yet. Please check your Library."
+        );
+        return;
+      }
+
+      if (renderRecovery?.state === "failed") {
+        await clearActiveRenderAttempt();
+        showError(renderRecovery.message || "Render failed. Please try again.");
+        return;
+      }
+
+      if (renderRecovery?.state !== "pending") {
+        await clearActiveRenderAttempt();
+        return;
+      }
+
+      if (resumedStoredRenderAttemptRef.current === storedAttemptId || isRendering) {
+        return;
+      }
+
+      resumedStoredRenderAttemptRef.current = storedAttemptId;
+      setIsRendering(true);
+      setShowRenderingModal(true);
+      setRenderingModalTitle(RECOVERY_RENDERING_MODAL_TITLE);
+      setRenderingModalSubtext(RECOVERY_RENDERING_MODAL_SUBTEXT);
+
+      try {
+        const recoveryResult = await recoverRenderAttempt(storedAttemptId);
+        if (cancelled) return;
+        if (recoveryResult !== "pending") {
+          await clearActiveRenderAttempt();
+        }
+      } finally {
+        if (!cancelled) {
+          setIsRendering(false);
+          setRenderingModalTitle(DEFAULT_RENDERING_MODAL_TITLE);
+          setRenderingModalSubtext(DEFAULT_RENDERING_MODAL_SUBTEXT);
+        }
+      }
+    };
+
+    void resumeStoredFinalizeAttempt();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    clearActiveRenderAttempt,
+    completeRenderSuccess,
+    isLoading,
+    isRendering,
+    recoverRenderAttempt,
+    session,
+    sessionId,
+    showError,
+    user?.uid,
+  ]);
+
   const doRender = useCallback(async (reservedEstimateSec?: number | null) => {
     setIsRendering(true);
     setShowRenderingModal(true);
@@ -1091,6 +1231,7 @@ export default function StoryEditorScreen() {
       }
 
       if (!result.ok) {
+        const recoveryAttemptId = getFinalizeAttemptId(result.finalize, idempotencyKey);
         enrichFailureDiagnostic(
           {
             route: "/api/story/finalize",
@@ -1109,18 +1250,22 @@ export default function StoryEditorScreen() {
           result.code === "TIMEOUT" ||
           result.code === "NETWORK_ERROR" ||
           result.code === "IDEMPOTENT_IN_PROGRESS" ||
+          result.code === "FINALIZE_ALREADY_ACTIVE" ||
           result.status === 0 ||
           result.status === 409
         ) {
-          const recoveryResult = await recoverRenderAttempt(idempotencyKey);
+          await persistActiveRenderAttempt(recoveryAttemptId);
+          const recoveryResult = await recoverRenderAttempt(recoveryAttemptId);
           shouldClearActiveRenderAttemptKey = recoveryResult !== "pending";
           if (recoveryResult !== "pending") {
+            await clearActiveRenderAttempt();
             setShowRenderingModal(false);
           }
           return;
         }
 
         shouldClearActiveRenderAttemptKey = true;
+        await clearActiveRenderAttempt();
 
         if (result.code === "INSUFFICIENT_RENDER_TIME" || result.status === 402) {
           const estimateForError =
@@ -1138,6 +1283,22 @@ export default function StoryEditorScreen() {
           showError(result.message || "Render failed. Please try again.");
         }
         setShowRenderingModal(false);
+        return;
+      }
+
+      if (result.data) {
+        setSession(result.data);
+      }
+
+      if (result.status === 202 && result.finalize?.state === "pending") {
+        const recoveryAttemptId = getFinalizeAttemptId(result.finalize, idempotencyKey);
+        await persistActiveRenderAttempt(recoveryAttemptId);
+        const recoveryResult = await recoverRenderAttempt(recoveryAttemptId);
+        shouldClearActiveRenderAttemptKey = recoveryResult !== "pending";
+        if (recoveryResult !== "pending") {
+          await clearActiveRenderAttempt();
+          setShowRenderingModal(false);
+        }
         return;
       }
 
@@ -1169,16 +1330,19 @@ export default function StoryEditorScreen() {
           attemptId: idempotencyKey,
         },
       });
+      await clearActiveRenderAttempt();
       setShowRenderingModal(false);
     } catch (error) {
+      const failedAttemptId = activeRenderAttemptKeyRef.current;
       shouldClearActiveRenderAttemptKey = true;
+      await clearActiveRenderAttempt();
       recordClientDiagnostic({
         route: "/api/story/finalize",
         code: "UNEXPECTED_RENDER_EXCEPTION",
         message: error instanceof Error ? error.message : "Unknown render error",
         context: {
           sessionId,
-          attemptId: activeRenderAttemptKeyRef.current,
+          attemptId: failedAttemptId,
         },
       });
       console.error("[story] render error:", error);
@@ -1193,9 +1357,11 @@ export default function StoryEditorScreen() {
       setRenderingModalSubtext(DEFAULT_RENDERING_MODAL_SUBTEXT);
     }
   }, [
+    clearActiveRenderAttempt,
     completeRenderSuccess,
     estimatedSec,
     navigation,
+    persistActiveRenderAttempt,
     recoverRenderAttempt,
     session,
     sessionId,
