@@ -4,9 +4,9 @@
 - Owner repo: mobile
 - Source of truth for: exact current mobile callers, payloads sent, response fields read, and known unwired spec endpoints in this repo
 - Canonical counterpart/source: backend contract truth lives in ../vaiform-1/docs/MOBILE_BACKEND_CONTRACT.md, ../vaiform-1/docs/MOBILE_HARDENING_PLAN.md, and ../vaiform-1/docs/LEGACY_WEB_SURFACES.md
-- Last verified against: both repos on 2026-03-18
+- Last verified against: both repos on 2026-03-21
 
-Generated from source on 2026-03-18.
+Generated from source on 2026-03-21.
 
 Scope: exact current mobile repo behavior only. This file describes what the app actually calls today, what it sends, what it reads back, and which spec-sheet endpoints are still unwired. It does not describe intended behavior unless the repo already implements it.
 
@@ -75,7 +75,7 @@ Scope: exact current mobile repo behavior only. This file describes what the app
 
 | Endpoint | Trigger | Payload sent | Response fields read now | Evidence |
 |---|---|---|---|---|
-| `GET /api/shorts/:id` | When route params contain `shortId` and not `short`; also manual retry; also auto-retry when detail lacks `videoUrl` | No body | On success, stores `ShortDetail`, then adapts it into a `ShortItem`-like object by reading `id`, `videoUrl`, `coverImageUrl`, `durationSec`, `usedQuote.text`, `usedTemplate`, and `createdAt`. Backend detail now also returns compatibility `jobId`, but the screen still reads `id` and ignores `jobId`. Error path reads `ok`, `status`, `code`, `message`. | `client/screens/ShortDetailScreen.tsx:183-345`, `client/screens/ShortDetailScreen.tsx:411-425`, `client/screens/ShortDetailScreen.tsx:594-602`, `client/api/client.ts:578-584` |
+| `GET /api/shorts/:jobId` | When route params contain `shortId` and not `short`; also manual retry; also auto-retry when detail lacks `videoUrl` | No body | On success, stores `ShortDetail`, then adapts it into a `ShortItem`-like object by reading `id`, `videoUrl`, `coverImageUrl`, `durationSec`, `usedQuote.text`, `usedTemplate`, and `createdAt`. Backend detail now also returns compatibility `jobId`, but the screen still reads `id` and ignores `jobId`. Error path reads `ok`, `status`, `code`, `message`. | `client/screens/ShortDetailScreen.tsx:183-345`, `client/screens/ShortDetailScreen.tsx:411-425`, `client/screens/ShortDetailScreen.tsx:594-602`, `client/api/client.ts:591-597` |
 | `GET /api/shorts/mine?limit=50` | Fallback during post-render eventual consistency: every other 404 attempt while waiting for `/api/shorts/:id` to become available | No body; query string is `limit=50` | Reads `data.items`, then filters by `item.id === shortId && item.status === "ready" && item.videoUrl`. If found, swaps route params to `{ short }` and stops using `/api/shorts/:id`. | `client/screens/ShortDetailScreen.tsx:243-316`, `client/api/client.ts:559-571` |
 
 Current `ShortDetailScreen` UI reads these fields from the resolved `short` object, whether it came from `LibraryScreen` or from the adapted detail response: `videoUrl`, `thumbUrl`, `coverImageUrl`, `quoteText`, `id`, `durationSec`, `template`, `mode`, `status`, and `createdAt` (`client/screens/ShortDetailScreen.tsx:640-770`).
@@ -118,5 +118,5 @@ These routes are present in `vaiform-mobile-spec-sheet` but have no current scre
 ## Notes On Naming Mismatch In Shorts Detail
 
 - The spec sheet names the detail route as `GET /api/shorts/:jobId` (`vaiform-mobile-spec-sheet:137`, `vaiform-mobile-spec-sheet:1024`).
-- The current mobile client wrapper is `getShortDetail(id)` and calls `GET /api/shorts/${id}` (`client/api/client.ts:506-518`).
-- Current screen code treats `short.id`, `shortId`, and the spec's `jobId` as the same identifier for navigation and fetch purposes (`client/screens/LibraryScreen.tsx:140-141`, `client/screens/StoryEditorScreen.tsx:887-891`, `client/screens/ShortDetailScreen.tsx:92-95`, `client/screens/ShortDetailScreen.tsx:233-248`).
+- The current mobile client wrapper is `getShortDetail(id)` and calls `GET /api/shorts/${id}` (`client/api/client.ts`).
+- Current screen code treats `short.id`, `shortId`, and the spec's `jobId` as the same identifier for navigation and fetch purposes (`client/screens/LibraryScreen.tsx`, `client/screens/StoryEditorScreen.tsx`, `client/screens/ShortDetailScreen.tsx`).
