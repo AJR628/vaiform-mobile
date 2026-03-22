@@ -4,7 +4,7 @@
 - Owner repo: mobile
 - Source of truth for: active mobile-repo docs ownership and where canonical backend/mobile truth lives
 - Canonical counterpart/source: backend repo `docs/CROSS_REPO_PRODUCTION_HARDENING_PLAN.md`, backend repo `docs/MOBILE_BACKEND_CONTRACT.md`, backend repo `docs/MOBILE_HARDENING_PLAN.md`, backend repo `docs/LEGACY_WEB_SURFACES.md`
-- Last verified against: both repos on 2026-03-18
+- Last verified against: both repos on 2026-03-21
 
 ## Active Root Docs
 
