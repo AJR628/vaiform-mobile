@@ -1,5 +1,8 @@
 # Vaiform Mobile
 
+> Historical/tooling note only. This file is not canonical for current transport ownership or backend-contract truth.
+> Use `README.md` and `docs/DOCS_INDEX.md` first for the live mobile front door, current caller truth, and canonical backend references.
+
 ## Overview
 
 Vaiform Mobile is a React Native/Expo mobile client that connects to an existing Vaiform backend. The app enables users to access their content library, view and play media (shorts/videos), manage settings, and handle authentication. It follows a professional, editorial design aesthetic with clean typography and purposeful use of color.

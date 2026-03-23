@@ -13,7 +13,7 @@ Scope: exact current mobile repo behavior only. This file describes what the app
 ## Ground Rules
 
 - Authenticated API traffic is centralized in `client/api/client.ts`. Current live calls use `Authorization: Bearer <Firebase ID token>`, `Content-Type: application/json`, and `x-client: mobile`, and normalized responses now preserve backend `requestId` (`client/api/client.ts:163-241`, `client/api/client.ts:223-289`).
-- The app-wide React Query client exists, but no screen currently issues requests through `client/lib/query-client.ts`; the live surface is the hand-written API client plus a few direct media URL probes (`client/App.tsx:36-57`, `client/lib/query-client.ts`).
+- The live mobile runtime path is the hand-written API client plus a few direct media URL probes. React Query is no longer mounted in the active runtime for these flows (`client/App.tsx`, `client/api/client.ts`, `client/screens/ShortDetailScreen.tsx`).
 - Auth bootstrap no longer treats Firebase auth alone as app-ready. `AuthContext` now waits for `POST /api/users/ensure` before exposing the signed-in app state, and signs back out on provisioning failure (`client/contexts/AuthContext.tsx:133-202`, `client/navigation/RootStackNavigator.tsx:20-60`).
 - Persisted active story session state is now scoped by UID, so sign-out/account-switch does not reuse another account's active session (`client/contexts/ActiveStorySessionContext.tsx:28-89`, `client/navigation/HomeStackNavigator.tsx:30-57`).
 - `ShortDetailScreen` also probes returned media URLs with `HEAD` and fallback `Range` requests. Those hit the asset URL returned by shorts endpoints, not a Vaiform API route (`client/screens/ShortDetailScreen.tsx:443-492`).

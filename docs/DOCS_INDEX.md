@@ -30,8 +30,14 @@ Do not start from reports, archives, or the root spec sheet unless one of the do
 ## Transport Ownership
 
 - `client/api/client.ts` is the active transport owner for the current mobile-used backend flows.
-- `client/lib/query-client.ts` and `QueryClientProvider` are present in the repo, but React Query is not the owning transport for those flows today.
-- Do not treat React Query as the live transport owner unless a later intentional migration plan says otherwise.
+- React Query is no longer part of the active mobile runtime path in this repo.
+- Do not introduce a second client-side transport owner unless a later intentional migration plan says otherwise.
+
+## Local Server / Build Surface
+
+- `server/` is local build/deployment support for Expo/Replit flows in this repo.
+- It is not backend contract truth and it is not the Vaiform backend repo.
+- For the current local classification and entrypoints, see `server/README.md`.
 
 ## Backend Canonical Truth
 
@@ -45,6 +51,7 @@ Canonical backend/mobile contract and hardening truth lives in the backend repo:
 ## Non-Canonical Historical Material
 
 - `vaiform-mobile-spec-sheet` is a stale root-level spec retained only for historical context and gap tracking.
+- `replit.md` is retained for historical/tooling context only. It is not canonical for current transport ownership or backend-contract truth.
 - docs/reports/ contains working reports and verification notes that may still be useful but are not contract truth.
 - docs/_archive/ contains superseded audits, plans, and stale spec-era documents kept only for history.
 

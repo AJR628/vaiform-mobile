@@ -1,441 +1,66 @@
-import React, { useState, useEffect, useRef, useCallback, useLayoutEffect, useMemo } from "react";
+import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
-  View,
-  StyleSheet,
-  FlatList,
-  TextInput,
   ActivityIndicator,
-  Image,
-  Pressable,
-  Modal,
   Keyboard,
+  Modal,
   Platform,
+  StyleSheet,
+  TextInput,
   useWindowDimensions,
+  View,
   type LayoutChangeEvent,
   Animated as RNAnimated,
-  Alert,
 } from "react-native";
-import Animated, {
-  useAnimatedScrollHandler,
-  useAnimatedStyle,
-  useSharedValue,
-  interpolate,
-} from "react-native-reanimated";
-import { Feather } from "@expo/vector-icons";
 import {
-  useRoute,
-  useNavigation,
-  RouteProp,
-  useFocusEffect,
-} from "@react-navigation/native";
+  useAnimatedScrollHandler,
+  useSharedValue,
+} from "react-native-reanimated";
+import { RouteProp, useNavigation, useRoute } from "@react-navigation/native";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { ThemedView } from "@/components/ThemedView";
-import { ThemedText } from "@/components/ThemedText";
-import { Card } from "@/components/Card";
-import { FlowTabsHeader } from "@/components/FlowTabsHeader";
-import { HomeStackParamList } from "@/navigation/HomeStackNavigator";
-import { useTheme } from "@/hooks/useTheme";
-import { useCaptionPreview } from "@/hooks/useCaptionPreview";
-import { useToast } from "@/contexts/ToastContext";
-import { useAuth } from "@/contexts/AuthContext";
-import { useActiveStorySession } from "@/contexts/ActiveStorySessionContext";
-import { Spacing } from "@/constants/theme";
-import {
-  storyGet,
-  storyUpdateBeatText,
-  storyFinalize,
-  storyUpdateCaptionStyle,
-  storyDeleteBeat,
-  type CaptionPreviewMeta,
-  type StoryFinalizePendingMeta,
-} from "@/api/client";
 import * as Haptics from "expo-haptics";
-import { LinearGradient } from "expo-linear-gradient";
-import * as Crypto from "expo-crypto";
-import type { SharedValue } from "react-native-reanimated";
-import type { StorySession } from "@/types/story";
-import {
-  formatRenderTimeAmount,
-  getEstimatedUsageSec,
-  getSettledBilledSec,
-} from "@/lib/renderUsage";
-import {
-  enrichFailureDiagnostic,
-  recordClientDiagnostic,
-} from "@/lib/diagnostics";
-import {
-  clearStoredStoryFinalizeAttempt,
-  loadStoredStoryFinalizeAttempt,
-  storeStoryFinalizeAttempt,
-} from "@/lib/storyFinalizeAttemptStorage";
+
+import { ThemedText } from "@/components/ThemedText";
+import { ThemedView } from "@/components/ThemedView";
+import { FlowTabsHeader } from "@/components/FlowTabsHeader";
+import { BeatActionsModal } from "@/components/story-editor/BeatActionsModal";
+import { BeatEditorPanel } from "@/components/story-editor/BeatEditorPanel";
+import { StoryDeck } from "@/components/story-editor/StoryDeck";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/contexts/ToastContext";
+import { Spacing } from "@/constants/theme";
+import { useTheme } from "@/hooks/useTheme";
+import { HomeStackParamList } from "@/navigation/HomeStackNavigator";
+import { getEstimatedUsageSec } from "@/lib/renderUsage";
+
+import { getSelectedShot } from "@/screens/story-editor/model";
+import { useStoryEditorCaptionPlacement } from "@/screens/story-editor/useStoryEditorCaptionPlacement";
+import { useStoryEditorFinalize } from "@/screens/story-editor/useStoryEditorFinalize";
+import { useStoryEditorSession } from "@/screens/story-editor/useStoryEditorSession";
 
 type StoryEditorRouteProp = RouteProp<HomeStackParamList, "StoryEditor">;
+type StoryEditorNavProp = NativeStackNavigationProp<HomeStackParamList, "StoryEditor">;
 
-interface Beat {
-  sentenceIndex: number;
-  text: string;
-}
-
-type CaptionPlacement = "top" | "center" | "bottom";
-
-const CAPTION_PLACEMENTS: CaptionPlacement[] = ["top", "center", "bottom"];
-const PLACEMENT_TO_YPCT: Record<CaptionPlacement, number> = {
-  top: 0.1,
-  center: 0.5,
-  bottom: 0.9,
-};
-
-interface RenderRecoveryState {
-  state?: "pending" | "done" | "failed" | string;
-  attemptId?: string | null;
-  shortId?: string | null;
-  startedAt?: string | null;
-  updatedAt?: string | null;
-  finishedAt?: string | null;
-  failedAt?: string | null;
-  code?: string | null;
-  message?: string | null;
-}
-
-const DEFAULT_RENDERING_MODAL_TITLE = "Rendering your video...";
-const DEFAULT_RENDERING_MODAL_SUBTEXT = "This usually takes 2-5 minutes";
-const RECOVERY_RENDERING_MODAL_TITLE = "Checking render status...";
-const RECOVERY_RENDERING_MODAL_SUBTEXT = "Connection interrupted. We're checking the same render attempt.";
-const RENDER_RECOVERY_POLL_DELAY_MS = 3000;
-const RENDER_RECOVERY_MAX_ATTEMPTS = 20;
-
-function formatUuidFromBytes(bytes: Uint8Array): string {
-  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
-  return [
-    hex.slice(0, 8),
-    hex.slice(8, 12),
-    hex.slice(12, 16),
-    hex.slice(16, 20),
-    hex.slice(20, 32),
-  ].join("-");
-}
-
-async function createRenderAttemptIdempotencyKey(): Promise<string> {
-  const bytes = await Crypto.getRandomBytesAsync(16);
-  bytes[6] = (bytes[6] & 0x0f) | 0x40;
-  bytes[8] = (bytes[8] & 0x3f) | 0x80;
-  return formatUuidFromBytes(bytes);
-}
-
-/**
- * Unwrap session from NormalizedResponse shape
- */
-function unwrapSession(res: any): any {
-  // Prefer normalized shape first (apiRequestNormalized returns { ok: true, data: T })
-  if (res?.data && (res?.ok === true || res?.success === true)) return res.data;
-  // Some wrappers return session directly (defensive fallback)
-  return res;
-}
-
-function getRenderRecovery(session: any): RenderRecoveryState | null {
-  const renderRecovery = session?.renderRecovery;
-  if (!renderRecovery || typeof renderRecovery !== "object") return null;
-  return renderRecovery as RenderRecoveryState;
-}
-
-function getRenderRecoveryShortId(
-  session: any,
-  renderRecovery: RenderRecoveryState | null
-): string | null {
-  if (
-    typeof renderRecovery?.shortId === "string" &&
-    renderRecovery.shortId.trim().length > 0
-  ) {
-    return renderRecovery.shortId.trim();
-  }
-  if (
-    typeof session?.finalVideo?.jobId === "string" &&
-    session.finalVideo.jobId.trim().length > 0
-  ) {
-    return session.finalVideo.jobId.trim();
-  }
-  return null;
-}
-
-function isRenderRecoveryForAttempt(
-  renderRecovery: RenderRecoveryState | null,
-  attemptId: string
-): boolean {
-  return (
-    !!renderRecovery &&
-    typeof renderRecovery.attemptId === "string" &&
-    renderRecovery.attemptId === attemptId
-  );
-}
-
-function getInsufficientRenderTimeMessage(estimatedSec: number, availableSec: number): string {
-  return `Not enough render time. Estimated usage is ${formatRenderTimeAmount(
-    estimatedSec
-  )}. You have ${formatRenderTimeAmount(availableSec)} left.`;
-}
-
-function getFinalizeAttemptId(
-  finalize: StoryFinalizePendingMeta | null | undefined,
-  fallbackAttemptId: string
-): string {
-  if (typeof finalize?.attemptId === "string" && finalize.attemptId.trim().length > 0) {
-    return finalize.attemptId.trim();
-  }
-  return fallbackAttemptId;
-}
-
-/**
- * Extract beats from session with defensive checks
- */
-function extractBeats(session: any): Beat[] {
-  if (!session) return [];
-
-  // Check story.sentences (expected path from spec)
-  if (Array.isArray(session?.story?.sentences)) {
-    return session.story.sentences.map((text: string, index: number) => ({
-      sentenceIndex: index,
-      text: typeof text === "string" ? text : String(text),
-    }));
-  }
-
-  // Fallback checks (defensive)
-  if (Array.isArray(session?.sentences)) {
-    return session.sentences.map((item: any, index: number) => ({
-      sentenceIndex: index,
-      text: typeof item === "string" ? item : item?.text || String(item),
-    }));
-  }
-
-  if (Array.isArray(session?.beats)) {
-    return session.beats.map((beat: any, index: number) => ({
-      sentenceIndex: index,
-      text: beat?.text || String(beat),
-    }));
-  }
-
-  return [];
-}
-
-/**
- * Get shot for a given sentenceIndex from session
- */
-function getSelectedShot(session: any, sentenceIndex: number): any | null {
-  if (!session?.shots) return null;
-
-  // If shots is an array, find by sentenceIndex property
-  if (Array.isArray(session.shots)) {
-    return session.shots.find((s: any) => s?.sentenceIndex === sentenceIndex) || null;
-  }
-
-  // If shots is an object/map, try accessing by key
-  if (typeof session.shots === "object") {
-    return session.shots[String(sentenceIndex)] || session.shots[sentenceIndex] || null;
-  }
-
-  return null;
-}
-
-interface DeckCardProps {
-  item: Beat;
-  index: number;
-  session: StorySession | null;
-  meta: CaptionPreviewMeta | null;
-  isLoading: boolean;
-  cardW: number;
-  cardH: number;
-  cardStep: number;
-  scrollX: SharedValue<number>;
-  onPress: (index: number) => void;
-  onLongPress: (sentenceIndex: number) => void;
-  selectedSentenceIndex: number | null;
-  totalBeats: number;
-  backgroundSecondary: string;
-  tabIconDefault: string;
-  link: string;
-}
-
-/** SSOT: center card scale; used in DeckCard interpolate and deck card height math so balloon fits in deck section. */
 const ACTIVE_SCALE = 1.16;
-
-const DeckCard = React.memo(function DeckCard({
-  item,
-  index,
-  session,
-  meta,
-  isLoading,
-  cardW,
-  cardH,
-  cardStep,
-  scrollX,
-  onPress,
-  onLongPress,
-  selectedSentenceIndex,
-  totalBeats,
-  backgroundSecondary,
-  tabIconDefault,
-  link,
-}: DeckCardProps) {
-  const shot = session ? getSelectedShot(session, item.sentenceIndex) : null;
-  const clip = shot?.selectedClip || null;
-  const frameW = meta?.frameW ?? 1080;
-  const scaleMeta = cardW / frameW;
-  const overlayW = (meta?.rasterW ?? 0) * scaleMeta;
-  const overlayH = (meta?.rasterH ?? 0) * scaleMeta;
-  const leftPx =
-    (typeof meta?.xPx_png === "number"
-      ? meta.xPx_png
-      : (frameW - (meta?.rasterW ?? 0)) / 2) * scaleMeta;
-  const topPx = (meta?.yPx_png ?? 0) * scaleMeta;
-  const hasMeta = meta?.rasterUrl && overlayW > 0 && overlayH > 0;
-
-  const animatedStyle = useAnimatedStyle(() => {
-    const inputRange = [
-      (index - 1) * cardStep,
-      index * cardStep,
-      (index + 1) * cardStep,
-    ];
-    const scale = interpolate(scrollX.value, inputRange, [0.92, ACTIVE_SCALE, 0.92]);
-    const translateY = interpolate(scrollX.value, inputRange, [6, -10, 6]);
-    const opacity = interpolate(scrollX.value, inputRange, [0.75, 1, 0.75]);
-    const zIndex = Math.round(interpolate(scrollX.value, inputRange, [0, 10, 0]));
-    return {
-      transform: [{ scale }, { translateY }],
-      opacity,
-      zIndex,
-    };
-  });
-
-  return (
-    <Animated.View style={[{ width: cardStep, alignItems: "center" }, animatedStyle]}>
-      <Pressable
-        style={[
-          styles.deckCard,
-          { width: cardW, height: cardH, backgroundColor: backgroundSecondary },
-        ]}
-        onPress={() => onPress(index)}
-        onLongPress={() => onLongPress(item.sentenceIndex)}
-      >
-        {selectedSentenceIndex === item.sentenceIndex && (
-          <View style={styles.deckCardPill} pointerEvents="none">
-            <ThemedText style={styles.deckCardPillText}>
-              Beat {item.sentenceIndex + 1} / {totalBeats}
-            </ThemedText>
-          </View>
-        )}
-        {clip?.thumbUrl ? (
-          <View style={styles.deckCardInner}>
-            <Image
-              source={{ uri: clip.thumbUrl }}
-              style={[styles.deckThumbnail, { backgroundColor: backgroundSecondary }]}
-              resizeMode="cover"
-            />
-            {hasMeta && (
-              <View
-                style={{
-                  position: "absolute",
-                  left: leftPx,
-                  top: topPx,
-                  width: overlayW,
-                  height: overlayH,
-                }}
-                pointerEvents="none"
-              >
-                <Image
-                  source={{ uri: meta!.rasterUrl }}
-                  style={{ width: "100%", height: "100%" }}
-                  resizeMode="stretch"
-                />
-              </View>
-            )}
-            {isLoading && (
-              <View style={styles.deckCaptionLoading} pointerEvents="none">
-                <ActivityIndicator size="small" color={link} />
-              </View>
-            )}
-          </View>
-        ) : (
-          <View style={[styles.deckCardInner, styles.deckPlaceholder]}>
-            <Feather name="video" size={24} color={tabIconDefault} />
-            <ThemedText style={styles.deckPlaceholderText}>No clip</ThemedText>
-            {hasMeta && meta?.rasterUrl && (
-              <View
-                style={{
-                  position: "absolute",
-                  left: leftPx,
-                  top: topPx,
-                  width: overlayW,
-                  height: overlayH,
-                }}
-                pointerEvents="none"
-              >
-                <Image
-                  source={{ uri: meta.rasterUrl }}
-                  style={{ width: "100%", height: "100%" }}
-                  resizeMode="stretch"
-                />
-              </View>
-            )}
-          </View>
-        )}
-      </Pressable>
-    </Animated.View>
-  );
-});
-
-type StoryEditorNavProp = NativeStackNavigationProp<
-  HomeStackParamList,
-  "StoryEditor"
->;
 
 export default function StoryEditorScreen() {
   const route = useRoute<StoryEditorRouteProp>();
   const navigation = useNavigation<StoryEditorNavProp>();
   const { sessionId } = route.params;
   const { theme } = useTheme();
-  const { showError, showWarning, showSuccess } = useToast();
-  const { setActiveSessionId } = useActiveStorySession();
-  const { user, usageSnapshot, refreshUsage } = useAuth();
+  const { showError, showSuccess, showWarning } = useToast();
+  const { refreshUsage, usageSnapshot, user } = useAuth();
   const availableSec = usageSnapshot?.usage?.availableSec ?? 0;
   const tabBarHeight = useBottomTabBarHeight();
 
-  const [session, setSession] = useState<StorySession | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [savingByIndex, setSavingByIndex] = useState<Record<number, boolean>>(
-    {}
-  );
-  const [beatTexts, setBeatTexts] = useState<Record<number, string>>({});
-  const [selectedSentenceIndex, setSelectedSentenceIndex] = useState<number | null>(null);
-  const [replaceModalForIndex, setReplaceModalForIndex] = useState<number | null>(null);
-  const [isRendering, setIsRendering] = useState(false);
-  const [showRenderingModal, setShowRenderingModal] = useState(false);
-  const [renderingModalTitle, setRenderingModalTitle] = useState(
-    DEFAULT_RENDERING_MODAL_TITLE
-  );
-  const [renderingModalSubtext, setRenderingModalSubtext] = useState(
-    DEFAULT_RENDERING_MODAL_SUBTEXT
-  );
+  const [showBeatActionsForIndex, setShowBeatActionsForIndex] = useState<number | null>(null);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
-  const [editorH, setEditorH] = useState(120);
   const [editorCollapsed, setEditorCollapsed] = useState(false);
-  const [captionPlacement, setCaptionPlacement] = useState<CaptionPlacement>("center");
+  const [deckAreaH, setDeckAreaH] = useState(0);
+  const [draftText, setDraftText] = useState("");
 
-  const { previewByIndex, isLoadingByIndex, requestPreview, prefetchAllBeats, cancelPrefetch, resetPreviews } =
-    useCaptionPreview(sessionId, selectedSentenceIndex);
-
-  const scrollX = useSharedValue(0);
-  const onDeckScroll = useAnimatedScrollHandler({
-    onScroll: (e) => {
-      scrollX.value = e.contentOffset.x;
-    },
-  });
-
-  const loggedRef = useRef(false);
-  const prefetchDoneForSessionRef = useRef<string | null>(null);
-  const shouldRefreshRef = useRef(false);
   const textInputRef = useRef<TextInput>(null);
-  const savingRef = useRef<number | null>(null);
-  const deckListRef = useRef<FlatList<Beat>>(null);
+  const deckListRef = useRef<any>(null);
   const selectionFromDeckRef = useRef(false);
   const deckAreaHRef = useRef(0);
   const isEditingRef = useRef(false);
@@ -443,531 +68,211 @@ export default function StoryEditorScreen() {
   const keyboardVisibleRef = useRef(false);
   const editorTranslateY = useRef(new RNAnimated.Value(0)).current;
   const renderAreaHRef = useRef(0);
-  const prefetchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const persistInFlightRef = useRef(false);
-  const pendingPlacementRef = useRef<CaptionPlacement | null>(null);
-  const lastPersistedPlacementRef = useRef<CaptionPlacement>("center");
-  const lastPersistedYPctRef = useRef<number>(PLACEMENT_TO_YPCT.center);
-  const activeRenderAttemptKeyRef = useRef<string | null>(null);
-  const resumedStoredRenderAttemptRef = useRef<string | null>(null);
 
-  const [deckAreaH, setDeckAreaH] = useState(0);
-  const [draftText, setDraftText] = useState("");
+  const {
+    beats,
+    beatTexts,
+    handleDeleteBeat,
+    handleSaveBeat,
+    isLoading,
+    markShouldRefresh,
+    savingByIndex,
+    selectedSentenceIndex,
+    session,
+    setSelectedSentenceIndex,
+    setSession,
+  } = useStoryEditorSession({
+    sessionId,
+    showError,
+  });
+
+  const committedText =
+    selectedSentenceIndex !== null
+      ? (beatTexts[selectedSentenceIndex] ??
+          beats.find((beat) => beat.sentenceIndex === selectedSentenceIndex)?.text ??
+          "")
+      : "";
+
+  const {
+    captionPlacement,
+    handlePlacementChange,
+    isLoadingByIndex,
+    previewByIndex,
+    resetPlacementPreviews,
+  } = useStoryEditorCaptionPlacement({
+    beats,
+    canPrefetch: () => !isEditingRef.current && !keyboardVisibleRef.current,
+    committedText,
+    selectedSentenceIndex,
+    serverPlacement: session?.overlayCaption?.placement,
+    sessionId,
+    showError,
+  });
+
   const estimatedSec = getEstimatedUsageSec(session);
   const canAttemptRender = Boolean(usageSnapshot);
+  const {
+    handleRender,
+    isRendering,
+    renderingModalSubtext,
+    renderingModalTitle,
+    showRenderingModal,
+  } = useStoryEditorFinalize({
+    availableSec,
+    estimatedSec,
+    navigation,
+    refreshUsage,
+    session,
+    sessionId,
+    setSession,
+    showError,
+    showSuccess,
+    showWarning,
+    usageLoaded: Boolean(usageSnapshot),
+    userId: user?.uid,
+  });
 
-  const persistActiveRenderAttempt = useCallback(
-    async (attemptId: string) => {
-      activeRenderAttemptKeyRef.current = attemptId;
-      if (!user?.uid) return;
-      try {
-        await storeStoryFinalizeAttempt({
-          uid: user.uid,
-          sessionId,
-          attemptId,
-          startedAt: new Date().toISOString(),
-        });
-      } catch (error) {
-        console.error("[story] persist finalize attempt failed:", error);
-      }
+  const scrollX = useSharedValue(0);
+  const onDeckScroll = useAnimatedScrollHandler({
+    onScroll: (event) => {
+      scrollX.value = event.contentOffset.x;
     },
-    [sessionId, user?.uid]
-  );
+  });
 
-  const clearActiveRenderAttempt = useCallback(async () => {
-    const previousAttemptId = activeRenderAttemptKeyRef.current;
-    activeRenderAttemptKeyRef.current = null;
-    resumedStoredRenderAttemptRef.current = null;
-    if (!user?.uid) return;
-    try {
-      await clearStoredStoryFinalizeAttempt(user.uid, sessionId);
-    } catch (error) {
-      console.error("[story] clear finalize attempt failed:", error);
-      if (previousAttemptId) {
-        activeRenderAttemptKeyRef.current = previousAttemptId;
-      }
-    }
-  }, [sessionId, user?.uid]);
-
-  const onDeckLayout = useCallback((e: LayoutChangeEvent) => {
-    const h = e.nativeEvent.layout.height;
-    if (h > 0 && h !== deckAreaHRef.current) {
-      deckAreaHRef.current = h;
-      setDeckAreaH(h);
+  const onDeckLayout = useCallback((event: LayoutChangeEvent) => {
+    const height = event.nativeEvent.layout.height;
+    if (height > 0 && height !== deckAreaHRef.current) {
+      deckAreaHRef.current = height;
+      setDeckAreaH(height);
     }
   }, []);
 
   const { width: windowWidth } = useWindowDimensions();
   const deckGap = 16;
-  const DECK_PAD_TOP = Spacing["5xl"] + Spacing.lg;
-  const DECK_PAD_BOTTOM = Spacing.sm;
+  const deckPadTop = Spacing["5xl"] + Spacing.lg;
+  const deckPadBottom = Spacing.sm;
   const desiredW = Math.round(windowWidth * 0.84);
   const desiredH = desiredW * (16 / 9);
-  const deckInnerH = deckAreaH > 0 ? Math.max(0, deckAreaH - DECK_PAD_TOP - DECK_PAD_BOTTOM) : 0;
+  const deckInnerH =
+    deckAreaH > 0 ? Math.max(0, deckAreaH - deckPadTop - deckPadBottom) : 0;
   const fitFactor = 1 + (ACTIVE_SCALE - 1) / 2;
   const maxCardH = deckAreaH > 0 ? deckInnerH / fitFactor : desiredH;
   const cardH = deckAreaH > 0 ? Math.min(maxCardH, desiredH) : desiredH;
   const cardW = Math.round((cardH * 9) / 16);
   const cardStep = cardW + deckGap;
 
-  // Load session on mount
-  useEffect(() => {
-    const loadSession = async () => {
-      setIsLoading(true);
-      try {
-        const res = await storyGet(sessionId);
-        if (!res?.ok && res?.success !== true) {
-          showError(
-            res?.message || "Failed to load storyboard. Please try again."
-          );
-          setIsLoading(false);
-          return;
-        }
-
-        const unwrappedSession = unwrapSession(res);
-        setSession(unwrappedSession);
-
-        // Extract beats and initialize beatTexts
-        const beats = extractBeats(unwrappedSession);
-        setBeatTexts((prev) => {
-          const updated = { ...prev };
-          beats.forEach((beat) => {
-            // Only initialize if not already set (preserve existing edits)
-            if (updated[beat.sentenceIndex] === undefined) {
-              updated[beat.sentenceIndex] = beat.text;
-            }
-          });
-          return updated;
-        });
-
-        // __DEV__ logging (once per session load)
-        if (__DEV__ && unwrappedSession && !loggedRef.current) {
-          loggedRef.current = true;
-          console.log(
-            "[story] session keys",
-            Object.keys(unwrappedSession || {})
-          );
-          const beats = extractBeats(unwrappedSession);
-          if (beats.length > 0) {
-            console.log(
-              "[story] beats found:",
-              beats.length,
-              "sample:",
-              beats[0]
-            );
-          } else {
-            console.log("[story] no beats found in session");
-          }
-          // Log shots structure
-          if (unwrappedSession?.shots?.[0]) {
-            console.log("[story] shots[0] sample:", unwrappedSession.shots[0]);
-          }
-        }
-      } catch (error) {
-        console.error("[story] load error:", error);
-        showError("Failed to load storyboard. Please try again.");
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadSession();
-  }, [sessionId, showError]);
-
-  // Refresh session when screen comes into focus (e.g., after modal closes)
-  useFocusEffect(
-    useCallback(() => {
-      if (!shouldRefreshRef.current || isLoading) return;
-      shouldRefreshRef.current = false; // clear BEFORE awaiting
-      const refreshSession = async () => {
-        try {
-          const res = await storyGet(sessionId);
-          if (res?.ok || res?.success === true) {
-            const unwrappedSession = unwrapSession(res);
-            setSession(unwrappedSession);
-          }
-        } catch (error) {
-          // Silently fail - session will refresh on next manual action
-          console.error("[story] refresh error:", error);
-        }
-      };
-      refreshSession();
-    }, [sessionId, isLoading]) // deps exclude session
-  );
-
-  const beats = useMemo(
-    () => (session ? extractBeats(session) : []),
-    [session]
-  );
-
-  useEffect(() => {
-    const placement = session?.overlayCaption?.placement as CaptionPlacement | undefined;
-    if (placement && CAPTION_PLACEMENTS.includes(placement)) {
-      setCaptionPlacement((prev) => (prev === placement ? prev : placement));
-      lastPersistedPlacementRef.current = placement;
-      lastPersistedYPctRef.current = PLACEMENT_TO_YPCT[placement];
-    }
-  }, [session]);
-
-  const committedText =
-    selectedSentenceIndex !== null
-      ? (beatTexts[selectedSentenceIndex] ??
-          beats.find((b) => b.sentenceIndex === selectedSentenceIndex)?.text ??
-          "")
-      : "";
-
-  // Sync draftText when selection changes (not when beatTexts changes - avoid clobbering active typing)
   useEffect(() => {
     if (selectedSentenceIndex === null) return;
     if (isEditingRef.current) return;
 
     const committed =
       beatTexts[selectedSentenceIndex] ??
-      beats.find((b) => b.sentenceIndex === selectedSentenceIndex)?.text ??
+      beats.find((beat) => beat.sentenceIndex === selectedSentenceIndex)?.text ??
       "";
 
     setDraftText(committed);
-  }, [selectedSentenceIndex, sessionId, beats]);
+  }, [beatTexts, beats, selectedSentenceIndex, sessionId]);
 
-  // Clamp selectedSentenceIndex by membership (not numeric range)
-  useEffect(() => {
-    if (beats.length === 0) {
-      setSelectedSentenceIndex(null);
-      return;
-    }
-
-    // If no selection yet, set to first beat's sentenceIndex
-    if (selectedSentenceIndex === null) {
-      setSelectedSentenceIndex(beats[0].sentenceIndex);
-      return;
-    }
-
-    // Check if selectedSentenceIndex exists in beats
-    const exists = beats.some((beat) => beat.sentenceIndex === selectedSentenceIndex);
-    if (!exists) {
-      // Set to first beat's sentenceIndex if current selection is invalid
-      setSelectedSentenceIndex(beats[0].sentenceIndex);
-    }
-  }, [session, beats, selectedSentenceIndex]);
-
-  // Trigger caption preview for the selected beat (debounced inside hook). Only on committed text.
-  useEffect(() => {
-    if (selectedSentenceIndex === null || !sessionId) return;
-    if (!committedText.trim()) return;
-    const yPct = PLACEMENT_TO_YPCT[captionPlacement];
-    requestPreview(selectedSentenceIndex, committedText, {
-      placement: captionPlacement,
-      yPct,
-    });
-  }, [selectedSentenceIndex, sessionId, committedText, captionPlacement, requestPreview]);
-
-  // Prefetch caption previews for all beats once per session; delay start and skip while editing to avoid focus loss
-  useEffect(() => {
-    if (!sessionId || beats.length === 0) return;
-    if (prefetchDoneForSessionRef.current === sessionId) return;
-
-    prefetchTimeoutRef.current = setTimeout(() => {
-      prefetchTimeoutRef.current = null;
-      if (isEditingRef.current || keyboardVisibleRef.current) return;
-      if (prefetchDoneForSessionRef.current === sessionId) return;
-      prefetchDoneForSessionRef.current = sessionId;
-      prefetchAllBeats(beats, {
-        delayBetweenMs: 120,
-        placement: captionPlacement,
-        yPct: PLACEMENT_TO_YPCT[captionPlacement],
-      });
-    }, 1500);
-
-    return () => {
-      if (prefetchTimeoutRef.current) {
-        clearTimeout(prefetchTimeoutRef.current);
-        prefetchTimeoutRef.current = null;
-      }
-    };
-  }, [sessionId, beats, prefetchAllBeats, captionPlacement]);
-
-  // Selection -> deck scroll (only when selection changed externally, not from onMomentumScrollEnd)
   useEffect(() => {
     if (selectionFromDeckRef.current) {
       selectionFromDeckRef.current = false;
       return;
     }
     if (selectedSentenceIndex === null || beats.length === 0) return;
-    const index = beats.findIndex((b) => b.sentenceIndex === selectedSentenceIndex);
+
+    const index = beats.findIndex((beat) => beat.sentenceIndex === selectedSentenceIndex);
     if (index < 0) return;
     deckListRef.current?.scrollToOffset({ offset: index * cardStep, animated: true });
-  }, [selectedSentenceIndex, beats, cardStep]);
+  }, [beats, cardStep, selectedSentenceIndex]);
 
-  // Native Animated translate (no re-render) so iOS keeps first responder; keyboardVisible for UI only
   useEffect(() => {
     const showEvent = Platform.OS === "ios" ? "keyboardDidShow" : "keyboardDidShow";
     const hideEvent = Platform.OS === "ios" ? "keyboardDidHide" : "keyboardDidHide";
-    const subShow = Keyboard.addListener(showEvent, (e) => {
-      const h = e.endCoordinates?.height ?? 0;
-      if (__DEV__) console.log("[beat] keyboardDidShow", h);
+
+    const showSubscription = Keyboard.addListener(showEvent, (event) => {
+      const height = event.endCoordinates?.height ?? 0;
+      if (__DEV__) console.log("[beat] keyboardDidShow", height);
       keyboardVisibleRef.current = true;
       setKeyboardVisible(true);
-      // Shift only by the amount the keyboard overlaps the editor.
       const reservedBelowEditor = renderAreaHRef.current || 0;
-      const shiftUp = Math.max(0, h - reservedBelowEditor);
-      if (__DEV__) console.log("[beat] dock", { h, reservedBelowEditor, shiftUp });
+      const shiftUp = Math.max(0, height - reservedBelowEditor);
+      if (__DEV__) console.log("[beat] dock", { height, reservedBelowEditor, shiftUp });
       editorTranslateY.setValue(-shiftUp);
     });
-    const subHide = Keyboard.addListener(hideEvent, () => {
+
+    const hideSubscription = Keyboard.addListener(hideEvent, () => {
       if (__DEV__) console.log("[beat] keyboardDidHide");
       editorTranslateY.setValue(0);
       keyboardVisibleRef.current = false;
       setKeyboardVisible(false);
     });
+
     return () => {
-      subShow.remove();
-      subHide.remove();
+      showSubscription.remove();
+      hideSubscription.remove();
     };
-  }, []);
-
-  useEffect(() => {
-    setActiveSessionId(sessionId);
-  }, [sessionId, setActiveSessionId]);
-
-  // Deck FlatList memoization - must be before any early return (Rules of Hooks)
-  const flatListExtraData = useMemo(
-    () => ({ previewByIndex, selectedSentenceIndex, isLoadingByIndex }),
-    [previewByIndex, selectedSentenceIndex, isLoadingByIndex]
-  );
+  }, [editorTranslateY]);
 
   const handleDeckCardPress = useCallback(
-    (index: number) => {
+    (sentenceIndex: number) => {
       if (keyboardVisibleRef.current || keyboardVisible) return;
-      if (!beats[index]) return;
+      const index = beats.findIndex((beat) => beat.sentenceIndex === sentenceIndex);
+      if (index < 0) return;
 
       Haptics.selectionAsync().catch(() => {});
-
       selectionFromDeckRef.current = true;
-
       deckListRef.current?.scrollToOffset({
         offset: index * cardStep,
         animated: true,
       });
-
-      setSelectedSentenceIndex(beats[index].sentenceIndex);
+      setSelectedSentenceIndex(sentenceIndex);
     },
-    [beats, cardStep, keyboardVisible]
+    [beats, cardStep, keyboardVisible, setSelectedSentenceIndex]
   );
 
-  const renderDeckItem = useCallback(
-    ({ item, index }: { item: Beat; index: number }) => (
-      <DeckCard
-        item={item}
-        index={index}
-        session={session}
-        meta={previewByIndex[item.sentenceIndex] ?? null}
-        isLoading={isLoadingByIndex[item.sentenceIndex] ?? false}
-        cardW={cardW}
-        cardH={cardH}
-        cardStep={cardStep}
-        scrollX={scrollX}
-        onPress={handleDeckCardPress}
-        onLongPress={setReplaceModalForIndex}
-        selectedSentenceIndex={selectedSentenceIndex}
-        totalBeats={beats.length}
-        backgroundSecondary={theme.backgroundSecondary}
-        tabIconDefault={theme.tabIconDefault}
-        link={theme.link}
-      />
-    ),
-    [
-      session,
-      previewByIndex,
-      isLoadingByIndex,
-      cardW,
-      cardH,
-      cardStep,
-      scrollX,
-      handleDeckCardPress,
-      selectedSentenceIndex,
-      beats.length,
-      theme.backgroundSecondary,
-      theme.tabIconDefault,
-      theme.link,
-    ]
+  const handleVisibleBeatChange = useCallback(
+    (sentenceIndex: number) => {
+      selectionFromDeckRef.current = true;
+      setSelectedSentenceIndex(sentenceIndex);
+    },
+    [setSelectedSentenceIndex]
   );
 
-  const handleSaveBeat = async (
-    sentenceIndex: number,
-    _source?: "submit" | "blur",
-    draftOverride?: string
-  ) => {
-    if (savingRef.current === sentenceIndex) return;
-
-    isEditingRef.current = false;
-
-    const draft = (draftOverride ?? beatTexts[sentenceIndex] ?? "").trim();
-    if (!draft) {
-      showError("Beat text cannot be empty");
-      return;
-    }
-
-    const beat = beats.find((b) => b.sentenceIndex === sentenceIndex);
-    const committed = beatTexts[sentenceIndex] ?? beat?.text?.trim() ?? "";
-    if (draft === committed) {
-      savingRef.current = sentenceIndex;
-      textInputRef.current?.blur();
-      Keyboard.dismiss();
-      setTimeout(() => {
-        savingRef.current = null;
-      }, 0);
-      return;
-    }
-
-    savingRef.current = sentenceIndex;
-    setSavingByIndex((prev) => ({ ...prev, [sentenceIndex]: true }));
-
-    try {
-      const res = await storyUpdateBeatText({
+  const handleReplaceClip = useCallback(
+    (sentenceIndex: number) => {
+      const shot = session ? getSelectedShot(session, sentenceIndex) : null;
+      setShowBeatActionsForIndex(null);
+      markShouldRefresh();
+      navigation.navigate("ClipSearch", {
         sessionId,
         sentenceIndex,
-        text: draft,
+        initialQuery: shot?.searchQuery ?? "",
       });
+    },
+    [markShouldRefresh, navigation, session, sessionId]
+  );
 
-      if (!res?.ok && res?.success !== true) {
-        showError(res?.message || "Failed to update beat text");
-        return;
-      }
+  const handleDeleteBeatFromModal = useCallback(
+    (sentenceIndex: number) => {
+      setShowBeatActionsForIndex(null);
+      handleDeleteBeat(sentenceIndex, {
+        onDeleted: resetPlacementPreviews,
+      });
+    },
+    [handleDeleteBeat, resetPlacementPreviews]
+  );
 
-      setBeatTexts((prev) => ({ ...prev, [sentenceIndex]: draft }));
-      const fresh = await storyGet(sessionId);
-      if (fresh?.ok || fresh?.success === true) {
-        setSession(unwrapSession(fresh));
-      }
-      textInputRef.current?.blur();
-      Keyboard.dismiss();
-      // Keep selection so deck does not jump back to beat 1
-    } catch (error) {
-      console.error("[story] save beat error:", error);
-      showError("Failed to update beat text. Please try again.");
-    } finally {
-      setSavingByIndex((prev) => ({ ...prev, [sentenceIndex]: false }));
-      savingRef.current = null;
-    }
-  };
-
-  const handleReplaceClip = (sentenceIndex: number) => {
-    const shot = session ? getSelectedShot(session, sentenceIndex) : null;
-    setReplaceModalForIndex(null); // Close modal before navigating
-    shouldRefreshRef.current = true;
-    navigation.navigate("ClipSearch", {
-      sessionId,
-      sentenceIndex,
-      initialQuery: shot?.searchQuery ?? "",
-    });
-  };
-
-  const handleDeleteBeat = (deletedIndex: number) => {
-    setReplaceModalForIndex(null);
-    Alert.alert(
-      "Delete beat?",
-      "This beat and its clip will be removed.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            const res = await storyDeleteBeat({ sessionId, sentenceIndex: deletedIndex });
-            if (!res?.ok && res?.success !== true) {
-              showError(res?.message ?? "Failed to delete beat.");
-              return;
-            }
-            const fresh = await storyGet(sessionId);
-            if (!fresh?.ok && fresh?.success !== true) {
-              showError(fresh?.message ?? "Failed to reload storyboard.");
-              return;
-            }
-            const unwrappedSession = unwrapSession(fresh);
-            setSession(unwrappedSession);
-            const newBeats = extractBeats(unwrappedSession);
-            setBeatTexts(
-              Object.fromEntries(newBeats.map((b) => [b.sentenceIndex, b.text]))
-            );
-            setSelectedSentenceIndex(
-              newBeats.length > 0
-                ? newBeats[Math.min(deletedIndex, newBeats.length - 1)].sentenceIndex
-                : null
-            );
-            prefetchDoneForSessionRef.current = null;
-            resetPreviews();
-          },
-        },
-      ]
-    );
-  };
-
-  const requestPlacementPreview = useCallback(
-    (placement: CaptionPlacement) => {
+  const handleSaveSelectedBeat = useCallback(
+    async (text: string) => {
       if (selectedSentenceIndex === null) return;
-      if (!committedText.trim()) return;
-      const yPct = PLACEMENT_TO_YPCT[placement];
-      requestPreview(selectedSentenceIndex, committedText, { placement, yPct, immediate: true });
+      isEditingRef.current = false;
+      await handleSaveBeat(selectedSentenceIndex, text, {
+        onSaved: () => {
+          textInputRef.current?.blur();
+        },
+      });
     },
-    [selectedSentenceIndex, committedText, requestPreview]
-  );
-
-  const persistPlacement = useCallback(
-    async (placement: CaptionPlacement) => {
-      if (persistInFlightRef.current) {
-        pendingPlacementRef.current = placement;
-        return;
-      }
-
-      persistInFlightRef.current = true;
-      const yPct = PLACEMENT_TO_YPCT[placement];
-
-      try {
-        const res = await storyUpdateCaptionStyle({
-          sessionId,
-          overlayCaption: { placement, yPct },
-        });
-        if (!res?.ok && res?.success !== true) {
-          throw new Error(res?.message || "Failed to update caption placement");
-        }
-        lastPersistedPlacementRef.current = placement;
-        lastPersistedYPctRef.current = yPct;
-      } catch (error) {
-        console.error("[story] update caption placement error:", error);
-        const fallbackPlacement =
-          lastPersistedPlacementRef.current ?? "center";
-        pendingPlacementRef.current = null;
-        setCaptionPlacement(fallbackPlacement);
-        requestPlacementPreview(fallbackPlacement);
-        showError("Failed to update caption placement. Please try again.");
-        return;
-      } finally {
-        persistInFlightRef.current = false;
-        const pending = pendingPlacementRef.current;
-        if (pending && pending !== lastPersistedPlacementRef.current) {
-          pendingPlacementRef.current = null;
-          persistPlacement(pending);
-        } else {
-          pendingPlacementRef.current = null;
-        }
-      }
-    },
-    [sessionId, requestPlacementPreview, showError]
-  );
-
-  const handlePlacementChange = useCallback(
-    (nextPlacement: CaptionPlacement) => {
-      if (selectedSentenceIndex === null || !committedText.trim()) return;
-      if (prefetchTimeoutRef.current != null) {
-        clearTimeout(prefetchTimeoutRef.current);
-        prefetchTimeoutRef.current = null;
-      }
-      cancelPrefetch();
-      setCaptionPlacement(nextPlacement);
-      requestPlacementPreview(nextPlacement);
-      persistPlacement(nextPlacement);
-    },
-    [selectedSentenceIndex, committedText, cancelPrefetch, requestPlacementPreview, persistPlacement]
+    [handleSaveBeat, selectedSentenceIndex]
   );
 
   const toggleEditorCollapsed = useCallback(() => {
@@ -975,440 +280,11 @@ export default function StoryEditorScreen() {
     setEditorCollapsed((prev) => !prev);
   }, [keyboardVisible]);
 
-  const expandEditor = useCallback(() => {
-    if (keyboardVisibleRef.current) return;
-    setEditorCollapsed(false);
-    setTimeout(() => textInputRef.current?.focus(), 50);
-  }, []);
-
-  const completeRenderSuccess = useCallback(
-    async (shortId: string, successMessage: string) => {
-      await clearActiveRenderAttempt();
-      setShowRenderingModal(false);
-      showSuccess(successMessage);
-
-      try {
-        await refreshUsage();
-      } catch (err) {
-        console.warn("[story] Failed to refresh usage after render:", err);
-      }
-
-      const tabNavigator = navigation.getParent();
-      if (__DEV__) {
-        console.log("[nav-verify] parent routeNames:", tabNavigator?.getState()?.routeNames);
-      }
-      if (tabNavigator) {
-        tabNavigator.navigate("LibraryTab", {
-          screen: "ShortDetail",
-          params: { shortId },
-        });
-      } else {
-        console.warn("[story] Could not access tab navigator for cross-stack navigation");
-        showError("Render succeeded, but navigation failed. Please check your Library.");
-      }
-    },
-    [clearActiveRenderAttempt, navigation, refreshUsage, showError, showSuccess]
-  );
-
-  const recoverRenderAttempt = useCallback(
-    async (
-      attemptId: string,
-      options?: { interrupted?: boolean }
-    ): Promise<"done" | "failed" | "pending"> => {
-      if (options?.interrupted) {
-        setRenderingModalTitle(RECOVERY_RENDERING_MODAL_TITLE);
-        setRenderingModalSubtext(RECOVERY_RENDERING_MODAL_SUBTEXT);
-      } else {
-        setRenderingModalTitle(DEFAULT_RENDERING_MODAL_TITLE);
-        setRenderingModalSubtext(DEFAULT_RENDERING_MODAL_SUBTEXT);
-      }
-
-      for (
-        let pollAttempt = 0;
-        pollAttempt < RENDER_RECOVERY_MAX_ATTEMPTS;
-        pollAttempt += 1
-      ) {
-        const res = await storyGet(sessionId);
-        if (!res.ok) {
-          enrichFailureDiagnostic(
-            {
-              route: `/api/story/${sessionId}`,
-              requestId: res.requestId,
-              status: res.status,
-              code: res.code,
-            },
-            {
-              sessionId,
-              attemptId,
-              pollAttempt,
-              stage: "recovery_poll",
-            }
-          );
-        }
-        if (res?.ok || res?.success === true) {
-          const recoveredSession = unwrapSession(res);
-          setSession(recoveredSession);
-
-          const renderRecovery = getRenderRecovery(recoveredSession);
-          if (isRenderRecoveryForAttempt(renderRecovery, attemptId)) {
-            if (renderRecovery?.state === "done") {
-              const recoveredShortId = getRenderRecoveryShortId(
-                recoveredSession,
-                renderRecovery
-              );
-              if (recoveredShortId) {
-                await completeRenderSuccess(
-                  recoveredShortId,
-                  "Video rendered successfully!"
-                );
-                return "done";
-              }
-              showError(
-                "Render finished, but the short is not ready yet. Please check your Library."
-              );
-              return "failed";
-            }
-
-            if (renderRecovery?.state === "failed") {
-              showError(renderRecovery.message || "Render failed. Please try again.");
-              return "failed";
-            }
-          }
-        }
-
-        if (pollAttempt < RENDER_RECOVERY_MAX_ATTEMPTS - 1) {
-          await new Promise((resolve) =>
-            setTimeout(resolve, RENDER_RECOVERY_POLL_DELAY_MS)
-          );
-        }
-      }
-
-      recordClientDiagnostic({
-        route: `/api/story/${sessionId}`,
-        code: "RECOVERY_PENDING",
-        message: "Render recovery remained pending after polling window.",
-        context: {
-          sessionId,
-          attemptId,
-          pollAttempts: RENDER_RECOVERY_MAX_ATTEMPTS,
-        },
-      });
-      showWarning(
-        "Render is still processing. Tap Render again to resume this same attempt, or check your Library shortly."
-      );
-      setShowRenderingModal(false);
-      return "pending";
-    },
-    [completeRenderSuccess, sessionId, showError, showWarning]
-  );
-
-  useEffect(() => {
-    if (isLoading || !session || !user?.uid) return;
-
-    let cancelled = false;
-
-    const resumeStoredFinalizeAttempt = async () => {
-      const storedAttempt = await loadStoredStoryFinalizeAttempt(user.uid, sessionId);
-      if (cancelled || !storedAttempt) return;
-
-      const storedAttemptId = storedAttempt.attemptId;
-      const renderRecovery = getRenderRecovery(session);
-
-      if (!isRenderRecoveryForAttempt(renderRecovery, storedAttemptId)) {
-        await clearActiveRenderAttempt();
-        return;
-      }
-
-      activeRenderAttemptKeyRef.current = storedAttemptId;
-
-      if (renderRecovery?.state === "done") {
-        const recoveredShortId = getRenderRecoveryShortId(session, renderRecovery);
-        if (recoveredShortId) {
-          const billedSec = getSettledBilledSec(session);
-          const successMessage = billedSec
-            ? `Video rendered successfully! Used ${formatRenderTimeAmount(billedSec)} of render time.`
-            : "Video rendered successfully!";
-          await completeRenderSuccess(recoveredShortId, successMessage);
-          return;
-        }
-        await clearActiveRenderAttempt();
-        showError(
-          "Render finished, but the short is not ready yet. Please check your Library."
-        );
-        return;
-      }
-
-      if (renderRecovery?.state === "failed") {
-        await clearActiveRenderAttempt();
-        showError(renderRecovery.message || "Render failed. Please try again.");
-        return;
-      }
-
-      if (renderRecovery?.state !== "pending") {
-        await clearActiveRenderAttempt();
-        return;
-      }
-
-      if (resumedStoredRenderAttemptRef.current === storedAttemptId || isRendering) {
-        return;
-      }
-
-      resumedStoredRenderAttemptRef.current = storedAttemptId;
-      setIsRendering(true);
-      setShowRenderingModal(true);
-      setRenderingModalTitle(RECOVERY_RENDERING_MODAL_TITLE);
-      setRenderingModalSubtext(RECOVERY_RENDERING_MODAL_SUBTEXT);
-
-      try {
-        const recoveryResult = await recoverRenderAttempt(storedAttemptId, { interrupted: true });
-        if (cancelled) return;
-        if (recoveryResult !== "pending") {
-          await clearActiveRenderAttempt();
-        }
-      } finally {
-        if (!cancelled) {
-          setIsRendering(false);
-          setRenderingModalTitle(DEFAULT_RENDERING_MODAL_TITLE);
-          setRenderingModalSubtext(DEFAULT_RENDERING_MODAL_SUBTEXT);
-        }
-      }
-    };
-
-    void resumeStoredFinalizeAttempt();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    clearActiveRenderAttempt,
-    completeRenderSuccess,
-    isLoading,
-    isRendering,
-    recoverRenderAttempt,
-    session,
-    sessionId,
-    showError,
-    user?.uid,
-  ]);
-
-  const doRender = useCallback(async (reservedEstimateSec?: number | null) => {
-    setIsRendering(true);
-    setShowRenderingModal(true);
-    setRenderingModalTitle(DEFAULT_RENDERING_MODAL_TITLE);
-    setRenderingModalSubtext(DEFAULT_RENDERING_MODAL_SUBTEXT);
-
-    let shouldClearActiveRenderAttemptKey = false;
-
-    try {
-      const idempotencyKey =
-        activeRenderAttemptKeyRef.current ??
-        await createRenderAttemptIdempotencyKey();
-      activeRenderAttemptKeyRef.current = idempotencyKey;
-
-      let result = await storyFinalize(
-        { sessionId },
-        { idempotencyKey }
-      );
-      let retryCount = 0;
-      const maxRetries = 1;
-
-      // Handle 503 retry logic
-      while (!result.ok && result.retryAfter && retryCount < maxRetries) {
-        enrichFailureDiagnostic(
-          {
-            route: "/api/story/finalize",
-            requestId: result.requestId,
-            status: result.status,
-            code: result.code,
-          },
-          {
-            sessionId,
-            attemptId: idempotencyKey,
-            retryCount,
-            retryAfterSec: result.retryAfter,
-            stage: "server_busy_retry",
-          }
-        );
-        showWarning(`Server busy. Retrying in ${result.retryAfter}s...`);
-        await new Promise((resolve) => setTimeout(resolve, result.retryAfter! * 1000));
-        result = await storyFinalize(
-          { sessionId },
-          { idempotencyKey }
-        );
-        retryCount++;
-      }
-
-      if (!result.ok) {
-        const recoveryAttemptId = getFinalizeAttemptId(result.finalize, idempotencyKey);
-        enrichFailureDiagnostic(
-          {
-            route: "/api/story/finalize",
-            requestId: result.requestId,
-            status: result.status,
-            code: result.code,
-          },
-          {
-            sessionId,
-            attemptId: idempotencyKey,
-            retryCount,
-            stage: "finalize_result",
-          }
-        );
-        if (
-          result.code === "TIMEOUT" ||
-          result.code === "NETWORK_ERROR" ||
-          result.code === "IDEMPOTENT_IN_PROGRESS" ||
-          result.code === "FINALIZE_ALREADY_ACTIVE" ||
-          result.status === 0 ||
-          result.status === 409
-        ) {
-          await persistActiveRenderAttempt(recoveryAttemptId);
-          const recoveryResult = await recoverRenderAttempt(recoveryAttemptId, {
-            interrupted: true,
-          });
-          shouldClearActiveRenderAttemptKey = recoveryResult !== "pending";
-          if (recoveryResult !== "pending") {
-            await clearActiveRenderAttempt();
-            setShowRenderingModal(false);
-          }
-          return;
-        }
-
-        shouldClearActiveRenderAttemptKey = true;
-        await clearActiveRenderAttempt();
-
-        if (result.code === "INSUFFICIENT_RENDER_TIME" || result.status === 402) {
-          const estimateForError =
-            reservedEstimateSec ?? estimatedSec ?? getEstimatedUsageSec(session);
-          showError(
-            getInsufficientRenderTimeMessage(
-              estimateForError ?? 0,
-              usageSnapshot?.usage?.availableSec ?? 0
-            )
-          );
-        } else if (result.code === "NOT_FOUND" || result.status === 404) {
-          showError("Session not found. Please start a new video.");
-          navigation.goBack();
-        } else {
-          showError(result.message || "Render failed. Please try again.");
-        }
-        setShowRenderingModal(false);
-        return;
-      }
-
-      if (result.data) {
-        setSession(result.data);
-      }
-
-      if (result.status === 202 && result.finalize?.state === "pending") {
-        const recoveryAttemptId = getFinalizeAttemptId(result.finalize, idempotencyKey);
-        await persistActiveRenderAttempt(recoveryAttemptId);
-        const recoveryResult = await recoverRenderAttempt(recoveryAttemptId);
-        shouldClearActiveRenderAttemptKey = recoveryResult !== "pending";
-        if (recoveryResult !== "pending") {
-          await clearActiveRenderAttempt();
-          setShowRenderingModal(false);
-        }
-        return;
-      }
-
-      shouldClearActiveRenderAttemptKey = true;
-
-      const resolvedShortId =
-        result.shortId ||
-        getRenderRecoveryShortId(result.data, getRenderRecovery(result.data));
-
-      if (resolvedShortId) {
-        const billedSec = getSettledBilledSec(result.data);
-        const successMessage = billedSec
-          ? `Video rendered successfully! Used ${formatRenderTimeAmount(billedSec)} of render time.`
-          : "Video rendered successfully!";
-        await completeRenderSuccess(resolvedShortId, successMessage);
-        return;
-      }
-
-      showError(
-        "Render finished, but the short is not ready yet. Please check your Library."
-      );
-      recordClientDiagnostic({
-        route: "/api/story/finalize",
-        code: "SHORT_ID_MISSING",
-        message: "Finalize succeeded without a resolvable shortId.",
-        requestId: result.requestId,
-        context: {
-          sessionId,
-          attemptId: idempotencyKey,
-        },
-      });
-      await clearActiveRenderAttempt();
-      setShowRenderingModal(false);
-    } catch (error) {
-      const failedAttemptId = activeRenderAttemptKeyRef.current;
-      shouldClearActiveRenderAttemptKey = true;
-      await clearActiveRenderAttempt();
-      recordClientDiagnostic({
-        route: "/api/story/finalize",
-        code: "UNEXPECTED_RENDER_EXCEPTION",
-        message: error instanceof Error ? error.message : "Unknown render error",
-        context: {
-          sessionId,
-          attemptId: failedAttemptId,
-        },
-      });
-      console.error("[story] render error:", error);
-      showError("An unexpected error occurred. Please try again.");
-      setShowRenderingModal(false);
-    } finally {
-      if (shouldClearActiveRenderAttemptKey) {
-        activeRenderAttemptKeyRef.current = null;
-      }
-      setIsRendering(false);
-      setRenderingModalTitle(DEFAULT_RENDERING_MODAL_TITLE);
-      setRenderingModalSubtext(DEFAULT_RENDERING_MODAL_SUBTEXT);
-    }
-  }, [
-    clearActiveRenderAttempt,
-    completeRenderSuccess,
-    estimatedSec,
-    navigation,
-    persistActiveRenderAttempt,
-    recoverRenderAttempt,
-    session,
-    sessionId,
-    showError,
-    showWarning,
-    usageSnapshot?.usage?.availableSec,
-  ]);
-  const handleRender = useCallback(async () => {
-    if (!usageSnapshot) {
-      showError("Render time is still loading. Please wait a moment and try again.");
-      return;
-    }
-    if (!estimatedSec) {
-      showError("Estimated usage is unavailable. Please reload this storyboard and try again.");
-      return;
-    }
-    if (availableSec < estimatedSec) {
-      showError(getInsufficientRenderTimeMessage(estimatedSec, availableSec));
-      return;
-    }
-    Alert.alert(
-      "Render now?",
-      `Estimated usage is ${formatRenderTimeAmount(estimatedSec)} of render time.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Render", onPress: () => void doRender(estimatedSec) },
-      ]
-    );
-  }, [availableSec, doRender, estimatedSec, showError, usageSnapshot]);
-
-  // Header: Flow tabs, no back arrow (Create tab is primary escape), no header right.
   useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: () => null,
       headerLeft: () => null,
       headerBackVisible: false,
-      headerBackTitleVisible: false,
       headerTitle: () => (
         <FlowTabsHeader
           currentStep="storyboard"
@@ -1421,12 +297,12 @@ export default function StoryEditorScreen() {
       ),
     });
   }, [
-    navigation,
-    sessionId,
-    handleRender,
     canAttemptRender,
+    handleRender,
     isRendering,
     keyboardVisible,
+    navigation,
+    sessionId,
     showWarning,
   ]);
 
@@ -1445,337 +321,104 @@ export default function StoryEditorScreen() {
     return (
       <ThemedView style={styles.container}>
         <View style={styles.emptyContainer}>
-          <ThemedText style={styles.emptyText}>
-            No beats found in this storyboard.
-          </ThemedText>
+          <ThemedText style={styles.emptyText}>No beats found in this storyboard.</ThemedText>
         </View>
       </ThemedView>
     );
   }
 
-  // Selected beat and display text for beat editor (deck is the only preview surface)
   const selectedBeat =
     selectedSentenceIndex !== null
-      ? beats.find((b) => b.sentenceIndex === selectedSentenceIndex)
+      ? beats.find((beat) => beat.sentenceIndex === selectedSentenceIndex) ?? null
       : null;
   const isSaving =
-    selectedSentenceIndex !== null
-      ? savingByIndex[selectedSentenceIndex] || false
-      : false;
+    selectedSentenceIndex !== null ? savingByIndex[selectedSentenceIndex] || false : false;
 
   return (
     <ThemedView style={styles.container}>
-      {/* Deck: center card is the stage. Card H is capped so scaled (ACTIVE_SCALE) bounds fit in deckInnerH; editor/render sit below and would otherwise paint over the card. */}
-      <View style={styles.deckSection} onLayout={onDeckLayout}>
-        <View style={styles.deckStageWrap}>
-          <Animated.FlatList
-            ref={deckListRef as React.RefObject<Animated.FlatList<Beat>>}
-            data={beats}
-            renderItem={renderDeckItem}
-            keyExtractor={(item) => `beat-${item.sentenceIndex}`}
-            horizontal
-            snapToInterval={cardStep}
-            decelerationRate="fast"
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{
-              paddingHorizontal: (windowWidth - cardW) / 2,
-              paddingTop: DECK_PAD_TOP,
-              paddingBottom: DECK_PAD_BOTTOM,
-            }}
-            extraData={flatListExtraData}
-            removeClippedSubviews={false}
-            onScroll={onDeckScroll}
-            scrollEventThrottle={16}
-            onMomentumScrollEnd={(e) => {
-              const offsetX = e.nativeEvent.contentOffset.x;
-              const index = Math.round(offsetX / cardStep);
-              const clamped = Math.max(0, Math.min(index, beats.length - 1));
-              selectionFromDeckRef.current = true;
-              setSelectedSentenceIndex(beats[clamped].sentenceIndex);
-            }}
-            keyboardShouldPersistTaps="handled"
-            keyboardDismissMode={keyboardVisible ? "none" : "on-drag"}
-            scrollEnabled={!keyboardVisible}
-          />
-          <LinearGradient
-            colors={["rgba(0,0,0,0.55)", "transparent"]}
-            style={[styles.deckScrimTop, { zIndex: 5 }]}
-            pointerEvents="none"
-          />
-          <LinearGradient
-            colors={["transparent", "rgba(0,0,0,0.55)"]}
-            style={[styles.deckScrimBottom, { zIndex: 5 }]}
-            pointerEvents="none"
-          />
-          <LinearGradient
-            colors={["rgba(0,0,0,0.45)", "transparent"]}
-            start={{ x: 0, y: 0.5 }}
-            end={{ x: 1, y: 0.5 }}
-            style={[styles.deckScrimLeft, { zIndex: 5 }]}
-            pointerEvents="none"
-          />
-          <LinearGradient
-            colors={["transparent", "rgba(0,0,0,0.45)"]}
-            start={{ x: 0, y: 0.5 }}
-            end={{ x: 1, y: 0.5 }}
-            style={[styles.deckScrimRight, { zIndex: 5 }]}
-            pointerEvents="none"
-          />
-        </View>
-      </View>
+      <StoryDeck
+        beats={beats}
+        cardH={cardH}
+        cardStep={cardStep}
+        cardW={cardW}
+        deckListRef={deckListRef}
+        keyboardVisible={keyboardVisible}
+        isLoadingByIndex={isLoadingByIndex}
+        onDeckLayout={onDeckLayout}
+        onDeckScroll={onDeckScroll}
+        onLongPressBeat={setShowBeatActionsForIndex}
+        onPressBeat={handleDeckCardPress}
+        onVisibleBeatChange={handleVisibleBeatChange}
+        previewByIndex={previewByIndex}
+        scrollX={scrollX}
+        selectedSentenceIndex={selectedSentenceIndex}
+        session={session}
+        theme={theme}
+        windowWidth={windowWidth}
+      />
 
-      {/* Beat editor: native Animated translate (no re-render) so iOS keeps first responder */}
-      {selectedBeat && (
-        <RNAnimated.View
-          style={[
-            styles.inputContainer,
-            { zIndex: 50, transform: [{ translateY: editorTranslateY }] },
-          ]}
-          onLayout={(e) => {
-            const h = e.nativeEvent.layout.height;
-            if (Math.abs(h - editorHRef.current) >= 2) {
-              editorHRef.current = h;
-              setEditorH(h);
+      {selectedBeat ? (
+        <BeatEditorPanel
+          captionPlacement={captionPlacement}
+          draftText={draftText}
+          editorCollapsed={editorCollapsed}
+          editorTranslateY={editorTranslateY}
+          isSaving={isSaving}
+          onChangeDraftText={setDraftText}
+          onFocus={() => {
+            if (__DEV__) console.log("[beat] onFocus");
+            isEditingRef.current = true;
+          }}
+          onLayout={(height) => {
+            if (Math.abs(height - editorHRef.current) >= 2) {
+              editorHRef.current = height;
             }
           }}
-        >
-          <View
-            style={[
-              styles.beatLabelRow,
-              editorCollapsed && styles.beatLabelRowCollapsed,
-              editorCollapsed && { backgroundColor: theme.backgroundSecondary },
-            ]}
-          >
-            <ThemedText style={styles.beatLabel}>
-              Beat {selectedBeat.sentenceIndex + 1}
-            </ThemedText>
-            <View style={styles.beatLabelActions}>
-              <Pressable
-                onPress={() => setReplaceModalForIndex(selectedBeat.sentenceIndex)}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                style={({ pressed }) => [
-                  styles.iconButton,
-                  { opacity: pressed ? 0.7 : 1 },
-                ]}
-              >
-                <Feather
-                  name="shuffle"
-                  size={18}
-                  color={theme.tabIconDefault}
-                />
-              </Pressable>
-              {!editorCollapsed && (
-                <Pressable
-                  onPress={() => {
-                    handleSaveBeat(selectedBeat.sentenceIndex, "submit", draftText);
-                  }}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  style={({ pressed }) => [
-                    styles.doneButton,
-                    { opacity: pressed ? 0.7 : 1 },
-                  ]}
-                >
-                  <ThemedText style={[styles.doneButtonText, { color: theme.link }]}>
-                    Done
-                  </ThemedText>
-                </Pressable>
-              )}
-              <Pressable
-                onPress={toggleEditorCollapsed}
-                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                style={({ pressed }) => [{ opacity: pressed ? 0.7 : 1 }]}
-              >
-                <Feather
-                  name={editorCollapsed ? "chevron-up" : "chevron-down"}
-                  size={20}
-                  color={theme.tabIconDefault}
-                />
-              </Pressable>
-            </View>
-          </View>
-          {!editorCollapsed && (
-            <>
-              <View
-                style={[
-                  styles.placementRow,
-                  { backgroundColor: theme.backgroundSecondary },
-                ]}
-              >
-                {CAPTION_PLACEMENTS.map((placement) => {
-                  const isActive = captionPlacement === placement;
-                  const label =
-                    placement === "top"
-                      ? "Top"
-                      : placement === "center"
-                        ? "Center"
-                        : "Bottom";
-                  return (
-                    <Pressable
-                      key={placement}
-                      onPress={() => handlePlacementChange(placement)}
-                      style={({ pressed }) => [
-                        styles.placementButton,
-                        isActive && { backgroundColor: theme.link },
-                        pressed && !isActive ? { opacity: 0.7 } : null,
-                      ]}
-                      hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                    >
-                      <ThemedText
-                        style={[
-                          styles.placementButtonText,
-                          { color: isActive ? theme.buttonText : theme.text },
-                        ]}
-                      >
-                        {label}
-                      </ThemedText>
-                    </Pressable>
-                  );
-                })}
-              </View>
-              <TextInput
-                ref={textInputRef}
-                style={[
-                  styles.textInput,
-                  {
-                    color: theme.text,
-                    backgroundColor: theme.backgroundSecondary,
-                  },
-                ]}
-                value={draftText}
-                onFocus={() => {
-                  if (__DEV__) console.log("[beat] onFocus");
-                  isEditingRef.current = true;
-                }}
-                onBlur={() => {
-                  if (__DEV__) console.log("[beat] onBlur");
-                  handleSaveBeat(selectedBeat.sentenceIndex, "blur", draftText);
-                }}
-                onChangeText={(text) => {
-                  if (selectedSentenceIndex === null) return;
+          onPlacementChange={handlePlacementChange}
+          onSave={handleSaveSelectedBeat}
+          onShowActions={setShowBeatActionsForIndex}
+          onToggleCollapsed={toggleEditorCollapsed}
+          selectedBeat={selectedBeat}
+          textInputRef={textInputRef}
+          theme={theme}
+        />
+      ) : null}
 
-                  if (text.includes("\n")) {
-                    const cleaned = text.replace(/\n/g, " ").trim();
-                    setDraftText(cleaned);
-                    handleSaveBeat(selectedBeat.sentenceIndex, "submit", cleaned);
-                    textInputRef.current?.blur();
-                    Keyboard.dismiss();
-                  } else {
-                    setDraftText(text);
-                  }
-                }}
-                multiline
-                editable={!isSaving}
-                placeholderTextColor={theme.tabIconDefault}
-              />
-              {isSaving && (
-                <View style={styles.savingIndicator}>
-                  <ActivityIndicator size="small" color={theme.link} />
-                </View>
-              )}
-            </>
-          )}
-        </RNAnimated.View>
-        )}
-
-      {/* Tab-bar-only spacer: reserves space below editor for keyboard docking. SSOT: reservedBelowEditor = tabBarHeight + Spacing.sm. */}
       <View
         style={[styles.renderAreaSpacer, { height: tabBarHeight + Spacing.sm }]}
-        onLayout={(e) => {
-          renderAreaHRef.current = e.nativeEvent.layout.height;
+        onLayout={(event) => {
+          renderAreaHRef.current = event.nativeEvent.layout.height;
         }}
       />
 
-      {/* Rendering Modal */}
       <Modal
         visible={showRenderingModal}
         transparent
         animationType="fade"
-        onRequestClose={() => {
-          // Don't allow closing during render
-          if (!isRendering) {
-            setShowRenderingModal(false);
-          }
-        }}
+        onRequestClose={() => {}}
       >
         <View style={styles.renderingModalOverlay}>
-          <View style={[styles.renderingModalContent, { backgroundColor: theme.backgroundDefault }]}>
+          <View
+            style={[styles.renderingModalContent, { backgroundColor: theme.backgroundDefault }]}
+          >
             <ActivityIndicator size="large" color={theme.link} />
             <ThemedText style={styles.renderingModalTitle}>{renderingModalTitle}</ThemedText>
-            <ThemedText style={[styles.renderingModalSubtext, { color: theme.tabIconDefault }]}>
+            <ThemedText
+              style={[styles.renderingModalSubtext, { color: theme.tabIconDefault }]}
+            >
               {renderingModalSubtext}
             </ThemedText>
           </View>
         </View>
       </Modal>
 
-      {/* Beat Actions Modal (long-press on deck card) */}
-      <Modal
-        visible={replaceModalForIndex !== null}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setReplaceModalForIndex(null)}
-      >
-        <Pressable
-          style={styles.modalOverlay}
-          onPress={() => setReplaceModalForIndex(null)}
-        >
-          <Pressable
-            style={[styles.modalContent, { backgroundColor: theme.backgroundDefault }]}
-            onPress={(e) => e.stopPropagation()}
-          >
-            <ThemedText style={styles.modalTitle}>
-              Beat {replaceModalForIndex !== null ? replaceModalForIndex + 1 : ""}
-            </ThemedText>
-            <View style={styles.modalButtons}>
-              <Pressable
-                style={[
-                  styles.modalButton,
-                  styles.modalButtonCancel,
-                  { backgroundColor: theme.backgroundSecondary },
-                ]}
-                onPress={() => setReplaceModalForIndex(null)}
-              >
-                <ThemedText style={styles.modalButtonText}>Cancel</ThemedText>
-              </Pressable>
-              <Pressable
-                style={[
-                  styles.modalButton,
-                  styles.modalButtonPrimary,
-                  { backgroundColor: theme.link },
-                ]}
-                onPress={() => {
-                  if (replaceModalForIndex !== null) {
-                    handleReplaceClip(replaceModalForIndex);
-                  }
-                }}
-              >
-                <ThemedText
-                  style={[styles.modalButtonText, { color: theme.buttonText }]}
-                >
-                  Replace Clip
-                </ThemedText>
-              </Pressable>
-              <Pressable
-                style={[
-                  styles.modalButton,
-                  { backgroundColor: theme.backgroundSecondary },
-                ]}
-                onPress={() => {
-                  if (replaceModalForIndex !== null) {
-                    handleDeleteBeat(replaceModalForIndex);
-                  }
-                }}
-              >
-                <ThemedText
-                  style={[styles.modalButtonText, { color: theme.link }]}
-                >
-                  Delete Beat
-                </ThemedText>
-              </Pressable>
-            </View>
-          </Pressable>
-        </Pressable>
-      </Modal>
+      <BeatActionsModal
+        onClose={() => setShowBeatActionsForIndex(null)}
+        onDeleteBeat={handleDeleteBeatFromModal}
+        onReplaceClip={handleReplaceClip}
+        selectedSentenceIndex={showBeatActionsForIndex}
+        theme={theme}
+      />
     </ThemedView>
   );
 }
@@ -1783,16 +426,6 @@ export default function StoryEditorScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    gap: Spacing.md,
-  },
-  loadingText: {
-    fontSize: 16,
-    opacity: 0.7,
   },
   emptyContainer: {
     flex: 1,
@@ -1805,227 +438,18 @@ const styles = StyleSheet.create({
     opacity: 0.7,
     textAlign: "center",
   },
-  deckSection: {
+  loadingContainer: {
     flex: 1,
-    overflow: "visible" as const,
-  },
-  deckStageWrap: {
-    flex: 1,
-    position: "relative",
-  },
-  deckScrimTop: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    height: Spacing["3xl"],
-    pointerEvents: "none",
-  },
-  deckScrimBottom: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    height: Spacing["3xl"],
-    pointerEvents: "none",
-  },
-  deckScrimLeft: {
-    position: "absolute",
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: Spacing.xl,
-    pointerEvents: "none",
-  },
-  deckScrimRight: {
-    position: "absolute",
-    right: 0,
-    top: 0,
-    bottom: 0,
-    width: Spacing.xl,
-    pointerEvents: "none",
-  },
-  deckCard: {
-    borderRadius: 12,
-    overflow: "hidden",
-    position: "relative",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.10)",
-    elevation: 8,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
-  },
-  deckCardPill: {
-    position: "absolute",
-    bottom: 8,
-    left: 8,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
-    borderRadius: 12,
-    backgroundColor: "rgba(0,0,0,0.5)",
-  },
-  deckCardPillText: {
-    fontSize: 11,
-    fontWeight: "600",
-    opacity: 0.95,
-    color: "#fff",
-  },
-  deckCardInner: {
-    width: "100%",
-    height: "100%",
-    position: "relative",
-  },
-  deckThumbnail: {
-    width: "100%",
-    height: "100%",
-  },
-  deckPlaceholder: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  deckPlaceholderText: {
-    fontSize: 12,
-    opacity: 0.7,
-    marginTop: 4,
-  },
-  deckCaptionLoading: {
-    position: "absolute",
-    bottom: 8,
-    left: 0,
-    right: 0,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  beatLabelRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: Spacing.sm,
-  },
-  placementRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: 10,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.12)",
-    marginBottom: Spacing.sm,
-  },
-  placementButton: {
-    flex: 1,
-    paddingVertical: Spacing.xs,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  placementButtonText: {
-    fontSize: 13,
-    fontWeight: "600",
-    opacity: 0.92,
-  },
-  beatLabelRowCollapsed: {
-    marginHorizontal: Spacing.lg,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-    borderRadius: 12,
-    marginBottom: 0,
-  },
-  beatLabel: {
-    fontSize: 14,
-    fontWeight: "600",
-    opacity: 0.8,
-  },
-  beatLabelActions: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: Spacing.sm,
-  },
-  iconButton: {
-    padding: Spacing.xs,
-    borderRadius: 6,
-  },
-  editorCollapsedRow: {
-    padding: Spacing.md,
-    borderRadius: 8,
-    minHeight: 48,
-    justifyContent: "center",
-  },
-  editorCollapsedText: {
-    fontSize: 14,
-    opacity: 0.9,
-  },
-  editorCollapsedHint: {
-    fontSize: 12,
-    opacity: 0.7,
-    marginTop: 4,
-  },
-  doneButton: {
-    paddingVertical: Spacing.xs,
-    paddingHorizontal: Spacing.sm,
-  },
-  doneButtonText: {
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  inputContainer: {
-    position: "relative",
-  },
-  textInput: {
-    minHeight: 64,
-    padding: Spacing.md,
-    borderRadius: 8,
-    fontSize: 16,
-    textAlignVertical: "top",
-  },
-  savingIndicator: {
-    position: "absolute",
-    top: Spacing.sm,
-    right: Spacing.sm,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
     justifyContent: "center",
     alignItems: "center",
-  },
-  modalContent: {
-    borderRadius: 12,
-    padding: Spacing.xl,
-    minWidth: 280,
-    maxWidth: "80%",
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    marginBottom: Spacing.lg,
-    textAlign: "center",
-  },
-  modalButtons: {
-    flexDirection: "row",
     gap: Spacing.md,
   },
-  modalButton: {
-    flex: 1,
-    paddingVertical: Spacing.md,
-    paddingHorizontal: Spacing.lg,
-    borderRadius: 8,
-    alignItems: "center",
-  },
-  modalButtonCancel: {},
-  modalButtonPrimary: {},
-  modalButtonText: {
+  loadingText: {
     fontSize: 16,
-    fontWeight: "500",
+    opacity: 0.7,
   },
   renderAreaSpacer: {
     width: "100%",
-  },
-  renderingModalOverlay: {
-    flex: 1,
-    backgroundColor: "rgba(0, 0, 0, 0.7)",
-    justifyContent: "center",
-    alignItems: "center",
   },
   renderingModalContent: {
     borderRadius: 12,
@@ -2035,14 +459,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: Spacing.md,
   },
-  renderingModalTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    textAlign: "center",
+  renderingModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.7)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   renderingModalSubtext: {
     fontSize: 14,
     textAlign: "center",
     opacity: 0.7,
+  },
+  renderingModalTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    textAlign: "center",
   },
 });
