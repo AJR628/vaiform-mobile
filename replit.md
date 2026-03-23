@@ -22,18 +22,18 @@ Preferred communication style: Simple, everyday language.
   - Root Stack Navigator handles auth flow (Login vs Main)
   - Main Tab Navigator with 3 tabs: Home, Library, Settings
   - Each tab has its own Stack Navigator for nested screens
-- **State Management**: 
+- **State Management**:
   - React Context for auth state (AuthContext) and toast notifications (ToastContext)
-  - TanStack React Query for server state and data fetching
+  - Hand-written API client (`client/api/client.ts`) for current backend transport
 - **Styling**: StyleSheet API with themed components, supporting light/dark mode
 - **Animation**: React Native Reanimated for fluid transitions and micro-interactions
 
-### Backend Architecture
+### Local Build/Deployment Surface
 
-- **Server**: Express.js with TypeScript
-- **Purpose**: Primarily serves as a proxy/gateway on Replit - the main business logic lives on the external Vaiform backend
-- **Database**: PostgreSQL via Drizzle ORM (schema defined but storage currently uses in-memory implementation)
-- **API Pattern**: RESTful endpoints prefixed with `/api`
+- **Local server**: Express.js with TypeScript
+- **Purpose**: Supports local Replit/build/deployment flows in this repo; it is not the canonical Vaiform backend contract surface
+- **Storage/database scaffolding**: PostgreSQL/Drizzle and in-memory storage references are leftover local scaffold surfaces, not current mobile/backend contract truth
+- **Docs note**: `server/README.md` and `docs/DOCS_INDEX.md` are the current sources for this classification
 
 ### Authentication
 
@@ -59,24 +59,24 @@ Preferred communication style: Simple, everyday language.
 
 ### Project Structure
 
-```
+```text
 client/           # React Native/Expo frontend
-├── api/          # API client and type definitions
-├── components/   # Reusable UI components
-├── contexts/     # React Context providers (Auth, Toast)
-├── hooks/        # Custom hooks (useTheme, useScreenOptions)
-├── navigation/   # React Navigation setup
-├── screens/      # Screen components
-├── lib/          # Firebase and query client setup
-└── constants/    # Theme colors, spacing, typography
+|- api/           # Hand-written API client and type definitions
+|- components/    # Reusable UI components
+|- contexts/      # React Context providers (Auth, Toast)
+|- hooks/         # Custom hooks (useTheme, useScreenOptions)
+|- navigation/    # React Navigation setup
+|- screens/       # Screen components
+|- lib/           # Firebase and other client support code
+\- constants/     # Theme colors, spacing, typography
 
-server/           # Express backend
-├── routes.ts     # API route definitions
-├── storage.ts    # Data storage interface
-└── templates/    # HTML templates
+server/           # Local build/deployment support only
+|- routes.ts      # Local server bootstrap
+|- storage.ts     # Leftover scaffold storage interface
+\- templates/     # HTML templates
 
 shared/           # Shared code between client/server
-└── schema.ts     # Drizzle database schema
+\- schema.ts      # Drizzle database schema
 ```
 
 ## External Dependencies
@@ -93,7 +93,6 @@ shared/           # Shared code between client/server
 - **expo-auth-session**: OAuth flow handling
 - **expo-web-browser**: OAuth redirect handling
 - **react-native-reanimated**: Animations
-- **@tanstack/react-query**: Server state management
 
 ### Environment Variables Required
 ```
@@ -106,7 +105,7 @@ EXPO_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
 EXPO_PUBLIC_FIREBASE_APP_ID
 EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID      # Google OAuth client ID
 EXPO_PUBLIC_API_BASE_URL              # Backend API URL
-EXPO_PUBLIC_DOMAIN                    # Replit domain for API calls
+EXPO_PUBLIC_DOMAIN                    # Replit/Expo dev-tooling variable used by the local expo:dev script; not the canonical mobile API base URL
 ```
 
 ### External Services
