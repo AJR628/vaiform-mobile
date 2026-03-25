@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   View,
   StyleSheet,
@@ -53,6 +53,7 @@ export default function ScriptScreen() {
   const activeInputRef = useRef<TextInput | null>(null);
   const activeListIndexRef = useRef<number | null>(null);
   const keyboardVisibleRef = useRef(false);
+  const savingSentenceIndicesRef = useRef<Set<number>>(new Set());
   const [editingSentenceIndex, setEditingSentenceIndex] = useState<number | null>(null);
   const [draftTexts, setDraftTexts] = useState<Record<number, string>>({});
   const [savingSentenceIndex, setSavingSentenceIndex] = useState<number | null>(null);
@@ -61,27 +62,38 @@ export default function ScriptScreen() {
     setActiveSessionId(sessionId);
   }, [sessionId, setActiveSessionId]);
 
-  useEffect(() => {
-    const load = async () => {
-      setIsLoading(true);
+  const refreshSession = useCallback(
+    async ({
+      showLoading = false,
+      errorMessage = "Failed to load script. Please try again.",
+    }: {
+      showLoading?: boolean;
+        errorMessage?: string;
+    } = {}) => {
+      if (showLoading) setIsLoading(true);
       try {
         const res = await storyGet(sessionId);
-        if (!res?.ok && res?.success !== true) {
-          showError(res?.message || "Failed to load script. Please try again.");
-          return;
+        if (!res?.ok) {
+          showError(res?.message || errorMessage);
+          return null;
         }
-        const unwrapped = unwrapNormalized(res);
+        const unwrapped = unwrapNormalized<StorySession>(res);
         setSession(unwrapped);
+        return unwrapped;
       } catch (err) {
         console.error("[script] load error:", err);
-        showError("Failed to load script. Please try again.");
+        showError(errorMessage);
+        return null;
       } finally {
-        setIsLoading(false);
+        if (showLoading) setIsLoading(false);
       }
-    };
+    },
+    [sessionId, showError]
+  );
 
-    load();
-  }, [sessionId, showError]);
+  useEffect(() => {
+    void refreshSession({ showLoading: true });
+  }, [refreshSession]);
 
   const beats: StoryBeat[] = useMemo(() => extractBeats(session), [session]);
 
@@ -179,11 +191,16 @@ export default function ScriptScreen() {
       return;
     }
 
+    if (savingSentenceIndicesRef.current.has(sentenceIndex)) {
+      return;
+    }
+
+    savingSentenceIndicesRef.current.add(sentenceIndex);
     setSavingSentenceIndex(sentenceIndex);
     try {
       const res = await storyUpdateBeatText({ sessionId, sentenceIndex, text: cleaned });
 
-      if (!res?.ok && res?.success !== true) {
+      if (!res?.ok) {
         showError(res?.message || "Failed to save beat. Please try again.");
 
         // If user dismissed keyboard, don't trap them in "editing" with CTA hidden
@@ -191,20 +208,41 @@ export default function ScriptScreen() {
         return;
       }
 
-      const updated = unwrapNormalized(res);
-      setSession(updated);
       setDraftTexts((prev) => ({ ...prev, [sentenceIndex]: cleaned }));
+      setSession((prev: StorySession | null) => {
+        const sentences = prev?.story?.sentences;
+        if (!prev || !Array.isArray(sentences)) return prev;
+        if (sentenceIndex < 0 || sentenceIndex >= sentences.length) return prev;
+
+        const nextSentences = [...sentences];
+        nextSentences[sentenceIndex] = cleaned;
+
+        return {
+          ...prev,
+          story: {
+            ...prev.story,
+            sentences: nextSentences,
+          },
+        };
+      });
 
       closeIfCurrent();
 
       // Only dismiss keyboard on explicit submit/enter
       if (reason === "submit") Keyboard.dismiss();
+
+      await refreshSession({
+        errorMessage: "Beat saved, but failed to refresh script. Please try again.",
+      });
     } catch (err) {
       console.error("[script] saveBeat error:", err);
       showError("Failed to save beat. Please try again.");
       if (reason === "blur") closeIfCurrent();
     } finally {
-      setSavingSentenceIndex(null);
+      savingSentenceIndicesRef.current.delete(sentenceIndex);
+      setSavingSentenceIndex((currentSaving) =>
+        currentSaving === sentenceIndex ? null : currentSaving
+      );
     }
   };
 
@@ -221,14 +259,11 @@ export default function ScriptScreen() {
 
   const handleDeleteBeat = async (sentenceIndex: number) => {
     const res = await storyDeleteBeat({ sessionId, sentenceIndex });
-    if (!res?.ok && res?.success !== true) {
+    if (!res?.ok) {
       showError(res?.message ?? "Failed to delete beat.");
       return;
     }
-    const fresh = await storyGet(sessionId);
-    if (fresh?.ok || fresh?.success === true) {
-      setSession(unwrapNormalized(fresh));
-    }
+    await refreshSession({ errorMessage: "Failed to reload script. Please try again." });
     setEditingSentenceIndex(null);
     setDraftTexts({});
     setSavingSentenceIndex(null);

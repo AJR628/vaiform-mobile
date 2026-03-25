@@ -7,6 +7,7 @@ import {
   clearTokenCache,
   normalizeResponse,
   storyFinalize,
+  storyUpdateBeatText,
 } from "@/api/client";
 
 function mockJsonResponse(
@@ -246,5 +247,58 @@ describe("client/api/client", () => {
       requestId: null,
       finalize: null,
     });
+  });
+
+  test("storyUpdateBeatText preserves the partial response shape from the backend", async () => {
+    auth.currentUser = {
+      getIdToken: jest.fn(async () => "firebase-id-token"),
+    } as any;
+
+    (global.fetch as jest.Mock).mockResolvedValue(
+      mockJsonResponse(
+        {
+          success: true,
+          data: {
+            sentences: ["Updated sentence text"],
+            shots: [],
+          },
+        },
+        {
+          status: 200,
+          headers: { "x-request-id": "request-456" },
+        },
+      ),
+    );
+
+    const result = await storyUpdateBeatText({
+      sessionId: "session-1",
+      sentenceIndex: 0,
+      text: "Updated sentence text",
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      data: {
+        sentences: ["Updated sentence text"],
+        shots: [],
+      },
+      requestId: "request-456",
+    });
+    expect(global.fetch).toHaveBeenCalledWith(
+      "https://api.test.local/api/story/update-beat-text",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          sessionId: "session-1",
+          sentenceIndex: 0,
+          text: "Updated sentence text",
+        }),
+        headers: expect.objectContaining({
+          Authorization: "Bearer firebase-id-token",
+          "Content-Type": "application/json",
+          "x-client": "mobile",
+        }),
+      }),
+    );
   });
 });

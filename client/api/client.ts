@@ -669,6 +669,11 @@ export async function storyGet(
   });
 }
 
+export interface StoryBeatTextUpdateData {
+  sentences: string[];
+  shots: unknown[];
+}
+
 /**
  * POST /api/story/update-beat-text - Edit single beat text
  */
@@ -676,8 +681,8 @@ export async function storyUpdateBeatText(body: {
   sessionId: string;
   sentenceIndex: number;
   text: string;
-}): Promise<NormalizedResponse<StorySession>> {
-  return apiRequestNormalized<StorySession>("/api/story/update-beat-text", {
+}): Promise<NormalizedResponse<StoryBeatTextUpdateData>> {
+  return apiRequestNormalized<StoryBeatTextUpdateData>("/api/story/update-beat-text", {
     method: "POST",
     body,
     requireAuth: true,
