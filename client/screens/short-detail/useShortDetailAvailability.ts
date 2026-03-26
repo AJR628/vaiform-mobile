@@ -7,6 +7,15 @@ import {
 } from "@/lib/diagnostics";
 
 import { adaptShortDetailToShortItem } from "./model";
+import {
+  buildLibraryFallbackHitDiagnostic,
+  buildLibraryFallbackMissDiagnostic,
+  buildLibraryFallbackReadbackContext,
+  buildShortDetailManualRetryContext,
+  buildShortDetailPendingDiagnostic,
+  buildShortDetailReadbackContext,
+  buildShortDetailRetryTimeoutDiagnostic,
+} from "./readbackDiagnostics";
 
 interface UseShortDetailAvailabilityOptions {
   navigation: any;
@@ -94,20 +103,19 @@ export function useShortDetailAvailability({
       if (cancelled || !isMountedRef.current) return;
 
       if (!result.ok) {
-        enrichFailureDiagnostic(
-          {
-            route: `/api/shorts/${shortId}`,
-            requestId: result.requestId,
-            status: result.status,
-            code: result.code,
-          },
-          {
-            shortId,
-            retryAttempt: attemptIndex,
-            stage: "detail_fetch",
-          }
-        );
-      }
+                enrichFailureDiagnostic(
+                  {
+                    route: `/api/shorts/${shortId}`,
+                    requestId: result.requestId,
+                    status: result.status,
+                    code: result.code,
+                  },
+                  buildShortDetailReadbackContext({
+                    shortId,
+                    retryAttempt: attemptIndex,
+                  })
+                );
+              }
 
       if (result.ok && result.data) {
         if (isMountedRef.current) {
@@ -129,15 +137,11 @@ export function useShortDetailAvailability({
 
       if (!result.ok && result.status === 404) {
         recordClientDiagnostic({
-          route: `/api/shorts/${shortId}`,
-          status: result.status,
-          code: "DETAIL_PENDING_RETRY",
-          message: "Short detail returned 404 during retry window.",
-          requestId: result.requestId,
-          context: {
+          ...buildShortDetailPendingDiagnostic({
             shortId,
             retryAttempt: attemptIndex,
-          },
+            requestId: result.requestId,
+          }),
         });
         if (isMountedRef.current) {
           setIsPendingAvailability(true);
@@ -165,11 +169,10 @@ export function useShortDetailAvailability({
                     status: listResult.status,
                     code: listResult.code,
                   },
-                  {
+                  buildLibraryFallbackReadbackContext({
                     shortId,
                     retryAttempt: attemptIndex,
-                    stage: "library_fallback",
-                  }
+                  })
                 );
               }
 
@@ -180,13 +183,11 @@ export function useShortDetailAvailability({
 
                 if (foundShort) {
                   recordClientDiagnostic({
-                    route: `/api/shorts/${shortId}`,
-                    code: "LIBRARY_FALLBACK_HIT",
-                    message: "Recovered short from library fallback.",
-                    context: {
+                    ...buildLibraryFallbackHitDiagnostic({
                       shortId,
                       retryAttempt: attemptIndex,
-                    },
+                      requestId: listResult.requestId,
+                    }),
                   });
                   if (isMountedRef.current) {
                     setIsPendingAvailability(false);
@@ -206,13 +207,11 @@ export function useShortDetailAvailability({
               }
 
               recordClientDiagnostic({
-                route: `/api/shorts/${shortId}`,
-                code: "LIBRARY_FALLBACK_MISS",
-                message: "Library fallback did not find the short yet.",
-                context: {
+                ...buildLibraryFallbackMissDiagnostic({
                   shortId,
                   retryAttempt: attemptIndex,
-                },
+                  requestId: listResult.requestId,
+                }),
               });
               if (__DEV__) {
                 console.log(
@@ -236,15 +235,11 @@ export function useShortDetailAvailability({
 
         if (attemptIndex >= MAX_ATTEMPTS - 1) {
           recordClientDiagnostic({
-            route: `/api/shorts/${shortId}`,
-            status: result.status,
-            code: "DETAIL_RETRY_TIMEOUT",
-            message: "Short detail retry window exhausted.",
-            requestId: result.requestId,
-            context: {
+            ...buildShortDetailRetryTimeoutDiagnostic({
               shortId,
               retryAttempts: MAX_ATTEMPTS,
-            },
+              requestId: result.requestId,
+            }),
           });
           if (isMountedRef.current) {
             setDidRetryTimeout(true);
@@ -336,9 +331,10 @@ export function useShortDetailAvailability({
             code: result.code,
           },
           {
-            shortId,
-            retryCount,
-            stage: "manual_retry",
+            ...buildShortDetailManualRetryContext({
+              shortId,
+              retryCount,
+            }),
           }
         );
       }

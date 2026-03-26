@@ -192,7 +192,8 @@ export function useStoryEditorFinalize({
               sessionId,
               attemptId,
               pollAttempt,
-              stage: "recovery_poll",
+              stage: "client_recovery_poll",
+              surface: "story_finalize_recovery",
             }
           );
         }
@@ -240,6 +241,8 @@ export function useStoryEditorFinalize({
           sessionId,
           attemptId,
           pollAttempts: RENDER_RECOVERY_MAX_ATTEMPTS,
+          stage: "client_recovery_poll",
+          surface: "story_finalize_recovery",
         },
       });
       showWarning(
@@ -376,6 +379,7 @@ export function useStoryEditorFinalize({
               retryCount,
               retryAfterSec: result.retryAfter,
               stage: "server_busy_retry",
+              surface: "story_finalize",
             }
           );
           showWarning(`Server busy. Retrying in ${result.retryAfter}s...`);
@@ -401,6 +405,7 @@ export function useStoryEditorFinalize({
               attemptId: idempotencyKey,
               retryCount,
               stage: "finalize_result",
+              surface: "story_finalize",
             }
           );
 
@@ -488,6 +493,7 @@ export function useStoryEditorFinalize({
           context: {
             sessionId,
             attemptId: idempotencyKey,
+            surface: "story_finalize",
           },
         });
         await clearActiveRenderAttempt();
@@ -503,6 +509,7 @@ export function useStoryEditorFinalize({
           context: {
             sessionId,
             attemptId: failedAttemptId,
+            surface: "story_finalize",
           },
         });
         console.error("[story] render error:", error);
