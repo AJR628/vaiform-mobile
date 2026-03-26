@@ -1,11 +1,18 @@
 import React, { useState } from "react";
-import { View, StyleSheet, Pressable, ActivityIndicator, Platform, TextInput, Alert } from "react-native";
+import {
+  View,
+  StyleSheet,
+  Pressable,
+  ActivityIndicator,
+  Platform,
+  TextInput,
+  Alert,
+} from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useHeaderHeight } from "@react-navigation/elements";
 import { useBottomTabBarHeight } from "@react-navigation/bottom-tabs";
 import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { Feather } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import * as Haptics from "expo-haptics";
 
@@ -13,12 +20,11 @@ import { ThemedText } from "@/components/ThemedText";
 import { ThemedView } from "@/components/ThemedView";
 import { Card } from "@/components/Card";
 import { KeyboardAwareScrollViewCompat } from "@/components/KeyboardAwareScrollViewCompat";
-import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/contexts/ToastContext";
 import { useActiveStorySession } from "@/contexts/ActiveStorySessionContext";
 import { useTheme } from "@/hooks/useTheme";
 import { Spacing, BorderRadius } from "@/constants/theme";
-import { storyStart, storyGenerate } from "@/api/client";
+import { storyStart, storyGenerate, type StoryStyleKey } from "@/api/client";
 import { HomeStackParamList } from "@/navigation/HomeStackNavigator";
 
 const COLORS = {
@@ -34,6 +40,16 @@ const COLORS = {
 
 type HomeNavProp = NativeStackNavigationProp<HomeStackParamList, "Home">;
 
+const STYLE_OPTIONS: ReadonlyArray<{
+  label: string;
+  value: StoryStyleKey | null;
+}> = [
+  { label: "Auto", value: null },
+  { label: "Default", value: "default" },
+  { label: "Hype", value: "hype" },
+  { label: "Cozy", value: "cozy" },
+];
+
 export default function HomeScreen() {
   const insets = useSafeAreaInsets();
   const headerHeight = useHeaderHeight();
@@ -41,10 +57,12 @@ export default function HomeScreen() {
   const { theme } = useTheme();
   const { showError } = useToast();
   const navigation = useNavigation<HomeNavProp>();
-  const { activeSessionId, isHydrated, setActiveSessionId, clearActiveSessionId } = useActiveStorySession();
+  const { activeSessionId, setActiveSessionId, clearActiveSessionId } =
+    useActiveStorySession();
 
   const [inputType, setInputType] = useState<"link" | "idea">("link");
   const [inputText, setInputText] = useState("");
+  const [styleKey, setStyleKey] = useState<StoryStyleKey | null>(null);
   const [progressText, setProgressText] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
 
@@ -68,7 +86,7 @@ export default function HomeScreen() {
               runCreateFlow(trimmedInput);
             },
           },
-        ]
+        ],
       );
       return;
     }
@@ -85,6 +103,7 @@ export default function HomeScreen() {
       const startResult = await storyStart({
         input: trimmedInput,
         inputType: inputType,
+        ...(styleKey ? { styleKey } : {}),
       });
 
       if (!startResult.ok) {
@@ -99,7 +118,10 @@ export default function HomeScreen() {
 
       const sessionId = startResult.data?.id;
       if (!sessionId) {
-        console.error("[story] Missing sessionId in start response:", startResult.data);
+        console.error(
+          "[story] Missing sessionId in start response:",
+          startResult.data,
+        );
         showError("Failed to create storyboard: Invalid response");
         setIsCreating(false);
         setProgressText(null);
@@ -130,7 +152,8 @@ export default function HomeScreen() {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       }
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : "Unknown error";
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error";
       showError(`Failed to create storyboard: ${errorMessage}`);
       setIsCreating(false);
       setProgressText(null);
@@ -138,9 +161,7 @@ export default function HomeScreen() {
   };
 
   const inputPlaceholder =
-    inputType === "link"
-      ? "Paste article URL..."
-      : "Describe your idea...";
+    inputType === "link" ? "Paste article URL..." : "Describe your idea...";
 
   return (
     <ThemedView style={styles.container}>
@@ -198,6 +219,39 @@ export default function HomeScreen() {
             </Pressable>
           </View>
 
+          <View style={styles.lensHeader}>
+            <ThemedText style={styles.lensTitle}>Script Lens</ThemedText>
+            <ThemedText style={styles.lensHint}>Optional</ThemedText>
+          </View>
+
+          <View style={styles.lensControl}>
+            {STYLE_OPTIONS.map((option) => {
+              const isActive = styleKey === option.value;
+              return (
+                <Pressable
+                  key={option.label}
+                  testID={`style-option-${option.value ?? "auto"}`}
+                  style={({ pressed }) => [
+                    styles.lensSegment,
+                    isActive && styles.segmentActive,
+                    pressed && styles.segmentPressed,
+                  ]}
+                  onPress={() => setStyleKey(option.value)}
+                  disabled={isCreating}
+                >
+                  <ThemedText
+                    style={[
+                      styles.lensSegmentText,
+                      isActive && styles.segmentTextActive,
+                    ]}
+                  >
+                    {option.label}
+                  </ThemedText>
+                </Pressable>
+              );
+            })}
+          </View>
+
           {/* Text Input */}
           <TextInput
             style={[
@@ -216,17 +270,23 @@ export default function HomeScreen() {
           {/* Progress Display */}
           {progressText && (
             <View style={styles.progressContainer}>
-              <ThemedText style={styles.progressText}>{progressText}</ThemedText>
+              <ThemedText style={styles.progressText}>
+                {progressText}
+              </ThemedText>
             </View>
           )}
         </Card>
 
         {/* Create Button */}
         <Pressable
+          testID="create-script-button"
           style={({ pressed }) => [
             styles.createButton,
             (isCreating || !inputText.trim()) && styles.createButtonDisabled,
-            pressed && !isCreating && inputText.trim() && styles.createButtonPressed,
+            pressed &&
+              !isCreating &&
+              inputText.trim() &&
+              styles.createButtonPressed,
           ]}
           onPress={handleCreateStoryboard}
           disabled={isCreating || !inputText.trim()}
@@ -283,10 +343,42 @@ const styles = StyleSheet.create({
     padding: 4,
     gap: 4,
   },
+  lensHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: Spacing.sm,
+  },
+  lensTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: COLORS.textPrimary,
+  },
+  lensHint: {
+    fontSize: 12,
+    color: COLORS.textSecondary,
+  },
+  lensControl: {
+    flexDirection: "row",
+    marginBottom: Spacing.lg,
+    backgroundColor: COLORS.surface,
+    borderRadius: BorderRadius.xs,
+    padding: 4,
+    gap: 4,
+  },
   segment: {
     flex: 1,
     paddingVertical: Spacing.sm,
     paddingHorizontal: Spacing.md,
+    borderRadius: BorderRadius.xs,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  lensSegment: {
+    flex: 1,
+    minHeight: 36,
+    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.sm,
     borderRadius: BorderRadius.xs,
     alignItems: "center",
     justifyContent: "center",
@@ -304,6 +396,11 @@ const styles = StyleSheet.create({
   },
   segmentTextActive: {
     color: COLORS.white,
+  },
+  lensSegmentText: {
+    fontSize: 12,
+    fontWeight: "600",
+    color: COLORS.textSecondary,
   },
   textInput: {
     minHeight: 120,

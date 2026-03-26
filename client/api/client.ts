@@ -9,8 +9,7 @@ if (!apiBaseUrlEnv) {
 }
 const API_BASE_URL = apiBaseUrlEnv.replace(/\/$/, "");
 
-const API_LOG =
-  __DEV__ && (process.env.EXPO_PUBLIC_API_LOG === "1");
+const API_LOG = __DEV__ && process.env.EXPO_PUBLIC_API_LOG === "1";
 
 let cachedIdToken: string | null = null;
 let tokenExpirationTime: number = 0;
@@ -94,7 +93,7 @@ export type NormalizedResponse<T> = NormalizedSuccess<T> | NormalizedError;
 function recordNormalizedFailure(
   route: string,
   method: HttpMethod,
-  normalized: NormalizedError
+  normalized: NormalizedError,
 ): void {
   recordApiFailure({
     route,
@@ -108,7 +107,7 @@ function recordNormalizedFailure(
 
 function getEnvelopeRequestId(
   obj: Record<string, unknown>,
-  fallback: string | null
+  fallback: string | null,
 ): string | null {
   if (typeof obj.requestId === "string") {
     return obj.requestId;
@@ -128,7 +127,7 @@ function getEnvelopeRequestId(
 export function normalizeResponse<T>(
   json: unknown,
   status: number,
-  requestIdFallback: string | null = null
+  requestIdFallback: string | null = null,
 ): NormalizedResponse<T> {
   if (typeof json !== "object" || json === null) {
     return {
@@ -162,9 +161,15 @@ export function normalizeResponse<T>(
 
 export async function apiRequest<T = unknown>(
   endpoint: string,
-  options: ApiRequestOptions = {}
+  options: ApiRequestOptions = {},
 ): Promise<T> {
-  const { method = "GET", body, headers = {}, requireAuth = true, signal } = options;
+  const {
+    method = "GET",
+    body,
+    headers = {},
+    requireAuth = true,
+    signal,
+  } = options;
 
   const url = `${API_BASE_URL}${endpoint}`;
 
@@ -193,7 +198,9 @@ export async function apiRequest<T = unknown>(
   const isCaptionPreview = endpoint.includes("/api/caption/preview");
   const shouldLog = API_LOG && !isCaptionPreview;
   if (shouldLog) {
-    console.log(`[api] ${method} ${endpoint} ${response.status} hasAuthHeader=${hasAuthHeader}`);
+    console.log(
+      `[api] ${method} ${endpoint} ${response.status} hasAuthHeader=${hasAuthHeader}`,
+    );
   }
 
   if (!response.ok) {
@@ -222,9 +229,15 @@ export async function apiRequest<T = unknown>(
  */
 export async function apiRequestNormalized<T = unknown>(
   endpoint: string,
-  options: ApiRequestOptions = {}
+  options: ApiRequestOptions = {},
 ): Promise<NormalizedResponse<T>> {
-  const { method = "GET", body, headers = {}, requireAuth = true, signal } = options;
+  const {
+    method = "GET",
+    body,
+    headers = {},
+    requireAuth = true,
+    signal,
+  } = options;
 
   const url = `${API_BASE_URL}${endpoint}`;
 
@@ -261,12 +274,16 @@ export async function apiRequestNormalized<T = unknown>(
       json = { message: text };
     }
 
-    const normalized = normalizeResponse<T>(json, response.status, responseRequestId);
+    const normalized = normalizeResponse<T>(
+      json,
+      response.status,
+      responseRequestId,
+    );
     const isCaptionPreview = endpoint.includes("/api/caption/preview");
     const shouldLog = API_LOG && !isCaptionPreview;
     if (shouldLog) {
       console.log(
-        `[api] ${method} ${endpoint} ${response.status} requestId=${normalized.requestId ?? "n/a"} hasAuthHeader=${hasAuthHeader}`
+        `[api] ${method} ${endpoint} ${response.status} requestId=${normalized.requestId ?? "n/a"} hasAuthHeader=${hasAuthHeader}`,
       );
     }
 
@@ -460,13 +477,31 @@ export interface CaptionPreviewData {
 }
 
 const CAPTION_PREVIEW_STYLE_KEYS: (keyof CaptionPreviewStyle)[] = [
-  "fontFamily", "fontPx", "weightCss", "fontStyle", "letterSpacingPx", "lineSpacingPx",
-  "textAlign", "textTransform", "color", "opacity", "strokePx", "strokeColor",
-  "shadowBlur", "shadowOffsetX", "shadowOffsetY", "shadowColor",
-  "wPct", "internalPaddingPx", "internalPadding", "rasterPadding",
+  "fontFamily",
+  "fontPx",
+  "weightCss",
+  "fontStyle",
+  "letterSpacingPx",
+  "lineSpacingPx",
+  "textAlign",
+  "textTransform",
+  "color",
+  "opacity",
+  "strokePx",
+  "strokeColor",
+  "shadowBlur",
+  "shadowOffsetX",
+  "shadowOffsetY",
+  "shadowColor",
+  "wPct",
+  "internalPaddingPx",
+  "internalPadding",
+  "rasterPadding",
 ];
 
-function extractStyleWhitelist(style: CaptionPreviewStyle | undefined): CaptionPreviewStyle | undefined {
+function extractStyleWhitelist(
+  style: CaptionPreviewStyle | undefined,
+): CaptionPreviewStyle | undefined {
   if (!style || typeof style !== "object") return undefined;
   const out: CaptionPreviewStyle = {};
   for (const k of CAPTION_PREVIEW_STYLE_KEYS) {
@@ -512,7 +547,7 @@ export interface CaptionPreviewOptions {
  */
 export async function captionPreview(
   body: CaptionPreviewRequestBody,
-  options: CaptionPreviewOptions = {}
+  options: CaptionPreviewOptions = {},
 ): Promise<NormalizedResponse<CaptionPreviewData>> {
   const { signal, timeoutMs = 10_000 } = options;
   let effectiveSignal: AbortSignal | undefined = signal;
@@ -528,12 +563,15 @@ export async function captionPreview(
     effectiveSignal = controller.signal;
   }
   try {
-    const result = await apiRequestNormalized<CaptionPreviewData>("/api/caption/preview", {
-      method: "POST",
-      body,
-      requireAuth: true,
-      signal: effectiveSignal,
-    });
+    const result = await apiRequestNormalized<CaptionPreviewData>(
+      "/api/caption/preview",
+      {
+        method: "POST",
+        body,
+        requireAuth: true,
+        signal: effectiveSignal,
+      },
+    );
     return result;
   } finally {
     if (timeoutId) clearTimeout(timeoutId);
@@ -571,7 +609,7 @@ export async function getUsage(): Promise<NormalizedResponse<UsageSnapshot>> {
  */
 export async function getMyShorts(
   cursor?: string,
-  limit: number = 24
+  limit: number = 24,
 ): Promise<NormalizedResponse<ShortsListResponse>> {
   let endpoint = `/api/shorts/mine?limit=${limit}`;
   if (cursor) {
@@ -589,7 +627,7 @@ export async function getMyShorts(
  * Returns 404 if not ready
  */
 export async function getShortDetail(
-  id: string
+  id: string,
 ): Promise<NormalizedResponse<ShortDetail>> {
   return apiRequestNormalized<ShortDetail>(`/api/shorts/${id}`, {
     method: "GET",
@@ -604,10 +642,12 @@ export async function getShortDetail(
 /**
  * POST /api/story/start - Create new story session
  */
+export type StoryStyleKey = "default" | "hype" | "cozy";
+
 export async function storyStart(body: {
   input: string;
   inputType?: "link" | "idea" | "paragraph";
-  styleKey?: string;
+  styleKey?: StoryStyleKey;
 }): Promise<NormalizedResponse<StorySession>> {
   return apiRequestNormalized<StorySession>("/api/story/start", {
     method: "POST",
@@ -661,7 +701,7 @@ export async function storySearchAll(body: {
  * GET /api/story/:sessionId - Get session state
  */
 export async function storyGet(
-  sessionId: string
+  sessionId: string,
 ): Promise<NormalizedResponse<StorySession>> {
   return apiRequestNormalized<StorySession>(`/api/story/${sessionId}`, {
     method: "GET",
@@ -682,11 +722,14 @@ export async function storyUpdateBeatText(body: {
   sentenceIndex: number;
   text: string;
 }): Promise<NormalizedResponse<StoryBeatTextUpdateData>> {
-  return apiRequestNormalized<StoryBeatTextUpdateData>("/api/story/update-beat-text", {
-    method: "POST",
-    body,
-    requireAuth: true,
-  });
+  return apiRequestNormalized<StoryBeatTextUpdateData>(
+    "/api/story/update-beat-text",
+    {
+      method: "POST",
+      body,
+      requireAuth: true,
+    },
+  );
 }
 
 /**
@@ -702,7 +745,7 @@ export async function storyDeleteBeat(body: {
       method: "POST",
       body,
       requireAuth: true,
-    }
+    },
   );
 }
 
@@ -750,7 +793,7 @@ export async function storyUpdateCaptionStyle(body: {
       method: "POST",
       body,
       requireAuth: true,
-    }
+    },
   );
 }
 
@@ -764,7 +807,7 @@ export async function storyFinalize(
   },
   options: {
     idempotencyKey: string;
-  }
+  },
 ): Promise<StoryFinalizeResult> {
   const idempotencyKey = options.idempotencyKey?.trim();
   if (!idempotencyKey) {
@@ -837,11 +880,15 @@ export async function storyFinalize(
       }
     }
 
-    const normalized = normalizeResponse<StorySession>(json, response.status, responseRequestId);
+    const normalized = normalizeResponse<StorySession>(
+      json,
+      response.status,
+      responseRequestId,
+    );
 
     if (API_LOG) {
       console.log(
-        `[api] POST /api/story/finalize ${response.status} requestId=${normalized.requestId ?? "n/a"}`
+        `[api] POST /api/story/finalize ${response.status} requestId=${normalized.requestId ?? "n/a"}`,
       );
     }
     if (!normalized.ok) {
