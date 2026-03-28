@@ -3,7 +3,7 @@
 - Status: CONSUMER_NOTE
 - Owner repo: mobile
 - Source of truth for: mobile-side pointer to backend-owned contract docs and local alignment rules for this repo
-- Canonical counterpart/source: ../vaiform-1/docs/SCRIPT_CONTROL_PREIMPLEMENTATION_AUDIT.md, ../vaiform-1/docs/MOBILE_BACKEND_CONTRACT.md, ../vaiform-1/docs/MOBILE_HARDENING_PLAN.md, ../vaiform-1/docs/LEGACY_WEB_SURFACES.md
+- Canonical counterpart/source: ../vaiform-1-clean/docs/SCRIPT_CONTROL_PREIMPLEMENTATION_AUDIT.md, ../vaiform-1-clean/docs/MOBILE_BACKEND_CONTRACT.md, ../vaiform-1-clean/docs/MOBILE_HARDENING_PLAN.md, ../vaiform-1-clean/docs/LEGACY_WEB_SURFACES.md
 - Last verified against: both repos on 2026-03-24
 
 This file is not a second canonical contract document. The backend repo owns backend/mobile contract truth.
@@ -12,10 +12,10 @@ This file is not a second canonical contract document. The backend repo owns bac
 
 Use these backend docs as the canonical source before changing any mobile-used route behavior:
 
-- ../vaiform-1/docs/SCRIPT_CONTROL_PREIMPLEMENTATION_AUDIT.md for the current script-writing user-control verification freeze
-- ../vaiform-1/docs/MOBILE_BACKEND_CONTRACT.md
-- ../vaiform-1/docs/MOBILE_HARDENING_PLAN.md
-- ../vaiform-1/docs/LEGACY_WEB_SURFACES.md
+- ../vaiform-1-clean/docs/SCRIPT_CONTROL_PREIMPLEMENTATION_AUDIT.md for the current script-writing user-control verification freeze
+- ../vaiform-1-clean/docs/MOBILE_BACKEND_CONTRACT.md
+- ../vaiform-1-clean/docs/MOBILE_HARDENING_PLAN.md
+- ../vaiform-1-clean/docs/LEGACY_WEB_SURFACES.md
 
 ## Mobile Repo Rule
 

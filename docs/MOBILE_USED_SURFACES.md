@@ -3,7 +3,7 @@
 - Status: CANONICAL
 - Owner repo: mobile
 - Source of truth for: exact current mobile callers, payloads sent, response fields read, and known unwired spec endpoints in this repo
-- Canonical counterpart/source: backend contract truth lives in ../vaiform-1/docs/MOBILE_BACKEND_CONTRACT.md, ../vaiform-1/docs/MOBILE_HARDENING_PLAN.md, and ../vaiform-1/docs/LEGACY_WEB_SURFACES.md
+- Canonical counterpart/source: backend contract truth lives in ../vaiform-1-clean/docs/MOBILE_BACKEND_CONTRACT.md, ../vaiform-1-clean/docs/MOBILE_HARDENING_PLAN.md, and ../vaiform-1-clean/docs/LEGACY_WEB_SURFACES.md
 - Last verified against: both repos on 2026-03-21
 
 Generated from source on 2026-03-21.
