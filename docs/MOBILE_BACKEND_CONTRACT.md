@@ -4,9 +4,9 @@
 - Owner repo: mobile
 - Source of truth for: mobile-side pointer to backend-owned contract docs and local alignment rules for this repo
 - Canonical counterpart/source: ../vaiform-1-clean/docs/SCRIPT_CONTROL_PREIMPLEMENTATION_AUDIT.md, ../vaiform-1-clean/docs/MOBILE_BACKEND_CONTRACT.md, ../vaiform-1-clean/docs/MOBILE_HARDENING_PLAN.md, ../vaiform-1-clean/docs/LEGACY_WEB_SURFACES.md
-- Last verified against: both repos on 2026-03-24
+- Last verified against: both repos on 2026-04-01
 
-This file is not a second canonical contract document. The backend repo owns backend/mobile contract truth.
+This file is not a second canonical contract document. The backend repo owns backend/mobile contract truth, and this file should stay a pointer/alignment note rather than rebuilding endpoint tables here.
 
 ## Canonical Backend Truth
 
@@ -21,7 +21,12 @@ Use these backend docs as the canonical source before changing any mobile-used r
 
 The mobile repo keeps one canonical usage doc only:
 
-- docs/MOBILE_USED_SURFACES.md for what the mobile app currently calls, sends, and reads.
+- docs/MOBILE_USED_SURFACES.md for what the mobile app currently calls, sends, and reads now.
+
+Trust order in this repo:
+
+1. `docs/MOBILE_USED_SURFACES.md` for exact current callers.
+2. Backend repo `docs/MOBILE_BACKEND_CONTRACT.md` and `docs/MOBILE_HARDENING_PLAN.md` for server guarantees and hardening status.
 
 If backend route behavior changes, update the backend canonical docs first. Update docs/MOBILE_USED_SURFACES.md in this repo only when actual mobile usage changes.
 

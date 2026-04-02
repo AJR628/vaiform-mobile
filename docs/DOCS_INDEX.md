@@ -3,8 +3,8 @@
 - Status: CONSUMER_NOTE
 - Owner repo: mobile
 - Source of truth for: active mobile-repo docs ownership and where canonical backend/mobile truth lives
-- Canonical counterpart/source: backend repo `docs/SCRIPT_CONTROL_PREIMPLEMENTATION_AUDIT.md`, backend repo `docs/CROSS_REPO_PRODUCTION_HARDENING_PLAN.md`, backend repo `docs/MOBILE_BACKEND_CONTRACT.md`, backend repo `docs/MOBILE_HARDENING_PLAN.md`, backend repo `docs/LEGACY_WEB_SURFACES.md`
-- Last verified against: both repos on 2026-03-24
+- Canonical counterpart/source: backend repo `docs/SCRIPT_CONTROL_PREIMPLEMENTATION_AUDIT.md`, backend repo `docs/MOBILE_BACKEND_CONTRACT.md`, backend repo `docs/MOBILE_HARDENING_PLAN.md`, backend repo `docs/LEGACY_WEB_SURFACES.md`, mobile repo `docs/MOBILE_USED_SURFACES.md`
+- Last verified against: both repos on 2026-04-01
 
 ## Active Root Docs
 
@@ -16,19 +16,26 @@
 
 ## Active Docs Map
 
-Trust these first for current work:
+Start here for current mobile work:
 
 - mobile repo `README.md`
 - mobile repo `docs/DOCS_INDEX.md`
-- mobile repo `docs/MOBILE_RELEASE_RUNBOOK.md`
 - mobile repo `docs/MOBILE_USED_SURFACES.md`
-- backend repo `docs/SCRIPT_CONTROL_PREIMPLEMENTATION_AUDIT.md`
-- backend repo `docs/CROSS_REPO_PRODUCTION_HARDENING_PLAN.md`
+- mobile repo `docs/MOBILE_RELEASE_RUNBOOK.md`
+- mobile repo `docs/MOBILE_BACKEND_CONTRACT.md` (alignment note only)
+
+Backend canonical contract/hardening docs for active mobile flows:
+
 - backend repo `docs/MOBILE_BACKEND_CONTRACT.md`
 - backend repo `docs/MOBILE_HARDENING_PLAN.md`
 - backend repo `docs/LEGACY_WEB_SURFACES.md`
+- backend repo `docs/SCRIPT_CONTROL_PREIMPLEMENTATION_AUDIT.md`
 
-Do not start from reports, archives, or the root spec sheet unless one of the docs above sends you there.
+Phase/reference docs that may still help with context, but must be re-verified before treating them as live truth:
+
+- backend repo `docs/CROSS_REPO_PRODUCTION_HARDENING_PLAN.md`
+
+Do not start from reports, archives, or phase/reference docs unless the live docs above or current code send you there.
 
 ## Transport Ownership
 
@@ -51,13 +58,16 @@ Do not start from reports, archives, or the root spec sheet unless one of the do
 
 ## Backend Canonical Truth
 
-Canonical backend/mobile contract and hardening truth lives in the backend repo:
+Canonical backend/mobile contract and hardening truth for active mobile flows lives in the backend repo:
 
 - backend repo `docs/SCRIPT_CONTROL_PREIMPLEMENTATION_AUDIT.md` for the current script-writing user-control preimplementation freeze
-- backend repo `docs/CROSS_REPO_PRODUCTION_HARDENING_PLAN.md`
 - backend repo `docs/MOBILE_BACKEND_CONTRACT.md`
 - backend repo `docs/MOBILE_HARDENING_PLAN.md`
 - backend repo `docs/LEGACY_WEB_SURFACES.md`
+
+Reference only:
+
+- backend repo `docs/CROSS_REPO_PRODUCTION_HARDENING_PLAN.md`
 
 ## Non-Canonical Historical Material
 
