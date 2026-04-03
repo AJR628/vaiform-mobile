@@ -87,7 +87,6 @@ export default function HomeStackNavigator() {
         options={({ navigation }) => ({
           headerTitle: () => <HomeFlowHeader navigation={navigation} />,
           headerBackVisible: false,
-          headerBackTitleVisible: false,
         })}
       />
       <Stack.Screen
@@ -101,7 +100,6 @@ export default function HomeStackNavigator() {
           headerTitleStyle: { color: theme.text, fontSize: 16, fontWeight: "600" },
           headerShadowVisible: false,
           headerBackVisible: false,
-          headerBackTitleVisible: false,
         }}
       />
       <Stack.Screen
@@ -120,7 +118,6 @@ export default function HomeStackNavigator() {
             <ScriptFlowHeader navigation={navigation} sessionId={route.params.sessionId} />
           ),
           headerBackVisible: false,
-          headerBackTitleVisible: false,
         })}
       />
     </Stack.Navigator>

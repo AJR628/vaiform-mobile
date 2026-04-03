@@ -53,7 +53,7 @@ Do not start from reports, archives, or phase/reference docs unless the live doc
 
 - `app.json` is the repo-owned source for mobile runtime-version and update behavior.
 - `eas.json` is the repo-owned source for preview versus production build-profile names and channel names.
-- `.github/workflows/mobile-ci.yml` is the current CI test lane; it is not a store submission or release automation lane.
+- `.github/workflows/mobile-ci.yml` is the current CI correctness lane; it enforces `npm run check:types` and `npm run test:ci`, but it is not a store submission or release automation lane.
 - `.replit`, `server/README.md`, and `replit.md` stay classified as local Replit/cloud deployment support, not store-release docs.
 
 ## Backend Canonical Truth

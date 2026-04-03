@@ -58,8 +58,8 @@ export default function ClipSearchModal() {
         page: 1,
       });
 
-      if (!res?.ok && res?.success !== true) {
-        showError(res?.message || "Failed to search clips");
+      if (!res.ok) {
+        showError(res.message || "Failed to search clips");
         return;
       }
 
@@ -89,8 +89,8 @@ export default function ClipSearchModal() {
         clipId,
       });
 
-      if (!res?.ok && res?.success !== true) {
-        showError(res?.message || "Failed to update clip");
+      if (!res.ok) {
+        showError(res.message || "Failed to update clip");
         return;
       }
 
@@ -113,6 +113,10 @@ export default function ClipSearchModal() {
       handleSearch(initial);
     }
   }, []); // mount-only; do not add route.params or handleSearch to deps
+
+  const triggerSearch = () => {
+    void handleSearch();
+  };
 
   const renderCandidate = ({ item }: { item: Clip }) => {
     const isSelecting = selectingClipId === item.id;
@@ -180,7 +184,7 @@ export default function ClipSearchModal() {
           onChangeText={setQuery}
           placeholder="Search clips..."
           placeholderTextColor={theme.textTertiary}
-          onSubmitEditing={handleSearch}
+          onSubmitEditing={triggerSearch}
           returnKeyType="search"
         />
         <Pressable
@@ -191,7 +195,7 @@ export default function ClipSearchModal() {
               opacity: isSearching ? 0.5 : 1,
             },
           ]}
-          onPress={handleSearch}
+          onPress={triggerSearch}
           disabled={isSearching}
         >
           {isSearching ? (

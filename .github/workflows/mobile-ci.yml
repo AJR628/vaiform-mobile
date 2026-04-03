@@ -26,5 +26,8 @@ jobs:
       - name: Install
         run: npm ci
 
+      - name: Mobile types
+        run: npm run check:types
+
       - name: Mobile tests
         run: npm run test:ci

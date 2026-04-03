@@ -1,12 +1,15 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from "firebase/app";
-import {
-  initializeAuth,
-  getAuth,
-  Auth,
-  getReactNativePersistence,
-} from "firebase/auth";
+import * as FirebaseAuth from "firebase/auth";
+import type { Auth, Persistence } from "firebase/auth";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Platform } from "react-native";
+
+const { initializeAuth, getAuth } = FirebaseAuth;
+const getReactNativePersistence = (
+  FirebaseAuth as typeof FirebaseAuth & {
+    getReactNativePersistence?: (storage: typeof AsyncStorage) => Persistence;
+  }
+).getReactNativePersistence;
 
 const firebaseEnv = {
   apiKey: process.env.EXPO_PUBLIC_FIREBASE_API_KEY?.trim() ?? "",
@@ -41,7 +44,7 @@ let auth: Auth;
 if (getApps().length === 0) {
   app = initializeApp(firebaseConfig);
   // Use React Native persistence for native platforms to fix persistence warning
-  if (Platform.OS !== "web") {
+  if (Platform.OS !== "web" && getReactNativePersistence) {
     auth = initializeAuth(app, {
       persistence: getReactNativePersistence(AsyncStorage),
     });

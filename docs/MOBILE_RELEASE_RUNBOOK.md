@@ -14,7 +14,7 @@ Purpose: repo-scoped release/build guidance for the mobile app's store-build and
 
 - `app.json` owns the app version, package identifiers, runtime-version policy, and update behavior for the Expo app.
 - `eas.json` owns the preview and production EAS Build profile names plus their channel names.
-- `.github/workflows/mobile-ci.yml` is the current repo-owned CI lane, but it is a test lane only.
+- `.github/workflows/mobile-ci.yml` is the current repo-owned CI lane; it now enforces the minimum release gate of `npm run check:types` and `npm run test:ci`.
 - `.replit`, `server/README.md`, and `replit.md` remain local Replit/cloud deployment surfaces only; they are not the store-release lane for this repo.
 
 ## Release policy encoded in repo
@@ -28,7 +28,7 @@ Purpose: repo-scoped release/build guidance for the mobile app's store-build and
 ## Preflight checklist
 
 1. Confirm mobile docs front door still points to this doc and to `docs/MOBILE_USED_SURFACES.md`.
-2. Confirm the current CI lane is green or rerun the repo's current checks (`npm run test:ci` at minimum).
+2. Confirm the current CI lane is green or rerun the repo's current checks (`npm run check:types` and `npm run test:ci`).
 3. If a new binary is required, bump `expo.version` in `app.json` before building. The current runtime-version policy keys off app version.
 4. Confirm the iOS bundle identifier and Android package name in `app.json` are still the intended store identifiers.
 5. Confirm external operator prerequisites separately: Expo/EAS project linkage, signing credentials, and store account access.
