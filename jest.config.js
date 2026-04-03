@@ -11,6 +11,12 @@ module.exports = {
     "/dist/",
     "/build/",
     "/server_dist/",
+    "<rootDir>/.cache/",
+    "<rootDir>/.bun/",
+  ],
+  modulePathIgnorePatterns: [
+    "<rootDir>/.cache/",
+    "<rootDir>/.bun/",
   ],
   clearMocks: true,
 };
