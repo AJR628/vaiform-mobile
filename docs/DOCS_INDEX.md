@@ -3,8 +3,8 @@
 - Status: CONSUMER_NOTE
 - Owner repo: mobile
 - Source of truth for: active mobile-repo docs ownership and where canonical backend/mobile truth lives
-- Canonical counterpart/source: backend repo `docs/SCRIPT_CONTROL_PREIMPLEMENTATION_AUDIT.md`, backend repo `docs/MOBILE_BACKEND_CONTRACT.md`, backend repo `docs/MOBILE_HARDENING_PLAN.md`, backend repo `docs/LEGACY_WEB_SURFACES.md`, mobile repo `docs/MOBILE_USED_SURFACES.md`
-- Last verified against: both repos on 2026-04-01
+- Canonical counterpart/source: backend repo `docs/FINAL_PAID_BETA_LAUNCH_PLAN.md`, backend repo `docs/MOBILE_BACKEND_CONTRACT.md`, backend repo `docs/MOBILE_HARDENING_PLAN.md`, backend repo `docs/LEGACY_WEB_SURFACES.md`, mobile repo `docs/MOBILE_USED_SURFACES.md`
+- Last verified against: both repos on 2026-04-04
 
 ## Active Root Docs
 
@@ -23,11 +23,13 @@ Start here for current mobile work:
 - mobile repo `docs/MOBILE_USED_SURFACES.md`
 - mobile repo `docs/MOBILE_RELEASE_RUNBOOK.md`
 - mobile repo `docs/MOBILE_BACKEND_CONTRACT.md` (alignment note only)
+- backend repo `docs/FINAL_PAID_BETA_LAUNCH_PLAN.md` - current launch-phase authority
 
 Backend canonical contract/hardening docs for active mobile flows:
 
+- backend repo `docs/FINAL_PAID_BETA_LAUNCH_PLAN.md`
 - backend repo `docs/MOBILE_BACKEND_CONTRACT.md`
-- backend repo `docs/MOBILE_HARDENING_PLAN.md`
+- backend repo `docs/MOBILE_HARDENING_PLAN.md` - current hardening-status ledger
 - backend repo `docs/LEGACY_WEB_SURFACES.md`
 - backend repo `docs/SCRIPT_CONTROL_PREIMPLEMENTATION_AUDIT.md`
 
@@ -60,9 +62,9 @@ Do not start from reports, archives, or phase/reference docs unless the live doc
 
 Canonical backend/mobile contract and hardening truth for active mobile flows lives in the backend repo:
 
-- backend repo `docs/SCRIPT_CONTROL_PREIMPLEMENTATION_AUDIT.md` for the current script-writing user-control preimplementation freeze
+- backend repo `docs/FINAL_PAID_BETA_LAUNCH_PLAN.md` for the current launch-phase authority
 - backend repo `docs/MOBILE_BACKEND_CONTRACT.md`
-- backend repo `docs/MOBILE_HARDENING_PLAN.md`
+- backend repo `docs/MOBILE_HARDENING_PLAN.md` for route-level hardening status
 - backend repo `docs/LEGACY_WEB_SURFACES.md`
 
 Reference only:

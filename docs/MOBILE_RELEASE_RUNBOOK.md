@@ -1,6 +1,6 @@
 # MOBILE_RELEASE_RUNBOOK
 
-Last verified against repo code: 2026-03-23.
+Last verified against repo code: 2026-04-04.
 
 Purpose: repo-scoped release/build guidance for the mobile app's store-build and OTA policy surfaces.
 
