@@ -3,7 +3,7 @@
 - Status: CONSUMER_NOTE
 - Owner repo: mobile
 - Source of truth for: mobile-side pointer to backend-owned contract docs and local alignment rules for this repo
-- Canonical counterpart/source: ../vaiform-1-clean/docs/FINAL_PAID_BETA_LAUNCH_PLAN.md, ../vaiform-1-clean/docs/MOBILE_BACKEND_CONTRACT.md, ../vaiform-1-clean/docs/MOBILE_HARDENING_PLAN.md, ../vaiform-1-clean/docs/LEGACY_WEB_SURFACES.md
+- Canonical counterpart/source: backend repo `docs/FINAL_PAID_BETA_LAUNCH_PLAN.md`, backend repo `docs/MOBILE_BACKEND_CONTRACT.md`, backend repo `docs/MOBILE_HARDENING_PLAN.md`, backend repo `docs/LEGACY_WEB_SURFACES.md`
 - Last verified against: both repos on 2026-04-04
 
 This file is not a second canonical contract document. The backend repo owns backend/mobile contract truth, and this file should stay a pointer/alignment note rather than rebuilding endpoint tables here.
@@ -12,10 +12,10 @@ This file is not a second canonical contract document. The backend repo owns bac
 
 Use these backend docs as the canonical source before changing any mobile-used route behavior:
 
-- ../vaiform-1-clean/docs/FINAL_PAID_BETA_LAUNCH_PLAN.md for the current launch-phase authority
-- ../vaiform-1-clean/docs/MOBILE_BACKEND_CONTRACT.md
-- ../vaiform-1-clean/docs/MOBILE_HARDENING_PLAN.md for route-level hardening status
-- ../vaiform-1-clean/docs/LEGACY_WEB_SURFACES.md
+- backend repo `docs/FINAL_PAID_BETA_LAUNCH_PLAN.md` for the current launch-phase authority
+- backend repo `docs/MOBILE_BACKEND_CONTRACT.md`
+- backend repo `docs/MOBILE_HARDENING_PLAN.md` for route-level hardening status
+- backend repo `docs/LEGACY_WEB_SURFACES.md`
 
 ## Mobile Repo Rule
 
