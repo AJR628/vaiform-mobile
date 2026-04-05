@@ -6,6 +6,14 @@
 - Canonical counterpart/source: backend repo `docs/FINAL_PAID_BETA_LAUNCH_PLAN.md`, backend repo `docs/MOBILE_BACKEND_CONTRACT.md`, backend repo `docs/MOBILE_HARDENING_PLAN.md`, backend repo `docs/LEGACY_WEB_SURFACES.md`, mobile repo `docs/MOBILE_USED_SURFACES.md`
 - Last verified against: both repos on 2026-04-04
 
+## Cross-Repo Maintenance Front Door
+
+For founder/operator maintenance and incident work, start in the backend repo at:
+
+- backend repo `docs/MAINTENANCE_FRONT_DOOR.md`
+
+Then return here for mobile caller truth and transport ownership.
+
 ## Active Root Docs
 
 - README.md - repo front door; points here first.
@@ -18,6 +26,7 @@
 
 Start here for current mobile work:
 
+- backend repo `docs/MAINTENANCE_FRONT_DOOR.md` - founder/operator maintenance front door
 - mobile repo `README.md`
 - mobile repo `docs/DOCS_INDEX.md`
 - mobile repo `docs/MOBILE_USED_SURFACES.md`

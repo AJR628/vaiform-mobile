@@ -1,3 +1,5 @@
+// Historical archive: this navigator has no active imports/callers in the current
+// mobile runtime. RootStackNavigator uses MainTabNavigator.tsx instead.
 import React from "react";
 import { createNativeBottomTabNavigator } from "@react-navigation/bottom-tabs/unstable";
 
