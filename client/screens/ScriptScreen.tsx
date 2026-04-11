@@ -33,6 +33,9 @@ import type { StorySession } from "@/types/story";
 
 type ScriptRouteProp = RouteProp<HomeStackParamList, "Script">;
 
+const MAX_BEAT_CHARS = 160;
+const MAX_TOTAL_CHARS = 850;
+
 export default function ScriptScreen() {
   const route = useRoute<ScriptRouteProp>();
   const navigation = useNavigation<NativeStackNavigationProp<HomeStackParamList, "Script">>();
@@ -99,9 +102,7 @@ export default function ScriptScreen() {
 
   const hasShots = useMemo(() => {
     if (!session) return false;
-    return Array.isArray((session as any)?.shots) 
-      ? (session as any).shots.length > 0 
-      : !!(session as any)?.shots;
+    return Array.isArray(session.shots) ? session.shots.length > 0 : false;
   }, [session]);
 
   const showCta = !hasShots && editingSentenceIndex === null;
@@ -184,8 +185,31 @@ export default function ScriptScreen() {
 
     const current = beats.find((b) => b.sentenceIndex === sentenceIndex)?.text ?? "";
 
+    if (!cleaned) {
+      showError("Beat text cannot be empty.");
+      if (reason === "blur") closeIfCurrent();
+      return;
+    }
+
+    if (cleaned.length > MAX_BEAT_CHARS) {
+      showError(`Beat text must stay under ${MAX_BEAT_CHARS} characters.`);
+      if (reason === "blur") closeIfCurrent();
+      return;
+    }
+
+    const nextTotalChars = beats
+      .slice()
+      .sort((left, right) => left.sentenceIndex - right.sentenceIndex)
+      .map((beat) => (beat.sentenceIndex === sentenceIndex ? cleaned : beat.text))
+      .join("").length;
+    if (nextTotalChars > MAX_TOTAL_CHARS) {
+      showError(`Story must stay under ${MAX_TOTAL_CHARS} total characters.`);
+      if (reason === "blur") closeIfCurrent();
+      return;
+    }
+
     // If no change, still exit edit mode on blur/submit (but don't break "tap another beat")
-    if (!cleaned || cleaned === current) {
+    if (cleaned === current) {
       closeIfCurrent();
       if (reason === "submit") Keyboard.dismiss();
       return;
@@ -418,6 +442,7 @@ export default function ScriptScreen() {
               multiline
               editable={!isSaving}
               autoFocus
+              maxLength={MAX_BEAT_CHARS}
               placeholderTextColor={theme.textSecondary}
             />
             {isSaving && (
@@ -442,9 +467,7 @@ export default function ScriptScreen() {
           Script
         </ThemedText>
         <ThemedText style={[styles.topSubtitle, { color: theme.textSecondary }]}>
-          {__DEV__ 
-            ? "Phase 1: read-only script view. Editing + remix buttons come next."
-            : "Review and edit your beats before choosing clips."}
+          Review and edit your beats before choosing clips.
         </ThemedText>
       </View>
 

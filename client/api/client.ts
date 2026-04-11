@@ -797,6 +797,155 @@ export async function storyUpdateCaptionStyle(body: {
   );
 }
 
+export interface StorySyncPendingMeta {
+  state?: "pending" | string;
+  attemptId?: string | null;
+  pollSessionId?: string | null;
+}
+
+export type StorySyncResult = NormalizedResponse<StorySession> & {
+  status: number;
+  sync?: StorySyncPendingMeta | null;
+};
+
+export async function storySync(
+  body: {
+    sessionId: string;
+    mode?: "full" | "stale";
+    voicePreset?: string;
+    voicePacePreset?: "normal";
+  },
+  options: {
+    idempotencyKey: string;
+  },
+): Promise<StorySyncResult> {
+  const idempotencyKey = options.idempotencyKey?.trim();
+  if (!idempotencyKey) {
+    throw new Error("storySync requires a non-empty idempotencyKey option");
+  }
+
+  const url = `${API_BASE_URL}/api/story/sync`;
+  const requestHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
+    "x-client": "mobile",
+    "X-Idempotency-Key": idempotencyKey,
+  };
+
+  const idToken = await getIdToken();
+  if (idToken) {
+    requestHeaders["Authorization"] = `Bearer ${idToken}`;
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 300_000);
+
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        method: "POST",
+        headers: requestHeaders,
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+    } catch (fetchError) {
+      clearTimeout(timeoutId);
+      if (fetchError instanceof Error && fetchError.name === "AbortError") {
+        const timeoutFailure: NormalizedError = {
+          ok: false,
+          status: 0,
+          code: "TIMEOUT",
+          message: "Request timed out after 5 minutes",
+          requestId: null,
+        };
+        recordNormalizedFailure("/api/story/sync", "POST", timeoutFailure);
+        return {
+          ...timeoutFailure,
+          status: 0,
+          sync: null,
+        };
+      }
+      throw fetchError;
+    }
+
+    const responseRequestId = response.headers.get("x-request-id");
+    const contentType = response.headers.get("content-type");
+    let json: unknown = null;
+    if (contentType && contentType.includes("application/json")) {
+      json = await response.json();
+    } else {
+      const text = await response.text();
+      json = { message: text };
+    }
+
+    const normalized = normalizeResponse<StorySession>(
+      json,
+      response.status,
+      responseRequestId,
+    );
+
+    if (API_LOG) {
+      console.log(
+        `[api] POST /api/story/sync ${response.status} requestId=${normalized.requestId ?? "n/a"}`,
+      );
+    }
+
+    if (!normalized.ok) {
+      recordNormalizedFailure("/api/story/sync", "POST", normalized);
+      return {
+        ...normalized,
+        status: response.status,
+        sync: null,
+      };
+    }
+
+    let sync: StorySyncPendingMeta | null = null;
+    if (json && typeof json === "object") {
+      const raw = json as Record<string, unknown>;
+      if (raw.sync && typeof raw.sync === "object") {
+        const rawSync = raw.sync as Record<string, unknown>;
+        sync = {
+          state: typeof rawSync.state === "string" ? rawSync.state : undefined,
+          attemptId:
+            typeof rawSync.attemptId === "string"
+              ? rawSync.attemptId
+              : rawSync.attemptId === null
+                ? null
+                : undefined,
+          pollSessionId:
+            typeof rawSync.pollSessionId === "string"
+              ? rawSync.pollSessionId
+              : rawSync.pollSessionId === null
+                ? null
+                : undefined,
+        };
+      }
+    }
+
+    return {
+      ...normalized,
+      status: response.status,
+      sync,
+    };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Network error";
+    const normalized: NormalizedError = {
+      ok: false,
+      status: 0,
+      code: "NETWORK_ERROR",
+      message,
+      requestId: null,
+    };
+    recordNormalizedFailure("/api/story/sync", "POST", normalized);
+    return {
+      ...normalized,
+      status: 0,
+      sync: null,
+    };
+  }
+}
+
 /**
  * POST /api/story/finalize - Enqueue finalize or replay the current attempt.
  * Special handling: extracts finalize metadata, shortId, and retryAfter from the finalize-specific envelope.

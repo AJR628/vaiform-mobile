@@ -2,6 +2,8 @@
 // Shared helpers for working with StorySession responses.
 // SSOT: keep response unwrapping and beat extraction in one place.
 
+import type { StorySession, StoryShot } from "@/types/story";
+
 export interface StoryBeat {
   sentenceIndex: number;
   text: string;
@@ -11,9 +13,24 @@ export interface StoryBeat {
  * Unwrap payload from the app's NormalizedResponse shape.
  * apiRequestNormalized returns: { ok: true, data: T }
  */
-export function unwrapNormalized<T = any>(res: any): T {
+export function unwrapNormalized<T = unknown>(res: unknown): T {
   // Prefer normalized shape first (apiRequestNormalized returns { ok: true, data: T })
-  if (res?.data && (res?.ok === true || res?.success === true)) return res.data as T;
+  if (
+    typeof res === "object" &&
+    res !== null &&
+    "data" in res &&
+    (res as { ok?: boolean; success?: boolean }).ok === true
+  ) {
+    return (res as { data: T }).data;
+  }
+  if (
+    typeof res === "object" &&
+    res !== null &&
+    "data" in res &&
+    (res as { ok?: boolean; success?: boolean }).success === true
+  ) {
+    return (res as { data: T }).data;
+  }
   // Some wrappers return payload directly (defensive fallback)
   return res as T;
 }
@@ -22,50 +39,26 @@ export function unwrapNormalized<T = any>(res: any): T {
  * Extract beats from session with defensive checks.
  * Expected path: session.story.sentences: string[]
  */
-export function extractBeats(session: any): StoryBeat[] {
+export function extractBeats(session: StorySession | null | undefined): StoryBeat[] {
   if (!session) return [];
-
-  // story.sentences (expected path)
   if (Array.isArray(session?.story?.sentences)) {
-    return session.story.sentences.map((text: any, index: number) => ({
+    return session.story.sentences.map((text, index) => ({
       sentenceIndex: index,
       text: typeof text === "string" ? text : String(text),
     }));
   }
-
-  // Fallback checks (defensive)
-  if (Array.isArray(session?.sentences)) {
-    return session.sentences.map((item: any, index: number) => ({
-      sentenceIndex: index,
-      text: typeof item === "string" ? item : item?.text || String(item),
-    }));
-  }
-
-  if (Array.isArray(session?.beats)) {
-    return session.beats.map((beat: any, index: number) => ({
-      sentenceIndex: index,
-      text: beat?.text || String(beat),
-    }));
-  }
-
   return [];
 }
 
 /**
  * Get shot for a given sentenceIndex from session.
  */
-export function getSelectedShot(session: any, sentenceIndex: number): any | null {
+export function getSelectedShot(
+  session: StorySession | null | undefined,
+  sentenceIndex: number,
+): StoryShot | null {
   if (!session?.shots) return null;
-
-  // If shots is an array, find by sentenceIndex property
-  if (Array.isArray(session.shots)) {
-    return session.shots.find((s: any) => s?.sentenceIndex === sentenceIndex) || null;
-  }
-
-  // If shots is an object/map, try accessing by key
-  if (typeof session.shots === "object") {
-    return session.shots[String(sentenceIndex)] || session.shots[sentenceIndex] || null;
-  }
-
-  return null;
+  return Array.isArray(session.shots)
+    ? session.shots.find((shot) => shot?.sentenceIndex === sentenceIndex) || null
+    : null;
 }

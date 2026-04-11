@@ -117,7 +117,7 @@ import StoryEditorScreen from "@/screens/StoryEditorScreen";
 function buildSession(overrides: Record<string, unknown> = {}) {
   return {
     id: "session-1",
-    status: "clips_searched",
+    status: "voice_synced",
     story: {
       sentences: ["Beat one"],
     },
@@ -134,6 +134,17 @@ function buildSession(overrides: Record<string, unknown> = {}) {
     ],
     overlayCaption: {
       placement: "center",
+    },
+    voicePreset: "male_calm",
+    voicePacePreset: "normal",
+    voiceSync: {
+      state: "current",
+      staleScope: "none",
+      staleBeatIndices: [],
+      totalDurationSec: 24,
+      currentFingerprint: "sync-session-1",
+      nextEstimatedChargeSec: 0,
+      cached: false,
     },
     billingEstimate: {
       estimatedSec: 12,

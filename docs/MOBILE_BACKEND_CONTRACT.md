@@ -4,7 +4,7 @@
 - Owner repo: mobile
 - Source of truth for: mobile-side pointer to backend-owned contract docs and local alignment rules for this repo
 - Canonical counterpart/source: backend repo `docs/FINAL_PAID_BETA_LAUNCH_PLAN.md`, backend repo `docs/MOBILE_BACKEND_CONTRACT.md`, backend repo `docs/MOBILE_HARDENING_PLAN.md`, backend repo `docs/LEGACY_WEB_SURFACES.md`
-- Last verified against: both repos on 2026-04-04
+- Last verified against: both repos on 2026-04-11
 
 This file is not a second canonical contract document. The backend repo owns backend/mobile contract truth, and this file should stay a pointer/alignment note rather than rebuilding endpoint tables here.
 
@@ -36,7 +36,9 @@ If backend route behavior changes, update the backend canonical docs first. Upda
 - Active billing path used by mobile is GET /api/usage.
 - Current mobile readers are AuthContext bootstrap + refreshUsage(), surfaced by SettingsScreen and post-render refresh in StoryEditorScreen.
 - Current billing fields read by mobile are `data.usage.availableSec` and session `billingEstimate.estimatedSec`.
-- StoryEditorScreen reads the current backend-owned session `billingEstimate.estimatedSec` when presenting render confirmation and does not call any separate estimate-refresh route before render.
+- StoryEditorScreen now also uses `POST /api/story/sync` as the explicit speech/timing commit point and reads `voiceSync`, `voicePreset`, `voicePacePreset`, `voiceOptions`, and synced `captions` from `GET /api/story/:sessionId`.
+- Render is now blocked client-side unless sync is current and there is no local unsynced voice draft.
+- StoryEditorScreen reads the current backend-owned session `billingEstimate.estimatedSec` as the render charge only after sync is current; sync charge estimation lives under `voiceSync.nextEstimatedChargeSec`.
 - Current `/api/users/ensure` profile shape used by mobile is `{ uid, email, plan, freeShortsUsed }`.
 - Do not reintroduce GET /credits, backend aliases, or a global /api base-URL convention in this repo.
 - Auth bootstrap remains ensureUser()-driven in this repo, but app readiness now also depends on the canonical usage fetch.

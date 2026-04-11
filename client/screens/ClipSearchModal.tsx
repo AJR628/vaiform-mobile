@@ -31,6 +31,14 @@ interface Clip {
   provider: string;
 }
 
+interface ClipSearchResult {
+  shot?: {
+    candidates?: Clip[];
+  };
+  page?: number;
+  hasMore?: boolean;
+}
+
 export default function ClipSearchModal() {
   const route = useRoute<ClipSearchRouteProp>();
   const navigation = useNavigation();
@@ -63,7 +71,7 @@ export default function ClipSearchModal() {
         return;
       }
 
-      const unwrapped = unwrapNormalized(res);
+      const unwrapped = unwrapNormalized<ClipSearchResult>(res);
       const shot = unwrapped?.shot;
       const foundCandidates = shot?.candidates || [];
       const pageNum = unwrapped?.page || 1;

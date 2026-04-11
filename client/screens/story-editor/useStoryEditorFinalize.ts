@@ -45,6 +45,7 @@ interface UseStoryEditorFinalizeOptions {
   estimatedSec: number | null;
   navigation: StoryEditorNavProp;
   refreshUsage: () => Promise<void>;
+  renderBlockedMessage?: string | null;
   session: StorySession | null;
   sessionId: string;
   setSession: (session: StorySession | null) => void;
@@ -78,6 +79,7 @@ export function useStoryEditorFinalize({
   estimatedSec,
   navigation,
   refreshUsage,
+  renderBlockedMessage,
   session,
   sessionId,
   setSession,
@@ -414,8 +416,7 @@ export function useStoryEditorFinalize({
             result.code === "NETWORK_ERROR" ||
             result.code === "IDEMPOTENT_IN_PROGRESS" ||
             result.code === "FINALIZE_ALREADY_ACTIVE" ||
-            result.status === 0 ||
-            result.status === 409
+            result.status === 0
           ) {
             await persistActiveRenderAttempt(recoveryAttemptId);
             const recoveryResult = await recoverRenderAttempt(recoveryAttemptId, {
@@ -441,6 +442,10 @@ export function useStoryEditorFinalize({
                 availableSec
               )
             );
+          } else if (result.code === "VOICE_SYNC_REQUIRED") {
+            showError("Sync voice and timing before render.");
+          } else if (result.code === "VOICE_SYNC_STALE") {
+            showError("Voice timing is stale. Re-sync before render.");
           } else if (result.code === "NOT_FOUND" || result.status === 404) {
             showError("Session not found. Please start a new video.");
             navigation.goBack();
@@ -541,6 +546,10 @@ export function useStoryEditorFinalize({
   );
 
   const handleRender = useCallback(async () => {
+    if (renderBlockedMessage) {
+      showError(renderBlockedMessage);
+      return;
+    }
     if (!usageLoaded) {
       showError("Render time is still loading. Please wait a moment and try again.");
       return;
@@ -557,7 +566,7 @@ export function useStoryEditorFinalize({
       { text: "Cancel", style: "cancel" },
       { text: "Render", onPress: () => void doRender(estimatedSec) },
     ]);
-  }, [availableSec, doRender, estimatedSec, showError, usageLoaded]);
+  }, [availableSec, doRender, estimatedSec, renderBlockedMessage, showError, usageLoaded]);
 
   return {
     handleRender,

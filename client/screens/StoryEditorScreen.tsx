@@ -33,10 +33,16 @@ import { useTheme } from "@/hooks/useTheme";
 import { HomeStackParamList } from "@/navigation/HomeStackNavigator";
 import { getEstimatedUsageSec } from "@/lib/renderUsage";
 
-import { getSelectedShot } from "@/screens/story-editor/model";
+import {
+  CAPTION_PLACEMENTS,
+  getSelectedShot,
+  getVoiceSyncBlockedMessage,
+} from "@/screens/story-editor/model";
 import { useStoryEditorCaptionPlacement } from "@/screens/story-editor/useStoryEditorCaptionPlacement";
 import { useStoryEditorFinalize } from "@/screens/story-editor/useStoryEditorFinalize";
 import { useStoryEditorSession } from "@/screens/story-editor/useStoryEditorSession";
+import { useStoryVoiceSync } from "@/screens/story-editor/useStoryVoiceSync";
+import { VoiceSyncPanel } from "@/components/story-editor/VoiceSyncPanel";
 
 type StoryEditorRouteProp = RouteProp<HomeStackParamList, "StoryEditor">;
 type StoryEditorNavProp = NativeStackNavigationProp<HomeStackParamList, "StoryEditor">;
@@ -58,6 +64,7 @@ export default function StoryEditorScreen() {
   const [editorCollapsed, setEditorCollapsed] = useState(false);
   const [deckAreaH, setDeckAreaH] = useState(0);
   const [draftText, setDraftText] = useState("");
+  const [showVoiceSyncModal, setShowVoiceSyncModal] = useState(false);
 
   const textInputRef = useRef<TextInput>(null);
   const deckListRef = useRef<any>(null);
@@ -92,6 +99,11 @@ export default function StoryEditorScreen() {
           beats.find((beat) => beat.sentenceIndex === selectedSentenceIndex)?.text ??
           "")
       : "";
+  const serverPlacement = CAPTION_PLACEMENTS.includes(
+    session?.overlayCaption?.placement as (typeof CAPTION_PLACEMENTS)[number]
+  )
+    ? (session?.overlayCaption?.placement as (typeof CAPTION_PLACEMENTS)[number])
+    : undefined;
 
   const {
     captionPlacement,
@@ -104,13 +116,43 @@ export default function StoryEditorScreen() {
     canPrefetch: () => !isEditingRef.current && !keyboardVisibleRef.current,
     committedText,
     selectedSentenceIndex,
-    serverPlacement: session?.overlayCaption?.placement,
+    serverPlacement,
     sessionId,
     showError,
   });
 
   const estimatedSec = getEstimatedUsageSec(session);
   const canAttemptRender = Boolean(usageSnapshot);
+  const {
+    currentPreviewCaption,
+    draftVoicePreset,
+    hasLocalVoiceDraft,
+    isPreviewAvailable,
+    isPreviewPlaying,
+    isSyncing,
+    previewDurationSec,
+    previewPositionSec,
+    previewSentenceIndex,
+    renderEstimateSec,
+    setDraftVoicePreset,
+    stopPreview,
+    syncEstimateSec,
+    togglePreviewPlayback,
+    voiceOptions,
+    voiceSync,
+    handleSyncVoice,
+  } = useStoryVoiceSync({
+    refreshUsage,
+    session,
+    sessionId,
+    setSession,
+    showError,
+    showSuccess,
+    showWarning,
+  });
+  const renderBlockedMessage =
+    (isSyncing ? "Voice sync is still running. Please wait for it to finish." : null) ??
+    getVoiceSyncBlockedMessage(session, hasLocalVoiceDraft);
   const {
     handleRender,
     isRendering,
@@ -122,6 +164,7 @@ export default function StoryEditorScreen() {
     estimatedSec,
     navigation,
     refreshUsage,
+    renderBlockedMessage,
     session,
     sessionId,
     setSession,
@@ -131,6 +174,7 @@ export default function StoryEditorScreen() {
     usageLoaded: Boolean(usageSnapshot),
     userId: user?.uid,
   });
+  const activeDeckSentenceIndex = previewSentenceIndex ?? selectedSentenceIndex;
 
   const scrollX = useSharedValue(0);
   const onDeckScroll = useAnimatedScrollHandler({
@@ -174,6 +218,7 @@ export default function StoryEditorScreen() {
   }, [beatTexts, beats, selectedSentenceIndex, sessionId]);
 
   useEffect(() => {
+    if (previewSentenceIndex !== null) return;
     if (selectionFromDeckRef.current) {
       selectionFromDeckRef.current = false;
       return;
@@ -183,7 +228,15 @@ export default function StoryEditorScreen() {
     const index = beats.findIndex((beat) => beat.sentenceIndex === selectedSentenceIndex);
     if (index < 0) return;
     deckListRef.current?.scrollToOffset({ offset: index * cardStep, animated: true });
-  }, [beats, cardStep, selectedSentenceIndex]);
+  }, [beats, cardStep, previewSentenceIndex, selectedSentenceIndex]);
+
+  useEffect(() => {
+    if (previewSentenceIndex === null || beats.length === 0) return;
+    if (keyboardVisibleRef.current) return;
+    const index = beats.findIndex((beat) => beat.sentenceIndex === previewSentenceIndex);
+    if (index < 0) return;
+    deckListRef.current?.scrollToOffset({ offset: index * cardStep, animated: true });
+  }, [beats, cardStep, previewSentenceIndex]);
 
   useEffect(() => {
     const showEvent = Platform.OS === "ios" ? "keyboardDidShow" : "keyboardDidShow";
@@ -232,10 +285,11 @@ export default function StoryEditorScreen() {
 
   const handleVisibleBeatChange = useCallback(
     (sentenceIndex: number) => {
+      if (previewSentenceIndex !== null) return;
       selectionFromDeckRef.current = true;
       setSelectedSentenceIndex(sentenceIndex);
     },
-    [setSelectedSentenceIndex]
+    [previewSentenceIndex, setSelectedSentenceIndex]
   );
 
   const handleReplaceClip = useCallback(
@@ -280,6 +334,16 @@ export default function StoryEditorScreen() {
     setEditorCollapsed((prev) => !prev);
   }, [keyboardVisible]);
 
+  const openVoiceSyncModal = useCallback(() => {
+    Keyboard.dismiss();
+    setShowVoiceSyncModal(true);
+  }, []);
+
+  const closeVoiceSyncModal = useCallback(() => {
+    setShowVoiceSyncModal(false);
+    void stopPreview();
+  }, [stopPreview]);
+
   useLayoutEffect(() => {
     navigation.setOptions({
       headerRight: () => null,
@@ -291,8 +355,14 @@ export default function StoryEditorScreen() {
           onCreatePress={() => navigation.popToTop()}
           onScriptPress={() => navigation.replace("Script", { sessionId })}
           onRenderPress={handleRender}
-          onSpeechPress={() => showWarning("Coming soon.")}
-          renderDisabled={!canAttemptRender || isRendering || keyboardVisible}
+          onSpeechPress={openVoiceSyncModal}
+          renderDisabled={
+            !canAttemptRender ||
+            isRendering ||
+            isSyncing ||
+            keyboardVisible ||
+            Boolean(renderBlockedMessage)
+          }
         />
       ),
     });
@@ -300,10 +370,12 @@ export default function StoryEditorScreen() {
     canAttemptRender,
     handleRender,
     isRendering,
+    isSyncing,
     keyboardVisible,
     navigation,
+    openVoiceSyncModal,
+    renderBlockedMessage,
     sessionId,
-    showWarning,
   ]);
 
   if (isLoading) {
@@ -351,7 +423,7 @@ export default function StoryEditorScreen() {
         onVisibleBeatChange={handleVisibleBeatChange}
         previewByIndex={previewByIndex}
         scrollX={scrollX}
-        selectedSentenceIndex={selectedSentenceIndex}
+        selectedSentenceIndex={activeDeckSentenceIndex}
         session={session}
         theme={theme}
         windowWidth={windowWidth}
@@ -408,6 +480,48 @@ export default function StoryEditorScreen() {
             >
               {renderingModalSubtext}
             </ThemedText>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal
+        visible={showVoiceSyncModal}
+        transparent
+        animationType="slide"
+        onRequestClose={closeVoiceSyncModal}
+      >
+        <View style={styles.voiceSyncModalOverlay}>
+          <View style={styles.voiceSyncModalSheet}>
+            <VoiceSyncPanel
+              currentCaptionText={currentPreviewCaption?.text ?? null}
+              currentPreviewBeatLabel={
+                previewSentenceIndex !== null ? `Beat ${previewSentenceIndex + 1}` : null
+              }
+              draftVoicePreset={draftVoicePreset}
+              hasLocalVoiceDraft={hasLocalVoiceDraft}
+              isPreviewAvailable={isPreviewAvailable}
+              isPreviewPlaying={isPreviewPlaying}
+              isSyncing={isSyncing}
+              onClose={closeVoiceSyncModal}
+              onSelectVoice={setDraftVoicePreset}
+              onSync={() => void handleSyncVoice()}
+              onTogglePreview={() => void togglePreviewPlayback()}
+              previewDurationSec={previewDurationSec}
+              previewPositionSec={previewPositionSec}
+              renderEstimateSec={renderEstimateSec}
+              syncEstimateSec={syncEstimateSec}
+              theme={{
+                backgroundDefault: theme.backgroundDefault,
+                backgroundSecondary: theme.backgroundSecondary,
+                border: theme.backgroundTertiary,
+                buttonText: theme.buttonText,
+                link: theme.link,
+                tabIconDefault: theme.tabIconDefault,
+                text: theme.text,
+              }}
+              voiceOptions={voiceOptions}
+              voiceSync={voiceSync}
+            />
           </View>
         </View>
       </Modal>
@@ -474,5 +588,14 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: "600",
     textAlign: "center",
+  },
+  voiceSyncModalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.45)",
+    justifyContent: "flex-end",
+    padding: Spacing.lg,
+  },
+  voiceSyncModalSheet: {
+    width: "100%",
   },
 });

@@ -12,6 +12,9 @@ import type { StorySession } from "@/types/story";
 
 import { extractBeats, type Beat, unwrapSession } from "./model";
 
+const MAX_BEAT_CHARS = 160;
+const MAX_TOTAL_CHARS = 850;
+
 interface UseStoryEditorSessionOptions {
   sessionId: string;
   showError: (message: string) => void;
@@ -141,9 +144,22 @@ export function useStoryEditorSession({
         showError("Beat text cannot be empty");
         return;
       }
+      if (draft.length > MAX_BEAT_CHARS) {
+        showError(`Beat text must stay under ${MAX_BEAT_CHARS} characters.`);
+        return;
+      }
 
       const beat = beats.find((item) => item.sentenceIndex === sentenceIndex);
       const committed = beatTexts[sentenceIndex] ?? beat?.text?.trim() ?? "";
+      const nextSentences = beats
+        .slice()
+        .sort((left, right) => left.sentenceIndex - right.sentenceIndex)
+        .map((item) => (item.sentenceIndex === sentenceIndex ? draft : item.text));
+      const nextTotalChars = nextSentences.join("").length;
+      if (nextTotalChars > MAX_TOTAL_CHARS) {
+        showError(`Story must stay under ${MAX_TOTAL_CHARS} total characters.`);
+        return;
+      }
       if (draft === committed) {
         savingRef.current = sentenceIndex;
         Keyboard.dismiss();
@@ -240,6 +256,7 @@ export function useStoryEditorSession({
     savingByIndex,
     selectedSentenceIndex,
     session,
+    loadSession,
     setSelectedSentenceIndex,
     setSession,
   };
