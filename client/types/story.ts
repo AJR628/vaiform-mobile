@@ -47,6 +47,25 @@ export interface StoryCaption {
   endTimeSec: number;
 }
 
+export interface StoryPlaybackTimelineSegmentV1 {
+  segmentIndex: number;
+  sentenceIndex: number;
+  ownerSentenceIndex: number;
+  clipUrl: string;
+  clipThumbUrl?: string | null;
+  globalStartSec: number;
+  globalEndSec: number;
+  clipStartSec: number;
+  durationSec: number;
+}
+
+export interface StoryPlaybackTimelineV1 {
+  version: 1;
+  source: "classic" | "manual" | "auto";
+  totalDurationSec: number;
+  segments: StoryPlaybackTimelineSegmentV1[];
+}
+
 export interface StoryCaptionMeta {
   lines: string[];
   effectiveStyle?: Record<string, unknown>;
@@ -165,6 +184,7 @@ export interface StorySession {
   voicePacePreset?: string;
   voiceOptions?: StoryVoiceOption[];
   voiceSync?: StoryVoiceSync;
+  playbackTimelineV1?: StoryPlaybackTimelineV1 | null;
   billingEstimate?: StoryBillingEstimate;
   billing?: StoryBilling;
   renderRecovery?: StoryRenderRecovery | null;
