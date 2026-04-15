@@ -66,6 +66,13 @@ export interface StoryPlaybackTimelineV1 {
   segments: StoryPlaybackTimelineSegmentV1[];
 }
 
+export interface StoryPreviewReadinessV1 {
+  version: 1;
+  ready: boolean;
+  reasonCode?: string | null;
+  missingBeatIndices?: number[];
+}
+
 export interface StoryCaptionMeta {
   lines: string[];
   effectiveStyle?: Record<string, unknown>;
@@ -185,6 +192,7 @@ export interface StorySession {
   voiceOptions?: StoryVoiceOption[];
   voiceSync?: StoryVoiceSync;
   playbackTimelineV1?: StoryPlaybackTimelineV1 | null;
+  previewReadinessV1?: StoryPreviewReadinessV1 | null;
   billingEstimate?: StoryBillingEstimate;
   billing?: StoryBilling;
   renderRecovery?: StoryRenderRecovery | null;
