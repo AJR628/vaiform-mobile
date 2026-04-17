@@ -2,9 +2,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Audio, type AVPlaybackStatus } from "expo-av";
 import * as Crypto from "expo-crypto";
 
-import { storySync } from "@/api/client";
+import { storyGet, storySync } from "@/api/client";
 import { formatRenderTimeAmount } from "@/lib/renderUsage";
-import type { StoryCaption, StorySession, StoryVoiceOption } from "@/types/story";
+import type { StorySession, StoryVoiceOption } from "@/types/story";
 
 import { getVoiceSync, hasUnsyncedVoiceDraft } from "./model";
 
@@ -19,7 +19,9 @@ interface UseStoryVoiceSyncOptions {
 }
 
 function formatUuidFromBytes(bytes: Uint8Array): string {
-  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+  const hex = Array.from(bytes, (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
   return [
     hex.slice(0, 8),
     hex.slice(8, 12),
@@ -36,18 +38,8 @@ async function createSyncIdempotencyKey(): Promise<string> {
   return formatUuidFromBytes(bytes);
 }
 
-function findCaptionAtSecond(captions: StoryCaption[] | undefined, positionSec: number): StoryCaption | null {
-  if (!Array.isArray(captions) || captions.length === 0) return null;
-  return (
-    captions.find(
-      (caption) =>
-        positionSec >= Number(caption.startTimeSec ?? 0) &&
-        positionSec < Number(caption.endTimeSec ?? Number.MAX_SAFE_INTEGER),
-    ) ||
-    captions[captions.length - 1] ||
-    null
-  );
-}
+const SYNC_POLL_DELAY_MS = 3000;
+const SYNC_POLL_MAX_ATTEMPTS = 40;
 
 export function useStoryVoiceSync({
   refreshUsage,
@@ -61,16 +53,20 @@ export function useStoryVoiceSync({
   const persistedVoicePreset = session?.voicePreset ?? "";
   const persistedVoicePacePreset = session?.voicePacePreset ?? "normal";
 
-  const [draftVoicePreset, setDraftVoicePreset] = useState(persistedVoicePreset);
+  const [draftVoicePreset, setDraftVoicePreset] =
+    useState(persistedVoicePreset);
   const [draftVoicePacePreset] = useState<"normal">("normal");
   const [isSyncing, setIsSyncing] = useState(false);
   const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
   const [previewPositionSec, setPreviewPositionSec] = useState(0);
-  const [previewDurationSec, setPreviewDurationSec] = useState<number | null>(null);
+  const [previewDurationSec, setPreviewDurationSec] = useState<number | null>(
+    null,
+  );
 
   const soundRef = useRef<Audio.Sound | null>(null);
   const lastPersistedVoicePresetRef = useRef(persistedVoicePreset);
   const lastPersistedVoicePacePresetRef = useRef(persistedVoicePacePreset);
+  const syncRunIdRef = useRef(0);
 
   useEffect(() => {
     const persistedChanged =
@@ -90,18 +86,13 @@ export function useStoryVoiceSync({
   );
   const voiceSync = useMemo(() => getVoiceSync(session), [session]);
   const hasLocalVoiceDraft = useMemo(
-    () => hasUnsyncedVoiceDraft(session, draftVoicePreset, draftVoicePacePreset),
+    () =>
+      hasUnsyncedVoiceDraft(session, draftVoicePreset, draftVoicePacePreset),
     [draftVoicePacePreset, draftVoicePreset, session],
   );
   const syncEstimateSec = voiceSync?.nextEstimatedChargeSec ?? null;
   const renderEstimateSec = session?.billingEstimate?.estimatedSec ?? null;
   const previewAudioUrl = voiceSync?.previewAudioUrl ?? null;
-
-  const currentPreviewCaption = useMemo(
-    () => findCaptionAtSecond(session?.captions, previewPositionSec),
-    [previewPositionSec, session?.captions],
-  );
-  const previewSentenceIndex = currentPreviewCaption?.sentenceIndex ?? null;
 
   const resetPreviewState = useCallback(() => {
     setIsPreviewPlaying(false);
@@ -127,6 +118,7 @@ export function useStoryVoiceSync({
 
   useEffect(() => {
     return () => {
+      syncRunIdRef.current += 1;
       void unloadPreview();
     };
   }, [unloadPreview]);
@@ -197,7 +189,13 @@ export function useStoryVoiceSync({
       showError("Failed to play narration preview.");
       await unloadPreview();
     }
-  }, [handlePlaybackStatus, previewAudioUrl, showError, showWarning, unloadPreview]);
+  }, [
+    handlePlaybackStatus,
+    previewAudioUrl,
+    showError,
+    showWarning,
+    unloadPreview,
+  ]);
 
   const handleSyncVoice = useCallback(async () => {
     if (isSyncing) return;
@@ -206,11 +204,46 @@ export function useStoryVoiceSync({
       return;
     }
 
+    syncRunIdRef.current += 1;
+    const syncRunId = syncRunIdRef.current;
+
+    const pollForCanonicalSync = async (
+      pollSessionId: string,
+    ): Promise<StorySession | null> => {
+      for (let attempt = 0; attempt < SYNC_POLL_MAX_ATTEMPTS; attempt += 1) {
+        if (syncRunIdRef.current !== syncRunId) {
+          return null;
+        }
+
+        const res = await storyGet(pollSessionId);
+        if (syncRunIdRef.current !== syncRunId) {
+          return null;
+        }
+
+        if (res.ok && res.data) {
+          setSession(res.data);
+          if (getVoiceSync(res.data)?.state === "current") {
+            return res.data;
+          }
+        }
+
+        if (attempt < SYNC_POLL_MAX_ATTEMPTS - 1) {
+          await new Promise((resolve) =>
+            setTimeout(resolve, SYNC_POLL_DELAY_MS),
+          );
+        }
+      }
+
+      return null;
+    };
+
     setIsSyncing(true);
     try {
       const idempotencyKey = await createSyncIdempotencyKey();
       const mode =
-        hasLocalVoiceDraft || voiceSync?.state === "never_synced" || voiceSync?.staleScope === "full"
+        hasLocalVoiceDraft ||
+        voiceSync?.state === "never_synced" ||
+        voiceSync?.staleScope === "full"
           ? "full"
           : "stale";
       const result = await storySync(
@@ -223,13 +256,42 @@ export function useStoryVoiceSync({
         { idempotencyKey },
       );
 
-      if (!result.ok) {
+      const syncErrorCode = !result.ok ? result.code : null;
+      const shouldRecoverViaCanonicalPoll =
+        (result.ok &&
+          result.status === 202 &&
+          result.sync?.state === "pending") ||
+        syncErrorCode === "STORY_SYNC_ALREADY_ACTIVE" ||
+        syncErrorCode === "TIMEOUT" ||
+        syncErrorCode === "NETWORK_ERROR";
+
+      if (!result.ok && !shouldRecoverViaCanonicalPoll) {
         showError(result.message || "Failed to sync voice and timing.");
         return;
       }
 
-      if (result.data) {
+      if (result.ok && result.data) {
         setSession(result.data);
+      }
+
+      let resolvedSession = result.ok ? (result.data ?? null) : null;
+      if (
+        shouldRecoverViaCanonicalPoll ||
+        (resolvedSession && getVoiceSync(resolvedSession)?.state !== "current")
+      ) {
+        const polledSession = await pollForCanonicalSync(
+          result.sync?.pollSessionId ?? sessionId,
+        );
+        if (polledSession) {
+          resolvedSession = polledSession;
+        } else if (syncRunIdRef.current === syncRunId) {
+          showWarning(
+            "Voice sync is still processing. Check back in a moment and retry if needed.",
+          );
+          return;
+        } else {
+          return;
+        }
       }
 
       try {
@@ -238,8 +300,9 @@ export function useStoryVoiceSync({
         console.warn("[story] Failed to refresh usage after sync:", error);
       }
 
-      const billedSec = result.data?.voiceSync?.lastChargeSec ?? 0;
-      const cached = result.data?.voiceSync?.cached === true || billedSec <= 0;
+      const billedSec = resolvedSession?.voiceSync?.lastChargeSec ?? 0;
+      const cached =
+        resolvedSession?.voiceSync?.cached === true || billedSec <= 0;
       showSuccess(
         cached
           ? "Voice sync is already current."
@@ -261,12 +324,12 @@ export function useStoryVoiceSync({
     setSession,
     showError,
     showSuccess,
+    showWarning,
     voiceSync?.staleScope,
     voiceSync?.state,
   ]);
 
   return {
-    currentPreviewCaption,
     draftVoicePacePreset,
     draftVoicePreset,
     hasLocalVoiceDraft,
@@ -275,7 +338,6 @@ export function useStoryVoiceSync({
     isSyncing,
     previewDurationSec,
     previewPositionSec,
-    previewSentenceIndex,
     renderEstimateSec,
     setDraftVoicePreset,
     stopPreview: unloadPreview,

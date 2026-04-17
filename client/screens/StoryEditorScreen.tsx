@@ -1,4 +1,10 @@
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   ActivityIndicator,
   Keyboard,
@@ -41,11 +47,14 @@ import {
 import { useStoryEditorCaptionPlacement } from "@/screens/story-editor/useStoryEditorCaptionPlacement";
 import { useStoryEditorFinalize } from "@/screens/story-editor/useStoryEditorFinalize";
 import { useStoryEditorSession } from "@/screens/story-editor/useStoryEditorSession";
-import { useStoryVoiceSync } from "@/screens/story-editor/useStoryVoiceSync";
+import { useStep3SessionModel } from "@/screens/story-editor/useStep3SessionModel";
 import { VoiceSyncPanel } from "@/components/story-editor/VoiceSyncPanel";
 
 type StoryEditorRouteProp = RouteProp<HomeStackParamList, "StoryEditor">;
-type StoryEditorNavProp = NativeStackNavigationProp<HomeStackParamList, "StoryEditor">;
+type StoryEditorNavProp = NativeStackNavigationProp<
+  HomeStackParamList,
+  "StoryEditor"
+>;
 
 const ACTIVE_SCALE = 1.16;
 
@@ -59,7 +68,9 @@ export default function StoryEditorScreen() {
   const availableSec = usageSnapshot?.usage?.availableSec ?? 0;
   const tabBarHeight = useBottomTabBarHeight();
 
-  const [showBeatActionsForIndex, setShowBeatActionsForIndex] = useState<number | null>(null);
+  const [showBeatActionsForIndex, setShowBeatActionsForIndex] = useState<
+    number | null
+  >(null);
   const [keyboardVisible, setKeyboardVisible] = useState(false);
   const [editorCollapsed, setEditorCollapsed] = useState(false);
   const [deckAreaH, setDeckAreaH] = useState(0);
@@ -96,13 +107,15 @@ export default function StoryEditorScreen() {
   const committedText =
     selectedSentenceIndex !== null
       ? (beatTexts[selectedSentenceIndex] ??
-          beats.find((beat) => beat.sentenceIndex === selectedSentenceIndex)?.text ??
-          "")
+        beats.find((beat) => beat.sentenceIndex === selectedSentenceIndex)
+          ?.text ??
+        "")
       : "";
   const serverPlacement = CAPTION_PLACEMENTS.includes(
-    session?.overlayCaption?.placement as (typeof CAPTION_PLACEMENTS)[number]
+    session?.overlayCaption?.placement as (typeof CAPTION_PLACEMENTS)[number],
   )
-    ? (session?.overlayCaption?.placement as (typeof CAPTION_PLACEMENTS)[number])
+    ? (session?.overlayCaption
+        ?.placement as (typeof CAPTION_PLACEMENTS)[number])
     : undefined;
 
   const {
@@ -141,7 +154,7 @@ export default function StoryEditorScreen() {
     voiceOptions,
     voiceSync,
     handleSyncVoice,
-  } = useStoryVoiceSync({
+  } = useStep3SessionModel({
     refreshUsage,
     session,
     sessionId,
@@ -151,8 +164,9 @@ export default function StoryEditorScreen() {
     showWarning,
   });
   const renderBlockedMessage =
-    (isSyncing ? "Voice sync is still running. Please wait for it to finish." : null) ??
-    getVoiceSyncBlockedMessage(session, hasLocalVoiceDraft);
+    (isSyncing
+      ? "Voice sync is still running. Please wait for it to finish."
+      : null) ?? getVoiceSyncBlockedMessage(session, hasLocalVoiceDraft);
   const {
     handleRender,
     isRendering,
@@ -211,7 +225,8 @@ export default function StoryEditorScreen() {
 
     const committed =
       beatTexts[selectedSentenceIndex] ??
-      beats.find((beat) => beat.sentenceIndex === selectedSentenceIndex)?.text ??
+      beats.find((beat) => beat.sentenceIndex === selectedSentenceIndex)
+        ?.text ??
       "";
 
     setDraftText(committed);
@@ -225,22 +240,34 @@ export default function StoryEditorScreen() {
     }
     if (selectedSentenceIndex === null || beats.length === 0) return;
 
-    const index = beats.findIndex((beat) => beat.sentenceIndex === selectedSentenceIndex);
+    const index = beats.findIndex(
+      (beat) => beat.sentenceIndex === selectedSentenceIndex,
+    );
     if (index < 0) return;
-    deckListRef.current?.scrollToOffset({ offset: index * cardStep, animated: true });
+    deckListRef.current?.scrollToOffset({
+      offset: index * cardStep,
+      animated: true,
+    });
   }, [beats, cardStep, previewSentenceIndex, selectedSentenceIndex]);
 
   useEffect(() => {
     if (previewSentenceIndex === null || beats.length === 0) return;
     if (keyboardVisibleRef.current) return;
-    const index = beats.findIndex((beat) => beat.sentenceIndex === previewSentenceIndex);
+    const index = beats.findIndex(
+      (beat) => beat.sentenceIndex === previewSentenceIndex,
+    );
     if (index < 0) return;
-    deckListRef.current?.scrollToOffset({ offset: index * cardStep, animated: true });
+    deckListRef.current?.scrollToOffset({
+      offset: index * cardStep,
+      animated: true,
+    });
   }, [beats, cardStep, previewSentenceIndex]);
 
   useEffect(() => {
-    const showEvent = Platform.OS === "ios" ? "keyboardDidShow" : "keyboardDidShow";
-    const hideEvent = Platform.OS === "ios" ? "keyboardDidHide" : "keyboardDidHide";
+    const showEvent =
+      Platform.OS === "ios" ? "keyboardDidShow" : "keyboardDidShow";
+    const hideEvent =
+      Platform.OS === "ios" ? "keyboardDidHide" : "keyboardDidHide";
 
     const showSubscription = Keyboard.addListener(showEvent, (event) => {
       const height = event.endCoordinates?.height ?? 0;
@@ -249,7 +276,8 @@ export default function StoryEditorScreen() {
       setKeyboardVisible(true);
       const reservedBelowEditor = renderAreaHRef.current || 0;
       const shiftUp = Math.max(0, height - reservedBelowEditor);
-      if (__DEV__) console.log("[beat] dock", { height, reservedBelowEditor, shiftUp });
+      if (__DEV__)
+        console.log("[beat] dock", { height, reservedBelowEditor, shiftUp });
       editorTranslateY.setValue(-shiftUp);
     });
 
@@ -269,7 +297,9 @@ export default function StoryEditorScreen() {
   const handleDeckCardPress = useCallback(
     (sentenceIndex: number) => {
       if (keyboardVisibleRef.current || keyboardVisible) return;
-      const index = beats.findIndex((beat) => beat.sentenceIndex === sentenceIndex);
+      const index = beats.findIndex(
+        (beat) => beat.sentenceIndex === sentenceIndex,
+      );
       if (index < 0) return;
 
       Haptics.selectionAsync().catch(() => {});
@@ -280,7 +310,7 @@ export default function StoryEditorScreen() {
       });
       setSelectedSentenceIndex(sentenceIndex);
     },
-    [beats, cardStep, keyboardVisible, setSelectedSentenceIndex]
+    [beats, cardStep, keyboardVisible, setSelectedSentenceIndex],
   );
 
   const handleVisibleBeatChange = useCallback(
@@ -289,7 +319,7 @@ export default function StoryEditorScreen() {
       selectionFromDeckRef.current = true;
       setSelectedSentenceIndex(sentenceIndex);
     },
-    [previewSentenceIndex, setSelectedSentenceIndex]
+    [previewSentenceIndex, setSelectedSentenceIndex],
   );
 
   const handleReplaceClip = useCallback(
@@ -303,7 +333,7 @@ export default function StoryEditorScreen() {
         initialQuery: shot?.searchQuery ?? "",
       });
     },
-    [markShouldRefresh, navigation, session, sessionId]
+    [markShouldRefresh, navigation, session, sessionId],
   );
 
   const handleDeleteBeatFromModal = useCallback(
@@ -313,7 +343,7 @@ export default function StoryEditorScreen() {
         onDeleted: resetPlacementPreviews,
       });
     },
-    [handleDeleteBeat, resetPlacementPreviews]
+    [handleDeleteBeat, resetPlacementPreviews],
   );
 
   const handleSaveSelectedBeat = useCallback(
@@ -326,7 +356,7 @@ export default function StoryEditorScreen() {
         },
       });
     },
-    [handleSaveBeat, selectedSentenceIndex]
+    [handleSaveBeat, selectedSentenceIndex],
   );
 
   const toggleEditorCollapsed = useCallback(() => {
@@ -383,7 +413,9 @@ export default function StoryEditorScreen() {
       <ThemedView style={styles.container}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={theme.link} />
-          <ThemedText style={styles.loadingText}>Loading storyboard...</ThemedText>
+          <ThemedText style={styles.loadingText}>
+            Loading storyboard...
+          </ThemedText>
         </View>
       </ThemedView>
     );
@@ -393,7 +425,9 @@ export default function StoryEditorScreen() {
     return (
       <ThemedView style={styles.container}>
         <View style={styles.emptyContainer}>
-          <ThemedText style={styles.emptyText}>No beats found in this storyboard.</ThemedText>
+          <ThemedText style={styles.emptyText}>
+            No beats found in this storyboard.
+          </ThemedText>
         </View>
       </ThemedView>
     );
@@ -401,10 +435,13 @@ export default function StoryEditorScreen() {
 
   const selectedBeat =
     selectedSentenceIndex !== null
-      ? beats.find((beat) => beat.sentenceIndex === selectedSentenceIndex) ?? null
+      ? (beats.find((beat) => beat.sentenceIndex === selectedSentenceIndex) ??
+        null)
       : null;
   const isSaving =
-    selectedSentenceIndex !== null ? savingByIndex[selectedSentenceIndex] || false : false;
+    selectedSentenceIndex !== null
+      ? savingByIndex[selectedSentenceIndex] || false
+      : false;
 
   return (
     <ThemedView style={styles.container}>
@@ -471,12 +508,20 @@ export default function StoryEditorScreen() {
       >
         <View style={styles.renderingModalOverlay}>
           <View
-            style={[styles.renderingModalContent, { backgroundColor: theme.backgroundDefault }]}
+            style={[
+              styles.renderingModalContent,
+              { backgroundColor: theme.backgroundDefault },
+            ]}
           >
             <ActivityIndicator size="large" color={theme.link} />
-            <ThemedText style={styles.renderingModalTitle}>{renderingModalTitle}</ThemedText>
+            <ThemedText style={styles.renderingModalTitle}>
+              {renderingModalTitle}
+            </ThemedText>
             <ThemedText
-              style={[styles.renderingModalSubtext, { color: theme.tabIconDefault }]}
+              style={[
+                styles.renderingModalSubtext,
+                { color: theme.tabIconDefault },
+              ]}
             >
               {renderingModalSubtext}
             </ThemedText>
@@ -495,7 +540,9 @@ export default function StoryEditorScreen() {
             <VoiceSyncPanel
               currentCaptionText={currentPreviewCaption?.text ?? null}
               currentPreviewBeatLabel={
-                previewSentenceIndex !== null ? `Beat ${previewSentenceIndex + 1}` : null
+                previewSentenceIndex !== null
+                  ? `Beat ${previewSentenceIndex + 1}`
+                  : null
               }
               draftVoicePreset={draftVoicePreset}
               hasLocalVoiceDraft={hasLocalVoiceDraft}
