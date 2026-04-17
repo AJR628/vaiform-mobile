@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Audio, type AVPlaybackStatus } from "expo-av";
 import * as Crypto from "expo-crypto";
 
 import { storyGet, storySync } from "@/api/client";
@@ -57,13 +56,7 @@ export function useStoryVoiceSync({
     useState(persistedVoicePreset);
   const [draftVoicePacePreset] = useState<"normal">("normal");
   const [isSyncing, setIsSyncing] = useState(false);
-  const [isPreviewPlaying, setIsPreviewPlaying] = useState(false);
-  const [previewPositionSec, setPreviewPositionSec] = useState(0);
-  const [previewDurationSec, setPreviewDurationSec] = useState<number | null>(
-    null,
-  );
 
-  const soundRef = useRef<Audio.Sound | null>(null);
   const lastPersistedVoicePresetRef = useRef(persistedVoicePreset);
   const lastPersistedVoicePacePresetRef = useRef(persistedVoicePacePreset);
   const syncRunIdRef = useRef(0);
@@ -92,110 +85,12 @@ export function useStoryVoiceSync({
   );
   const syncEstimateSec = voiceSync?.nextEstimatedChargeSec ?? null;
   const renderEstimateSec = session?.billingEstimate?.estimatedSec ?? null;
-  const previewAudioUrl = voiceSync?.previewAudioUrl ?? null;
-
-  const resetPreviewState = useCallback(() => {
-    setIsPreviewPlaying(false);
-    setPreviewPositionSec(0);
-    setPreviewDurationSec(null);
-  }, []);
-
-  const unloadPreview = useCallback(async () => {
-    const sound = soundRef.current;
-    soundRef.current = null;
-    if (!sound) {
-      resetPreviewState();
-      return;
-    }
-    try {
-      await sound.unloadAsync();
-    } catch (error) {
-      console.warn("[story] preview unload failed:", error);
-    } finally {
-      resetPreviewState();
-    }
-  }, [resetPreviewState]);
 
   useEffect(() => {
     return () => {
       syncRunIdRef.current += 1;
-      void unloadPreview();
     };
-  }, [unloadPreview]);
-
-  useEffect(() => {
-    void unloadPreview();
-  }, [previewAudioUrl, unloadPreview]);
-
-  const handlePlaybackStatus = useCallback(
-    (status: AVPlaybackStatus) => {
-      if (!status.isLoaded) {
-        if ("error" in status && status.error) {
-          console.warn("[story] preview playback error:", status.error);
-        }
-        return;
-      }
-
-      setIsPreviewPlaying(status.isPlaying);
-      setPreviewPositionSec(status.positionMillis / 1000);
-      setPreviewDurationSec(
-        Number.isFinite(status.durationMillis ?? NaN)
-          ? (status.durationMillis ?? 0) / 1000
-          : null,
-      );
-
-      if (status.didJustFinish) {
-        void unloadPreview();
-      }
-    },
-    [unloadPreview],
-  );
-
-  const togglePreviewPlayback = useCallback(async () => {
-    if (!previewAudioUrl) {
-      showWarning("Sync voice and timing first to preview narration.");
-      return;
-    }
-
-    try {
-      if (!soundRef.current) {
-        await Audio.setAudioModeAsync({
-          playsInSilentModeIOS: true,
-          staysActiveInBackground: false,
-        });
-        const { sound } = await Audio.Sound.createAsync(
-          { uri: previewAudioUrl },
-          { shouldPlay: true, progressUpdateIntervalMillis: 200 },
-          handlePlaybackStatus,
-        );
-        soundRef.current = sound;
-        return;
-      }
-
-      const status = await soundRef.current.getStatusAsync();
-      if (!status.isLoaded) {
-        await unloadPreview();
-        return;
-      }
-
-      if (status.isPlaying) {
-        await soundRef.current.pauseAsync();
-        setIsPreviewPlaying(false);
-      } else {
-        await soundRef.current.playAsync();
-      }
-    } catch (error) {
-      console.error("[story] preview playback failed:", error);
-      showError("Failed to play narration preview.");
-      await unloadPreview();
-    }
-  }, [
-    handlePlaybackStatus,
-    previewAudioUrl,
-    showError,
-    showWarning,
-    unloadPreview,
-  ]);
+  }, []);
 
   const handleSyncVoice = useCallback(async () => {
     if (isSyncing) return;
@@ -333,16 +228,10 @@ export function useStoryVoiceSync({
     draftVoicePacePreset,
     draftVoicePreset,
     hasLocalVoiceDraft,
-    isPreviewAvailable: Boolean(previewAudioUrl),
-    isPreviewPlaying,
     isSyncing,
-    previewDurationSec,
-    previewPositionSec,
     renderEstimateSec,
     setDraftVoicePreset,
-    stopPreview: unloadPreview,
     syncEstimateSec,
-    togglePreviewPlayback,
     voiceOptions,
     voiceSync,
     handleSyncVoice,

@@ -36,10 +36,15 @@ interface VoiceSyncPanelProps {
   voiceSync: StoryVoiceSync | null;
 }
 
-function getStatusCopy(voiceSync: StoryVoiceSync | null, hasLocalVoiceDraft: boolean): string {
-  if (hasLocalVoiceDraft) return "Voice changed locally. Sync to commit timing.";
+function getStatusCopy(
+  voiceSync: StoryVoiceSync | null,
+  hasLocalVoiceDraft: boolean,
+): string {
+  if (hasLocalVoiceDraft)
+    return "Voice changed locally. Sync to commit timing.";
   const state = voiceSync?.state ?? "never_synced";
-  if (state === "current") return "Timing is current. Render will use these synced artifacts.";
+  if (state === "current")
+    return "Timing is current. Render will use these synced artifacts.";
   if (state === "stale") return "Timing is stale. Re-sync before render.";
   return "Voice and timing have not been synced yet.";
 }
@@ -73,53 +78,81 @@ export function VoiceSyncPanel({
   const lastChargeSec = voiceSync?.lastChargeSec ?? null;
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.backgroundDefault }]}>
-        <View style={styles.header}>
-          <View style={styles.headerCopy}>
+    <View
+      style={[styles.container, { backgroundColor: theme.backgroundDefault }]}
+    >
+      <View style={styles.header}>
+        <View style={styles.headerCopy}>
           <ThemedText type="h4">Sync Voice & Timing</ThemedText>
-          <ThemedText style={[styles.subtleText, { color: theme.tabIconDefault }]}>
+          <ThemedText
+            style={[styles.subtleText, { color: theme.tabIconDefault }]}
+          >
             {getStatusCopy(voiceSync, hasLocalVoiceDraft)}
           </ThemedText>
         </View>
         <Pressable onPress={onClose} hitSlop={12}>
-          <ThemedText style={[styles.closeText, { color: theme.link }]}>Close</ThemedText>
+          <ThemedText style={[styles.closeText, { color: theme.link }]}>
+            Close
+          </ThemedText>
         </Pressable>
       </View>
 
-      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-        <View style={[styles.infoCard, { backgroundColor: theme.backgroundSecondary }]}>
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <View
+          style={[
+            styles.infoCard,
+            { backgroundColor: theme.backgroundSecondary },
+          ]}
+        >
           <View style={styles.infoRow}>
-            <ThemedText style={[styles.infoLabel, { color: theme.tabIconDefault }]}>
+            <ThemedText
+              style={[styles.infoLabel, { color: theme.tabIconDefault }]}
+            >
               Next sync charge
             </ThemedText>
             <ThemedText>{formatRenderTimeAmount(syncEstimateSec)}</ThemedText>
           </View>
           <View style={styles.infoRow}>
-            <ThemedText style={[styles.infoLabel, { color: theme.tabIconDefault }]}>
+            <ThemedText
+              style={[styles.infoLabel, { color: theme.tabIconDefault }]}
+            >
               Render charge
             </ThemedText>
             <ThemedText>{formatRenderTimeAmount(renderEstimateSec)}</ThemedText>
           </View>
           <View style={styles.infoRow}>
-            <ThemedText style={[styles.infoLabel, { color: theme.tabIconDefault }]}>
+            <ThemedText
+              style={[styles.infoLabel, { color: theme.tabIconDefault }]}
+            >
               Synced duration
             </ThemedText>
-            <ThemedText>{formatRenderTimeAmount(voiceSync?.totalDurationSec ?? null)}</ThemedText>
+            <ThemedText>
+              {formatRenderTimeAmount(voiceSync?.totalDurationSec ?? null)}
+            </ThemedText>
           </View>
           {lastChargeSec ? (
             <View style={styles.infoRow}>
-              <ThemedText style={[styles.infoLabel, { color: theme.tabIconDefault }]}>
+              <ThemedText
+                style={[styles.infoLabel, { color: theme.tabIconDefault }]}
+              >
                 Last sync used
               </ThemedText>
               <ThemedText>{formatRenderTimeAmount(lastChargeSec)}</ThemedText>
             </View>
           ) : null}
           {voiceSync?.staleScope === "full" ? (
-            <ThemedText style={[styles.subtleText, { color: theme.tabIconDefault }]}>
+            <ThemedText
+              style={[styles.subtleText, { color: theme.tabIconDefault }]}
+            >
               Full re-sync required.
             </ThemedText>
           ) : staleBeats ? (
-            <ThemedText style={[styles.subtleText, { color: theme.tabIconDefault }]}>
+            <ThemedText
+              style={[styles.subtleText, { color: theme.tabIconDefault }]}
+            >
               Stale beats: {staleBeats}
             </ThemedText>
           ) : null}
@@ -143,8 +176,12 @@ export function VoiceSyncPanel({
                   ]}
                 >
                   <ThemedText style={styles.voiceName}>{voice.name}</ThemedText>
-                  <ThemedText style={[styles.voiceMeta, { color: theme.tabIconDefault }]}>
-                    {[voice.gender, voice.emotion].filter(Boolean).join(" • ") || "Preset voice"}
+                  <ThemedText
+                    style={[styles.voiceMeta, { color: theme.tabIconDefault }]}
+                  >
+                    {[voice.gender, voice.emotion]
+                      .filter(Boolean)
+                      .join(" • ") || "Preset voice"}
                   </ThemedText>
                 </Pressable>
               );
@@ -155,9 +192,13 @@ export function VoiceSyncPanel({
         <View style={styles.section}>
           <View style={styles.previewHeader}>
             <View>
-              <ThemedText style={styles.sectionTitle}>Raw Preview</ThemedText>
-              <ThemedText style={[styles.subtleText, { color: theme.tabIconDefault }]}>
-                Hear narration and inspect truthful beat pacing before export.
+              <ThemedText style={styles.sectionTitle}>
+                Preview Transport
+              </ThemedText>
+              <ThemedText
+                style={[styles.subtleText, { color: theme.tabIconDefault }]}
+              >
+                These controls mirror the inline Step 3 preview.
               </ThemedText>
             </View>
             <Pressable
@@ -166,7 +207,9 @@ export function VoiceSyncPanel({
               style={[
                 styles.previewButton,
                 {
-                  backgroundColor: isPreviewAvailable ? theme.link : theme.backgroundSecondary,
+                  backgroundColor: isPreviewAvailable
+                    ? theme.link
+                    : theme.backgroundSecondary,
                   opacity: isPreviewAvailable ? 1 : 0.5,
                 },
               ]}
@@ -176,17 +219,29 @@ export function VoiceSyncPanel({
               </ThemedText>
             </Pressable>
           </View>
-          <View style={[styles.previewCard, { backgroundColor: theme.backgroundSecondary }]}>
-            <ThemedText style={[styles.previewBeat, { color: theme.tabIconDefault }]}>
-              {currentPreviewBeatLabel ?? "Beat preview will appear here"}
+          <View
+            style={[
+              styles.previewCard,
+              { backgroundColor: theme.backgroundSecondary },
+            ]}
+          >
+            <ThemedText
+              style={[styles.previewBeat, { color: theme.tabIconDefault }]}
+            >
+              {currentPreviewBeatLabel ?? "Preview state will appear here"}
             </ThemedText>
-            <ThemedText>{currentCaptionText ?? "Sync first to unlock narration preview."}</ThemedText>
-            <ThemedText style={[styles.subtleText, { color: theme.tabIconDefault }]}>
+            <ThemedText>
+              {currentCaptionText ??
+                "Use the inline preview once sync is ready."}
+            </ThemedText>
+            <ThemedText
+              style={[styles.subtleText, { color: theme.tabIconDefault }]}
+            >
               {isPreviewAvailable
                 ? `${formatRenderTimeAmount(previewPositionSec)} / ${formatRenderTimeAmount(
                     previewDurationSec,
                   )}`
-                : "Preview becomes available after sync."}
+                : "Preview becomes available when synced preview readiness is complete."}
             </ThemedText>
           </View>
         </View>

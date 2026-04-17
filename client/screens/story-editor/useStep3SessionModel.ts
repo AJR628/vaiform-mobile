@@ -3,15 +3,13 @@ import { useMemo } from "react";
 import type { StorySession } from "@/types/story";
 
 import {
-  findStep3CaptionAtTime,
-  findStep3PlaybackSegmentAtTime,
   getStep3BlockedMessage,
   getStep3CaptionTimeline,
-  getStep3PlaybackOwnerSentenceIndex,
   getStep3PlaybackTimeline,
   getStep3PreviewReadiness,
   isStep3PreviewReady,
 } from "./step3";
+import { useStep3PreviewPlayback } from "./useStep3PreviewPlayback";
 import { useStoryVoiceSync } from "./useStoryVoiceSync";
 
 interface UseStep3SessionModelOptions {
@@ -42,6 +40,11 @@ export function useStep3SessionModel({
     showSuccess,
     showWarning,
   });
+  const previewPlaybackModel = useStep3PreviewPlayback({
+    session,
+    showError,
+    showWarning,
+  });
 
   const previewReadiness = useMemo(
     () => getStep3PreviewReadiness(session),
@@ -60,34 +63,14 @@ export function useStep3SessionModel({
     () => getStep3CaptionTimeline(session),
     [session],
   );
-  const currentPreviewCaption = useMemo(
-    () => findStep3CaptionAtTime(session, voiceSyncModel.previewPositionSec),
-    [session, voiceSyncModel.previewPositionSec],
-  );
-  const currentPlaybackSegment = useMemo(
-    () =>
-      findStep3PlaybackSegmentAtTime(
-        session,
-        voiceSyncModel.previewPositionSec,
-      ),
-    [session, voiceSyncModel.previewPositionSec],
-  );
-  const playbackOwnerSentenceIndex = useMemo(
-    () => getStep3PlaybackOwnerSentenceIndex(currentPlaybackSegment),
-    [currentPlaybackSegment],
-  );
-  const previewSentenceIndex = currentPreviewCaption?.sentenceIndex ?? null;
 
   return {
+    ...previewPlaybackModel,
     ...voiceSyncModel,
     captionTimeline,
-    currentPlaybackSegment,
-    currentPreviewCaption,
-    playbackOwnerSentenceIndex,
     playbackTimeline,
     previewBlockedMessage,
     previewReadiness,
     previewReady,
-    previewSentenceIndex,
   };
 }

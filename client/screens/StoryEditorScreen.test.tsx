@@ -9,6 +9,7 @@ import {
 } from "@jest/globals";
 import { Alert } from "react-native";
 import { act, render, waitFor } from "@testing-library/react-native";
+import StoryEditorScreen from "@/screens/StoryEditorScreen";
 
 const mockNavigation = {
   setOptions: jest.fn(),
@@ -104,6 +105,10 @@ jest.mock("@/api/client", () => ({
   storyDeleteBeat: jest.fn(),
 }));
 
+jest.mock("@/components/story-editor/StoryPreviewShell", () => ({
+  StoryPreviewShell: () => null,
+}));
+
 jest.mock("@/lib/storyFinalizeAttemptStorage", () => ({
   loadStoredStoryFinalizeAttempt: (...args: unknown[]) =>
     mockLoadStoredAttempt(...args),
@@ -111,8 +116,6 @@ jest.mock("@/lib/storyFinalizeAttemptStorage", () => ({
   clearStoredStoryFinalizeAttempt: (...args: unknown[]) =>
     mockClearAttempt(...args),
 }));
-
-import StoryEditorScreen from "@/screens/StoryEditorScreen";
 
 function buildSession(overrides: Record<string, unknown> = {}) {
   return {

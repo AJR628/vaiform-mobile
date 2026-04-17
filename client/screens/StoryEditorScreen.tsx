@@ -31,6 +31,7 @@ import { ThemedView } from "@/components/ThemedView";
 import { FlowTabsHeader } from "@/components/FlowTabsHeader";
 import { BeatActionsModal } from "@/components/story-editor/BeatActionsModal";
 import { BeatEditorPanel } from "@/components/story-editor/BeatEditorPanel";
+import { StoryPreviewShell } from "@/components/story-editor/StoryPreviewShell";
 import { StoryDeck } from "@/components/story-editor/StoryDeck";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/contexts/ToastContext";
@@ -138,19 +139,26 @@ export default function StoryEditorScreen() {
   const canAttemptRender = Boolean(usageSnapshot);
   const {
     currentPreviewCaption,
+    currentSegmentClipUrl,
+    currentSegmentPosterUrl,
     draftVoicePreset,
+    handleFollowerVideoLoad,
     hasLocalVoiceDraft,
     isPreviewAvailable,
     isPreviewPlaying,
     isSyncing,
+    playbackOwnerSentenceIndex,
     previewDurationSec,
+    previewBlockedMessage,
     previewPositionSec,
+    previewReady,
     previewSentenceIndex,
     renderEstimateSec,
     setDraftVoicePreset,
     stopPreview,
     syncEstimateSec,
     togglePreviewPlayback,
+    videoRef,
     voiceOptions,
     voiceSync,
     handleSyncVoice,
@@ -445,6 +453,38 @@ export default function StoryEditorScreen() {
 
   return (
     <ThemedView style={styles.container}>
+      <StoryPreviewShell
+        blockedMessage={previewBlockedMessage}
+        currentCaptionText={currentPreviewCaption?.text ?? null}
+        currentPreviewBeatLabel={
+          playbackOwnerSentenceIndex !== null
+            ? `Beat ${playbackOwnerSentenceIndex + 1}`
+            : previewSentenceIndex !== null
+              ? `Beat ${previewSentenceIndex + 1}`
+              : null
+        }
+        currentSegmentClipUrl={currentSegmentClipUrl}
+        currentSegmentPosterUrl={currentSegmentPosterUrl}
+        isPreviewAvailable={isPreviewAvailable}
+        isPreviewPlaying={isPreviewPlaying}
+        onStopPreview={() => void stopPreview()}
+        onTogglePreview={() => void togglePreviewPlayback()}
+        onVideoLoad={handleFollowerVideoLoad}
+        previewDurationSec={previewDurationSec}
+        previewPositionSec={previewPositionSec}
+        previewReady={previewReady}
+        theme={{
+          backgroundDefault: theme.backgroundDefault,
+          backgroundSecondary: theme.backgroundSecondary,
+          border: theme.backgroundTertiary,
+          buttonText: theme.buttonText,
+          link: theme.link,
+          tabIconDefault: theme.tabIconDefault,
+          text: theme.text,
+        }}
+        videoRef={videoRef}
+      />
+
       <StoryDeck
         beats={beats}
         cardH={cardH}
@@ -540,9 +580,11 @@ export default function StoryEditorScreen() {
             <VoiceSyncPanel
               currentCaptionText={currentPreviewCaption?.text ?? null}
               currentPreviewBeatLabel={
-                previewSentenceIndex !== null
-                  ? `Beat ${previewSentenceIndex + 1}`
-                  : null
+                playbackOwnerSentenceIndex !== null
+                  ? `Beat ${playbackOwnerSentenceIndex + 1}`
+                  : previewSentenceIndex !== null
+                    ? `Beat ${previewSentenceIndex + 1}`
+                    : null
               }
               draftVoicePreset={draftVoicePreset}
               hasLocalVoiceDraft={hasLocalVoiceDraft}
