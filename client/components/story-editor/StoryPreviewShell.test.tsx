@@ -1,5 +1,6 @@
 import React from "react";
-import { render } from "@testing-library/react-native";
+import { fireEvent, render } from "@testing-library/react-native";
+import { StyleSheet } from "react-native";
 import { describe, expect, jest, test } from "@jest/globals";
 
 import { StoryPreviewShell } from "@/components/story-editor/StoryPreviewShell";
@@ -25,7 +26,7 @@ const theme = {
 
 describe("client/components/story-editor/StoryPreviewShell", () => {
   test("renders the backend blocked message when preview is not ready", () => {
-    const { getAllByText } = render(
+    const { getAllByText, getByTestId } = render(
       <StoryPreviewShell
         blockedMessage="Sync voice and timing to unlock the synced preview."
         currentCaptionText={null}
@@ -34,6 +35,7 @@ describe("client/components/story-editor/StoryPreviewShell", () => {
         currentSegmentPosterUrl={null}
         isPreviewAvailable={false}
         isPreviewPlaying={false}
+        maxVideoHeight={220}
         onStopPreview={jest.fn()}
         onTogglePreview={jest.fn()}
         onVideoLoad={jest.fn()}
@@ -48,10 +50,20 @@ describe("client/components/story-editor/StoryPreviewShell", () => {
     expect(
       getAllByText("Sync voice and timing to unlock the synced preview."),
     ).toHaveLength(2);
+
+    fireEvent(getByTestId("story-preview-media-stage"), "layout", {
+      nativeEvent: { layout: { width: 320, height: 0 } },
+    });
+
+    const frameStyle = StyleSheet.flatten(
+      getByTestId("story-preview-media-frame").props.style,
+    );
+    expect(frameStyle.height).toBe(220);
+    expect(frameStyle.width).toBeCloseTo(123.75, 2);
   });
 
   test("renders the preview surface and timing UI when preview is ready", () => {
-    const { getByText, UNSAFE_getByType } = render(
+    const { getByText, getByTestId, UNSAFE_getByType } = render(
       <StoryPreviewShell
         blockedMessage={null}
         currentCaptionText="Beat one"
@@ -60,6 +72,7 @@ describe("client/components/story-editor/StoryPreviewShell", () => {
         currentSegmentPosterUrl="https://cdn.example.com/clip-a.jpg"
         isPreviewAvailable={true}
         isPreviewPlaying={false}
+        maxVideoHeight={240}
         onStopPreview={jest.fn()}
         onTogglePreview={jest.fn()}
         onVideoLoad={jest.fn()}
@@ -70,6 +83,10 @@ describe("client/components/story-editor/StoryPreviewShell", () => {
         videoRef={{ current: null }}
       />,
     );
+
+    fireEvent(getByTestId("story-preview-media-stage"), "layout", {
+      nativeEvent: { layout: { width: 200, height: 0 } },
+    });
 
     expect(getByText("Beat 1")).toBeTruthy();
     expect(getByText("0:04 / 0:12")).toBeTruthy();

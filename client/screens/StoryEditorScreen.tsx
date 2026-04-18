@@ -58,6 +58,12 @@ type StoryEditorNavProp = NativeStackNavigationProp<
 >;
 
 const ACTIVE_SCALE = 1.16;
+const PREVIEW_MIN_VIDEO_HEIGHT = 180;
+const PREVIEW_MAX_VIDEO_HEIGHT = 360;
+const PREVIEW_SHELL_CHROME_RESERVE = 124;
+const MIN_DECK_VISIBLE_HEIGHT = 196;
+const MIN_EDITOR_VISIBLE_HEIGHT = 148;
+const COLLAPSED_EDITOR_VISIBLE_HEIGHT = 76;
 
 export default function StoryEditorScreen() {
   const route = useRoute<StoryEditorRouteProp>();
@@ -77,6 +83,7 @@ export default function StoryEditorScreen() {
   const [deckAreaH, setDeckAreaH] = useState(0);
   const [draftText, setDraftText] = useState("");
   const [showVoiceSyncModal, setShowVoiceSyncModal] = useState(false);
+  const [contentAreaH, setContentAreaH] = useState(0);
 
   const textInputRef = useRef<TextInput>(null);
   const deckListRef = useRef<any>(null);
@@ -213,7 +220,7 @@ export default function StoryEditorScreen() {
     }
   }, []);
 
-  const { width: windowWidth } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const deckGap = 16;
   const deckPadTop = Spacing["5xl"] + Spacing.lg;
   const deckPadBottom = Spacing.sm;
@@ -226,6 +233,37 @@ export default function StoryEditorScreen() {
   const cardH = deckAreaH > 0 ? Math.min(maxCardH, desiredH) : desiredH;
   const cardW = Math.round((cardH * 9) / 16);
   const cardStep = cardW + deckGap;
+  const previewMaxVideoHeight = (() => {
+    const measuredBodyHeight = contentAreaH > 0 ? contentAreaH : windowHeight;
+    const bottomReserve = tabBarHeight + Spacing.sm;
+    const deckReserve = Math.min(
+      Math.max(measuredBodyHeight * 0.28, MIN_DECK_VISIBLE_HEIGHT),
+      260,
+    );
+    const editorReserve =
+      selectedSentenceIndex !== null
+        ? Math.min(
+            Math.max(
+              editorHRef.current,
+              editorCollapsed
+                ? COLLAPSED_EDITOR_VISIBLE_HEIGHT
+                : MIN_EDITOR_VISIBLE_HEIGHT,
+            ),
+            editorCollapsed ? 104 : 220,
+          )
+        : 0;
+    const availableForVideo =
+      measuredBodyHeight -
+      bottomReserve -
+      deckReserve -
+      editorReserve -
+      PREVIEW_SHELL_CHROME_RESERVE;
+
+    return Math.min(
+      Math.max(availableForVideo, PREVIEW_MIN_VIDEO_HEIGHT),
+      PREVIEW_MAX_VIDEO_HEIGHT,
+    );
+  })();
 
   useEffect(() => {
     if (selectedSentenceIndex === null) return;
@@ -452,7 +490,15 @@ export default function StoryEditorScreen() {
       : false;
 
   return (
-    <ThemedView style={styles.container}>
+    <ThemedView
+      style={styles.container}
+      onLayout={(event) => {
+        const nextHeight = event.nativeEvent.layout.height;
+        setContentAreaH((current) =>
+          Math.abs(current - nextHeight) >= 1 ? nextHeight : current,
+        );
+      }}
+    >
       <StoryPreviewShell
         blockedMessage={previewBlockedMessage}
         currentCaptionText={currentPreviewCaption?.text ?? null}
@@ -467,6 +513,7 @@ export default function StoryEditorScreen() {
         currentSegmentPosterUrl={currentSegmentPosterUrl}
         isPreviewAvailable={isPreviewAvailable}
         isPreviewPlaying={isPreviewPlaying}
+        maxVideoHeight={previewMaxVideoHeight}
         onStopPreview={() => void stopPreview()}
         onTogglePreview={() => void togglePreviewPlayback()}
         onVideoLoad={handleFollowerVideoLoad}

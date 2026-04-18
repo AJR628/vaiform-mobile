@@ -1,5 +1,10 @@
-import React from "react";
-import { Pressable, StyleSheet, View } from "react-native";
+import React, { useCallback, useMemo, useState } from "react";
+import {
+  Pressable,
+  StyleSheet,
+  View,
+  type LayoutChangeEvent,
+} from "react-native";
 import { ResizeMode, Video } from "expo-av";
 import { Feather } from "@expo/vector-icons";
 
@@ -14,6 +19,7 @@ interface StoryPreviewShellProps {
   currentSegmentPosterUrl: string | null;
   isPreviewAvailable: boolean;
   isPreviewPlaying: boolean;
+  maxVideoHeight?: number | null;
   onStopPreview: () => void;
   onTogglePreview: () => void;
   onVideoLoad: () => void;
@@ -48,6 +54,7 @@ export function StoryPreviewShell({
   currentSegmentPosterUrl,
   isPreviewAvailable,
   isPreviewPlaying,
+  maxVideoHeight,
   onStopPreview,
   onTogglePreview,
   onVideoLoad,
@@ -57,6 +64,37 @@ export function StoryPreviewShell({
   theme,
   videoRef,
 }: StoryPreviewShellProps) {
+  const [availableWidth, setAvailableWidth] = useState(0);
+
+  const handleFrameAreaLayout = useCallback((event: LayoutChangeEvent) => {
+    const nextWidth = event.nativeEvent.layout.width;
+    setAvailableWidth((current) =>
+      Math.abs(current - nextWidth) >= 1 ? nextWidth : current,
+    );
+  }, []);
+
+  const frameStyle = useMemo(() => {
+    const fallbackHeight =
+      typeof maxVideoHeight === "number" && maxVideoHeight > 0
+        ? maxVideoHeight
+        : 320;
+    const widthDrivenHeight =
+      availableWidth > 0 ? (availableWidth * 16) / 9 : fallbackHeight;
+    const frameHeight =
+      typeof maxVideoHeight === "number" && maxVideoHeight > 0
+        ? Math.min(widthDrivenHeight, maxVideoHeight)
+        : widthDrivenHeight;
+    const frameWidth =
+      availableWidth > 0
+        ? Math.min(availableWidth, (frameHeight * 9) / 16)
+        : (frameHeight * 9) / 16;
+
+    return {
+      height: Math.max(0, frameHeight),
+      width: Math.max(0, frameWidth),
+    };
+  }, [availableWidth, maxVideoHeight]);
+
   return (
     <View
       style={[
@@ -81,44 +119,53 @@ export function StoryPreviewShell({
       </View>
 
       <View
-        style={[
-          styles.videoFrame,
-          { backgroundColor: theme.backgroundSecondary },
-        ]}
+        style={styles.frameArea}
+        onLayout={handleFrameAreaLayout}
+        testID="story-preview-media-stage"
       >
-        {previewReady && currentSegmentClipUrl ? (
-          <>
-            <Video
-              ref={videoRef}
-              source={{ uri: currentSegmentClipUrl }}
-              style={styles.video}
-              resizeMode={ResizeMode.COVER}
-              shouldPlay={false}
-              isLooping={false}
-              progressUpdateIntervalMillis={250}
-              onLoad={onVideoLoad}
-              onReadyForDisplay={onVideoLoad}
-              posterSource={
-                currentSegmentPosterUrl
-                  ? { uri: currentSegmentPosterUrl }
-                  : undefined
-              }
-              usePoster={Boolean(currentSegmentPosterUrl)}
-            />
-            <View style={styles.captionOverlay} pointerEvents="none">
-              <ThemedText style={styles.captionText}>
-                {currentCaptionText ?? "Preview timing will appear here."}
+        <View
+          style={[
+            styles.videoFrame,
+            { backgroundColor: theme.backgroundSecondary },
+            frameStyle,
+          ]}
+          testID="story-preview-media-frame"
+        >
+          {previewReady && currentSegmentClipUrl ? (
+            <>
+              <Video
+                ref={videoRef}
+                source={{ uri: currentSegmentClipUrl }}
+                style={styles.video}
+                resizeMode={ResizeMode.COVER}
+                shouldPlay={false}
+                isLooping={false}
+                progressUpdateIntervalMillis={250}
+                onLoad={onVideoLoad}
+                onReadyForDisplay={onVideoLoad}
+                posterSource={
+                  currentSegmentPosterUrl
+                    ? { uri: currentSegmentPosterUrl }
+                    : undefined
+                }
+                usePoster={Boolean(currentSegmentPosterUrl)}
+              />
+              <View style={styles.captionOverlay} pointerEvents="none">
+                <ThemedText style={styles.captionText}>
+                  {currentCaptionText ?? "Preview timing will appear here."}
+                </ThemedText>
+              </View>
+            </>
+          ) : (
+            <View style={styles.blockedSurface}>
+              <Feather name="lock" size={24} color={theme.tabIconDefault} />
+              <ThemedText style={styles.blockedText}>
+                {blockedMessage ??
+                  "Synced preview is blocked for this session."}
               </ThemedText>
             </View>
-          </>
-        ) : (
-          <View style={styles.blockedSurface}>
-            <Feather name="lock" size={24} color={theme.tabIconDefault} />
-            <ThemedText style={styles.blockedText}>
-              {blockedMessage ?? "Synced preview is blocked for this session."}
-            </ThemedText>
-          </View>
-        )}
+          )}
+        </View>
       </View>
 
       <View style={styles.transportRow}>
@@ -211,6 +258,10 @@ const styles = StyleSheet.create({
     marginTop: Spacing.lg,
     padding: Spacing.md,
   },
+  frameArea: {
+    alignItems: "center",
+    width: "100%",
+  },
   header: {
     alignItems: "flex-start",
     flexDirection: "row",
@@ -264,9 +315,8 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   videoFrame: {
-    aspectRatio: 9 / 16,
+    alignSelf: "center",
     borderRadius: BorderRadius.lg,
     overflow: "hidden",
-    width: "100%",
   },
 });
