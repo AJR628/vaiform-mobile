@@ -31,6 +31,7 @@ import { ThemedView } from "@/components/ThemedView";
 import { FlowTabsHeader } from "@/components/FlowTabsHeader";
 import { BeatActionsModal } from "@/components/story-editor/BeatActionsModal";
 import { BeatEditorPanel } from "@/components/story-editor/BeatEditorPanel";
+import { StoryboardSurface } from "@/components/story-editor/StoryboardSurface";
 import { StoryPreviewShell } from "@/components/story-editor/StoryPreviewShell";
 import { StoryDeck } from "@/components/story-editor/StoryDeck";
 import { useAuth } from "@/contexts/AuthContext";
@@ -49,6 +50,7 @@ import { useStoryEditorCaptionPlacement } from "@/screens/story-editor/useStoryE
 import { useStoryEditorFinalize } from "@/screens/story-editor/useStoryEditorFinalize";
 import { useStoryEditorSession } from "@/screens/story-editor/useStoryEditorSession";
 import { useStep3SessionModel } from "@/screens/story-editor/useStep3SessionModel";
+import { isUnifiedStoryboardSurfaceEnabled } from "@/screens/story-editor/featureFlags";
 import { VoiceSyncPanel } from "@/components/story-editor/VoiceSyncPanel";
 
 type StoryEditorRouteProp = RouteProp<HomeStackParamList, "StoryEditor">;
@@ -64,6 +66,9 @@ const PREVIEW_SHELL_CHROME_RESERVE = 124;
 const MIN_DECK_VISIBLE_HEIGHT = 196;
 const MIN_EDITOR_VISIBLE_HEIGHT = 148;
 const COLLAPSED_EDITOR_VISIBLE_HEIGHT = 76;
+const UNIFIED_PREVIEW_MIN_VIDEO_HEIGHT = 240;
+const UNIFIED_PREVIEW_MAX_VIDEO_HEIGHT = 430;
+const UNIFIED_SURFACE_CHROME_RESERVE = 164;
 
 export default function StoryEditorScreen() {
   const route = useRoute<StoryEditorRouteProp>();
@@ -74,6 +79,7 @@ export default function StoryEditorScreen() {
   const { refreshUsage, usageSnapshot, user } = useAuth();
   const availableSec = usageSnapshot?.usage?.availableSec ?? 0;
   const tabBarHeight = useBottomTabBarHeight();
+  const unifiedStoryboardSurfaceEnabled = isUnifiedStoryboardSurfaceEnabled();
 
   const [showBeatActionsForIndex, setShowBeatActionsForIndex] = useState<
     number | null
@@ -145,6 +151,7 @@ export default function StoryEditorScreen() {
   const estimatedSec = getEstimatedUsageSec(session);
   const canAttemptRender = Boolean(usageSnapshot);
   const {
+    beatRailItems,
     currentPreviewCaption,
     currentSegmentClipUrl,
     currentSegmentPosterUrl,
@@ -262,6 +269,32 @@ export default function StoryEditorScreen() {
     return Math.min(
       Math.max(availableForVideo, PREVIEW_MIN_VIDEO_HEIGHT),
       PREVIEW_MAX_VIDEO_HEIGHT,
+    );
+  })();
+  const unifiedPreviewMaxVideoHeight = (() => {
+    const measuredBodyHeight = contentAreaH > 0 ? contentAreaH : windowHeight;
+    const bottomReserve = tabBarHeight + Spacing.sm;
+    const editorReserve =
+      selectedSentenceIndex !== null
+        ? Math.min(
+            Math.max(
+              editorHRef.current,
+              editorCollapsed
+                ? COLLAPSED_EDITOR_VISIBLE_HEIGHT
+                : MIN_EDITOR_VISIBLE_HEIGHT,
+            ),
+            editorCollapsed ? 104 : 220,
+          )
+        : 0;
+    const availableForVideo =
+      measuredBodyHeight -
+      bottomReserve -
+      editorReserve -
+      UNIFIED_SURFACE_CHROME_RESERVE;
+
+    return Math.min(
+      Math.max(availableForVideo, UNIFIED_PREVIEW_MIN_VIDEO_HEIGHT),
+      UNIFIED_PREVIEW_MAX_VIDEO_HEIGHT,
     );
   })();
 
@@ -499,59 +532,103 @@ export default function StoryEditorScreen() {
         );
       }}
     >
-      <StoryPreviewShell
-        blockedMessage={previewBlockedMessage}
-        currentCaptionText={currentPreviewCaption?.text ?? null}
-        currentPreviewBeatLabel={
-          playbackOwnerSentenceIndex !== null
-            ? `Beat ${playbackOwnerSentenceIndex + 1}`
-            : previewSentenceIndex !== null
-              ? `Beat ${previewSentenceIndex + 1}`
-              : null
-        }
-        currentSegmentClipUrl={currentSegmentClipUrl}
-        currentSegmentPosterUrl={currentSegmentPosterUrl}
-        isPreviewAvailable={isPreviewAvailable}
-        isPreviewPlaying={isPreviewPlaying}
-        maxVideoHeight={previewMaxVideoHeight}
-        onStopPreview={() => void stopPreview()}
-        onTogglePreview={() => void togglePreviewPlayback()}
-        onVideoLoad={handleFollowerVideoLoad}
-        previewDurationSec={previewDurationSec}
-        previewPositionSec={previewPositionSec}
-        previewReady={previewReady}
-        theme={{
-          backgroundDefault: theme.backgroundDefault,
-          backgroundSecondary: theme.backgroundSecondary,
-          border: theme.backgroundTertiary,
-          buttonText: theme.buttonText,
-          link: theme.link,
-          tabIconDefault: theme.tabIconDefault,
-          text: theme.text,
-        }}
-        videoRef={videoRef}
-      />
+      {unifiedStoryboardSurfaceEnabled ? (
+        <StoryboardSurface
+          activeSentenceIndex={activeDeckSentenceIndex}
+          blockedMessage={previewBlockedMessage}
+          captionPlacement={captionPlacement}
+          currentCaptionText={currentPreviewCaption?.text ?? null}
+          currentPreviewBeatLabel={
+            playbackOwnerSentenceIndex !== null
+              ? `Beat ${playbackOwnerSentenceIndex + 1}`
+              : previewSentenceIndex !== null
+                ? `Beat ${previewSentenceIndex + 1}`
+                : null
+          }
+          currentSegmentClipUrl={currentSegmentClipUrl}
+          currentSegmentPosterUrl={currentSegmentPosterUrl}
+          isPreviewAvailable={isPreviewAvailable}
+          isPreviewPlaying={isPreviewPlaying}
+          maxVideoHeight={unifiedPreviewMaxVideoHeight}
+          onLongPressBeat={setShowBeatActionsForIndex}
+          onPressBeat={handleDeckCardPress}
+          onStopPreview={() => void stopPreview()}
+          onTogglePreview={() => void togglePreviewPlayback()}
+          onVideoLoad={handleFollowerVideoLoad}
+          playbackSentenceIndex={previewSentenceIndex}
+          previewDurationSec={previewDurationSec}
+          previewPositionSec={previewPositionSec}
+          previewReady={previewReady}
+          railItems={beatRailItems}
+          selectedSentenceIndex={selectedSentenceIndex}
+          theme={{
+            backgroundDefault: theme.backgroundDefault,
+            backgroundSecondary: theme.backgroundSecondary,
+            border: theme.backgroundTertiary,
+            buttonText: theme.buttonText,
+            link: theme.link,
+            tabIconDefault: theme.tabIconDefault,
+            text: theme.text,
+          }}
+          videoRef={videoRef}
+        />
+      ) : (
+        <>
+          <StoryPreviewShell
+            blockedMessage={previewBlockedMessage}
+            currentCaptionText={currentPreviewCaption?.text ?? null}
+            currentPreviewBeatLabel={
+              playbackOwnerSentenceIndex !== null
+                ? `Beat ${playbackOwnerSentenceIndex + 1}`
+                : previewSentenceIndex !== null
+                  ? `Beat ${previewSentenceIndex + 1}`
+                  : null
+            }
+            currentSegmentClipUrl={currentSegmentClipUrl}
+            currentSegmentPosterUrl={currentSegmentPosterUrl}
+            isPreviewAvailable={isPreviewAvailable}
+            isPreviewPlaying={isPreviewPlaying}
+            maxVideoHeight={previewMaxVideoHeight}
+            onStopPreview={() => void stopPreview()}
+            onTogglePreview={() => void togglePreviewPlayback()}
+            onVideoLoad={handleFollowerVideoLoad}
+            previewDurationSec={previewDurationSec}
+            previewPositionSec={previewPositionSec}
+            previewReady={previewReady}
+            theme={{
+              backgroundDefault: theme.backgroundDefault,
+              backgroundSecondary: theme.backgroundSecondary,
+              border: theme.backgroundTertiary,
+              buttonText: theme.buttonText,
+              link: theme.link,
+              tabIconDefault: theme.tabIconDefault,
+              text: theme.text,
+            }}
+            videoRef={videoRef}
+          />
 
-      <StoryDeck
-        beats={beats}
-        cardH={cardH}
-        cardStep={cardStep}
-        cardW={cardW}
-        deckListRef={deckListRef}
-        keyboardVisible={keyboardVisible}
-        isLoadingByIndex={isLoadingByIndex}
-        onDeckLayout={onDeckLayout}
-        onDeckScroll={onDeckScroll}
-        onLongPressBeat={setShowBeatActionsForIndex}
-        onPressBeat={handleDeckCardPress}
-        onVisibleBeatChange={handleVisibleBeatChange}
-        previewByIndex={previewByIndex}
-        scrollX={scrollX}
-        selectedSentenceIndex={activeDeckSentenceIndex}
-        session={session}
-        theme={theme}
-        windowWidth={windowWidth}
-      />
+          <StoryDeck
+            beats={beats}
+            cardH={cardH}
+            cardStep={cardStep}
+            cardW={cardW}
+            deckListRef={deckListRef}
+            keyboardVisible={keyboardVisible}
+            isLoadingByIndex={isLoadingByIndex}
+            onDeckLayout={onDeckLayout}
+            onDeckScroll={onDeckScroll}
+            onLongPressBeat={setShowBeatActionsForIndex}
+            onPressBeat={handleDeckCardPress}
+            onVisibleBeatChange={handleVisibleBeatChange}
+            previewByIndex={previewByIndex}
+            scrollX={scrollX}
+            selectedSentenceIndex={activeDeckSentenceIndex}
+            session={session}
+            theme={theme}
+            windowWidth={windowWidth}
+          />
+        </>
+      )}
 
       {selectedBeat ? (
         <BeatEditorPanel

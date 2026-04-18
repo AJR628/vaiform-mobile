@@ -3,6 +3,7 @@ import { describe, expect, test } from "@jest/globals";
 import {
   findStep3CaptionAtTime,
   findStep3PlaybackSegmentAtTime,
+  getStep3BeatRailItems,
   getStep3BlockedMessage,
   getStep3CaptionTimeline,
   getStep3PlaybackOwnerSentenceIndex,
@@ -179,5 +180,32 @@ describe("client/screens/story-editor/step3", () => {
         findStep3PlaybackSegmentAtTime(mergedOwnerSession, 4),
       ),
     ).toBe(0);
+  });
+
+  test("builds one compact rail item per beat from canonical session truth", () => {
+    const session = buildSession();
+
+    expect(getStep3BeatRailItems(session)).toEqual([
+      {
+        sentenceIndex: 0,
+        text: "Beat one",
+        clipThumbUrl: "thumb-a",
+        clipUrl: "https://cdn.example.com/clip-a.mp4",
+        startTimeSec: 0,
+        endTimeSec: 3,
+        durationSec: 3,
+        hasSelectedClip: true,
+      },
+      {
+        sentenceIndex: 1,
+        text: "Beat two",
+        clipThumbUrl: "thumb-b",
+        clipUrl: "https://cdn.example.com/clip-b.mp4",
+        startTimeSec: 3,
+        endTimeSec: 6,
+        durationSec: 3,
+        hasSelectedClip: true,
+      },
+    ]);
   });
 });

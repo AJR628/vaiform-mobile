@@ -32,6 +32,8 @@ const mockStoryFinalize = jest.fn();
 const mockLoadStoredAttempt = jest.fn();
 const mockStoreAttempt = jest.fn(async () => {});
 const mockClearAttempt = jest.fn(async () => {});
+const mockStoryboardSurfaceRender = jest.fn(() => null);
+const mockStoryDeckRender = jest.fn(() => null);
 
 let mockRouteParams = { sessionId: "session-1" };
 let mockUsageSnapshot: any = {
@@ -109,6 +111,18 @@ jest.mock("@/components/story-editor/StoryPreviewShell", () => ({
   StoryPreviewShell: () => null,
 }));
 
+jest.mock("@/components/story-editor/StoryboardSurface", () => {
+  return {
+    StoryboardSurface: (props: unknown) => mockStoryboardSurfaceRender(props),
+  };
+});
+
+jest.mock("@/components/story-editor/StoryDeck", () => {
+  return {
+    StoryDeck: (props: unknown) => mockStoryDeckRender(props),
+  };
+});
+
 jest.mock("@/lib/storyFinalizeAttemptStorage", () => ({
   loadStoredStoryFinalizeAttempt: (...args: unknown[]) =>
     mockLoadStoredAttempt(...args),
@@ -165,6 +179,7 @@ function getHeaderProps() {
 describe("client/screens/StoryEditorScreen", () => {
   beforeEach(() => {
     jest.useFakeTimers();
+    delete process.env.EXPO_PUBLIC_STEP3_UNIFIED_SURFACE;
     mockRouteParams = { sessionId: "session-1" };
     mockUsageSnapshot = {
       usage: {
@@ -189,11 +204,78 @@ describe("client/screens/StoryEditorScreen", () => {
     mockLoadStoredAttempt.mockResolvedValue(null);
     mockStoreAttempt.mockClear();
     mockClearAttempt.mockClear();
+    mockStoryboardSurfaceRender.mockClear();
+    mockStoryDeckRender.mockClear();
   });
 
   afterEach(() => {
+    delete process.env.EXPO_PUBLIC_STEP3_UNIFIED_SURFACE;
     jest.useRealTimers();
     jest.restoreAllMocks();
+  });
+
+  test("uses the legacy deck path when the unified storyboard flag is off", async () => {
+    mockStoryGet.mockResolvedValue({
+      ok: true,
+      data: buildSession(),
+    });
+
+    render(<StoryEditorScreen />);
+
+    await waitFor(() => {
+      expect(mockStoryDeckRender).toHaveBeenCalled();
+    });
+
+    expect(mockStoryboardSurfaceRender).not.toHaveBeenCalled();
+  });
+
+  test("uses the unified surface path without mounting the legacy deck when the flag is on", async () => {
+    process.env.EXPO_PUBLIC_STEP3_UNIFIED_SURFACE = "1";
+    mockStoryGet.mockResolvedValue({
+      ok: true,
+      data: buildSession({
+        captions: [
+          {
+            sentenceIndex: 0,
+            text: "Beat one",
+            startTimeSec: 0,
+            endTimeSec: 4,
+          },
+        ],
+        previewReadinessV1: {
+          version: 1,
+          ready: true,
+          reasonCode: null,
+          missingBeatIndices: [],
+        },
+        playbackTimelineV1: {
+          version: 1,
+          source: "auto",
+          totalDurationSec: 4,
+          segments: [
+            {
+              segmentIndex: 0,
+              sentenceIndex: 0,
+              ownerSentenceIndex: 0,
+              clipUrl: "https://cdn.example.com/clip-1.mp4",
+              clipThumbUrl: "https://cdn.example.com/clip-1.jpg",
+              globalStartSec: 0,
+              globalEndSec: 4,
+              clipStartSec: 0,
+              durationSec: 4,
+            },
+          ],
+        },
+      }),
+    });
+
+    render(<StoryEditorScreen />);
+
+    await waitFor(() => {
+      expect(mockStoryboardSurfaceRender).toHaveBeenCalled();
+    });
+
+    expect(mockStoryDeckRender).not.toHaveBeenCalled();
   });
 
   test("shows the insufficient render time message before calling finalize", async () => {

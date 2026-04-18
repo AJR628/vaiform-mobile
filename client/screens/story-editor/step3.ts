@@ -19,6 +19,17 @@ export interface Step3CaptionTimelineItem {
   endTimeSec: number;
 }
 
+export interface Step3BeatRailItem {
+  sentenceIndex: number;
+  text: string;
+  clipThumbUrl: string | null;
+  clipUrl: string | null;
+  startTimeSec: number | null;
+  endTimeSec: number | null;
+  durationSec: number | null;
+  hasSelectedClip: boolean;
+}
+
 function normalizeBeatIndices(values: unknown): number[] {
   if (!Array.isArray(values)) return [];
   return values
@@ -193,4 +204,59 @@ export function getStep3PlaybackOwnerSentenceIndex(
     segment?.ownerSentenceIndex ?? segment?.sentenceIndex,
   );
   return ownerSentenceIndex;
+}
+
+function findSegmentForBeat(
+  timeline: StoryPlaybackTimelineV1 | null,
+  sentenceIndex: number,
+): StoryPlaybackTimelineSegmentV1 | null {
+  if (!timeline) return null;
+  return (
+    timeline.segments.find((segment) => {
+      const ownerSentenceIndex = getStep3PlaybackOwnerSentenceIndex(segment);
+      const segmentSentenceIndex = toFiniteNumber(segment?.sentenceIndex);
+      return (
+        ownerSentenceIndex === sentenceIndex ||
+        segmentSentenceIndex === sentenceIndex
+      );
+    }) ?? null
+  );
+}
+
+export function getStep3BeatRailItems(
+  session: StorySession | null | undefined,
+): Step3BeatRailItem[] {
+  const sentences = Array.isArray(session?.story?.sentences)
+    ? session.story.sentences
+    : [];
+  const captions = getStep3CaptionTimeline(session);
+  const timeline = getStep3PlaybackTimeline(session);
+  const shots = Array.isArray(session?.shots) ? session.shots : [];
+
+  return sentences.map((sentence, sentenceIndex) => {
+    const shot =
+      shots.find((entry) => entry?.sentenceIndex === sentenceIndex) ?? null;
+    const selectedClip = shot?.selectedClip ?? null;
+    const caption =
+      captions.find((entry) => entry.sentenceIndex === sentenceIndex) ?? null;
+    const segment = findSegmentForBeat(timeline, sentenceIndex);
+    const captionDuration =
+      caption && caption.endTimeSec >= caption.startTimeSec
+        ? caption.endTimeSec - caption.startTimeSec
+        : null;
+    const segmentDuration = toFiniteNumber(segment?.durationSec);
+    const shotDuration = toFiniteNumber(shot?.durationSec);
+
+    return {
+      sentenceIndex,
+      text: typeof sentence === "string" ? sentence : String(sentence ?? ""),
+      clipThumbUrl: selectedClip?.thumbUrl ?? segment?.clipThumbUrl ?? null,
+      clipUrl: selectedClip?.url ?? segment?.clipUrl ?? null,
+      startTimeSec:
+        caption?.startTimeSec ?? toFiniteNumber(segment?.globalStartSec),
+      endTimeSec: caption?.endTimeSec ?? toFiniteNumber(segment?.globalEndSec),
+      durationSec: captionDuration ?? segmentDuration ?? shotDuration,
+      hasSelectedClip: Boolean(selectedClip),
+    };
+  });
 }

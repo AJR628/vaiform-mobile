@@ -4,6 +4,7 @@ import type { StorySession } from "@/types/story";
 
 import {
   getStep3BlockedMessage,
+  getStep3BeatRailItems,
   getStep3CaptionTimeline,
   getStep3PlaybackTimeline,
   getStep3PreviewReadiness,
@@ -63,10 +64,15 @@ export function useStep3SessionModel({
     () => getStep3CaptionTimeline(session),
     [session],
   );
+  const beatRailItems = useMemo(
+    () => getStep3BeatRailItems(session),
+    [session],
+  );
 
   return {
     ...previewPlaybackModel,
     ...voiceSyncModel,
+    beatRailItems,
     captionTimeline,
     playbackTimeline,
     previewBlockedMessage,
