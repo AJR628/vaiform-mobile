@@ -5,6 +5,7 @@ import { describe, expect, jest, test } from "@jest/globals";
 
 import { StoryboardSurface } from "@/components/story-editor/StoryboardSurface";
 import type { Step3BeatRailItem } from "@/screens/story-editor/step3";
+import type { Step3PreviewVideoSlot } from "@/screens/story-editor/useStep3PreviewPlayback";
 
 jest.mock("expo-av", () => ({
   Video: "Video",
@@ -38,6 +39,52 @@ const railItems: Step3BeatRailItem[] = [
   },
 ];
 
+const blockedSlots: Step3PreviewVideoSlot[] = [
+  {
+    clipUrl: null,
+    isActive: true,
+    isReady: false,
+    key: "a",
+    posterUrl: null,
+    ref: { current: null },
+    requestToken: 0,
+    segmentIndex: null,
+  },
+  {
+    clipUrl: null,
+    isActive: false,
+    isReady: false,
+    key: "b",
+    posterUrl: null,
+    ref: { current: null },
+    requestToken: 0,
+    segmentIndex: null,
+  },
+];
+
+const readySlots: Step3PreviewVideoSlot[] = [
+  {
+    clipUrl: "https://cdn.example.com/clip-a.mp4",
+    isActive: true,
+    isReady: true,
+    key: "a",
+    posterUrl: "https://cdn.example.com/poster-a.jpg",
+    ref: { current: null },
+    requestToken: 1,
+    segmentIndex: 0,
+  },
+  {
+    clipUrl: "https://cdn.example.com/clip-b.mp4",
+    isActive: false,
+    isReady: false,
+    key: "b",
+    posterUrl: "https://cdn.example.com/poster-b.jpg",
+    ref: { current: null },
+    requestToken: 2,
+    segmentIndex: 1,
+  },
+];
+
 describe("client/components/story-editor/StoryboardSurface", () => {
   test("renders blocked state and compact rail inside one surface", () => {
     const { getByTestId, getAllByText } = render(
@@ -47,24 +94,22 @@ describe("client/components/story-editor/StoryboardSurface", () => {
         captionPlacement="bottom"
         currentCaptionText={null}
         currentPreviewBeatLabel={null}
-        currentSegmentClipUrl={null}
-        currentSegmentPosterUrl={null}
         isPreviewAvailable={false}
         isPreviewPlaying={false}
         maxVideoHeight={260}
         onLongPressBeat={jest.fn()}
         onPressBeat={jest.fn()}
+        onPreviewSlotReady={jest.fn()}
         onStopPreview={jest.fn()}
         onTogglePreview={jest.fn()}
-        onVideoLoad={jest.fn()}
         playbackSentenceIndex={null}
         previewDurationSec={null}
         previewPositionSec={0}
         previewReady={false}
+        previewVideoSlots={blockedSlots}
         railItems={railItems}
         selectedSentenceIndex={null}
         theme={theme}
-        videoRef={{ current: null }}
       />,
     );
 
@@ -77,31 +122,29 @@ describe("client/components/story-editor/StoryboardSurface", () => {
   });
 
   test("renders ready preview without depending on caption raster assets", () => {
-    const { getByTestId, UNSAFE_getByType } = render(
+    const { getByTestId } = render(
       <StoryboardSurface
         activeSentenceIndex={0}
         blockedMessage={null}
         captionPlacement="center"
         currentCaptionText="Caption from canonical session timing"
         currentPreviewBeatLabel="Beat 1"
-        currentSegmentClipUrl="https://cdn.example.com/clip-a.mp4"
-        currentSegmentPosterUrl="https://cdn.example.com/poster-a.jpg"
         isPreviewAvailable
         isPreviewPlaying={false}
         maxVideoHeight={280}
         onLongPressBeat={jest.fn()}
         onPressBeat={jest.fn()}
+        onPreviewSlotReady={jest.fn()}
         onStopPreview={jest.fn()}
         onTogglePreview={jest.fn()}
-        onVideoLoad={jest.fn()}
         playbackSentenceIndex={0}
         previewDurationSec={10}
         previewPositionSec={4}
         previewReady
+        previewVideoSlots={readySlots}
         railItems={railItems}
         selectedSentenceIndex={0}
         theme={theme}
-        videoRef={{ current: null }}
       />,
     );
 
@@ -113,7 +156,8 @@ describe("client/components/story-editor/StoryboardSurface", () => {
       getByTestId("storyboard-preview-caption").props.style,
     );
 
-    expect(UNSAFE_getByType("Video")).toBeTruthy();
+    expect(getByTestId("storyboard-preview-video-a")).toBeTruthy();
+    expect(getByTestId("storyboard-preview-video-b")).toBeTruthy();
     expect(captionStyle.fontSize).toBeGreaterThanOrEqual(13);
     expect(captionStyle.fontSize).toBeLessThanOrEqual(24);
   });

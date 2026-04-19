@@ -17,6 +17,8 @@ const mockUnloadAsync = jest.fn(async () => {});
 const mockPauseAsync = jest.fn(async () => {});
 const mockPlayAsync = jest.fn(async () => {});
 const mockGetStatusAsync = jest.fn();
+const mockVideoASetStatusAsync = jest.fn(async () => {});
+const mockVideoBSetStatusAsync = jest.fn(async () => {});
 
 jest.mock("expo-av", () => ({
   Audio: {
@@ -122,6 +124,8 @@ describe("client/screens/story-editor/useStep3PreviewPlayback", () => {
     mockPauseAsync.mockClear();
     mockPlayAsync.mockClear();
     mockGetStatusAsync.mockReset();
+    mockVideoASetStatusAsync.mockClear();
+    mockVideoBSetStatusAsync.mockClear();
   });
 
   afterEach(() => {
@@ -221,5 +225,234 @@ describe("client/screens/story-editor/useStep3PreviewPlayback", () => {
     });
 
     expect(mockUnloadAsync).toHaveBeenCalled();
+  });
+
+  test("warms standby slot near a segment boundary without replacing active immediately", async () => {
+    const showWarning = jest.fn();
+    const showError = jest.fn();
+    const session = buildSession();
+    let playbackStatus: ((status: Record<string, unknown>) => void) | undefined;
+    const sound = {
+      unloadAsync: mockUnloadAsync,
+      pauseAsync: mockPauseAsync,
+      playAsync: mockPlayAsync,
+      getStatusAsync: mockGetStatusAsync,
+    };
+    mockCreateAsync.mockImplementation(
+      async (
+        _source: unknown,
+        _status: unknown,
+        onPlaybackStatusUpdate?: (status: Record<string, unknown>) => void,
+      ) => {
+        playbackStatus = onPlaybackStatusUpdate;
+        return { sound };
+      },
+    );
+
+    const { result } = renderHook(() =>
+      useStep3PreviewPlayback({
+        session,
+        showError,
+        showWarning,
+        useUnifiedPreviewSlots: true,
+      }),
+    );
+
+    result.current.previewVideoSlots[0].ref.current = {
+      setStatusAsync: mockVideoASetStatusAsync,
+    } as never;
+    result.current.previewVideoSlots[1].ref.current = {
+      setStatusAsync: mockVideoBSetStatusAsync,
+    } as never;
+
+    await act(async () => {
+      result.current.handlePreviewSlotReady(
+        "a",
+        result.current.previewVideoSlots[0].requestToken,
+      );
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await result.current.togglePreviewPlayback();
+    });
+
+    await act(async () => {
+      playbackStatus?.({
+        durationMillis: 6000,
+        isLoaded: true,
+        isPlaying: true,
+        positionMillis: 2800,
+      });
+      await Promise.resolve();
+    });
+
+    const standby = result.current.previewVideoSlots.find(
+      (slot) => slot.key === "b",
+    );
+
+    expect(result.current.previewVideoSlots[0].isActive).toBe(true);
+    expect(standby?.clipUrl).toBe("https://cdn.example.com/clip-b.mp4");
+    expect(standby?.isActive).toBe(false);
+  });
+
+  test("keeps active slot visible until standby readiness matches the current token", async () => {
+    const showWarning = jest.fn();
+    const showError = jest.fn();
+    const session = buildSession();
+    let playbackStatus: ((status: Record<string, unknown>) => void) | undefined;
+    const sound = {
+      unloadAsync: mockUnloadAsync,
+      pauseAsync: mockPauseAsync,
+      playAsync: mockPlayAsync,
+      getStatusAsync: mockGetStatusAsync,
+    };
+    mockCreateAsync.mockImplementation(
+      async (
+        _source: unknown,
+        _status: unknown,
+        onPlaybackStatusUpdate?: (status: Record<string, unknown>) => void,
+      ) => {
+        playbackStatus = onPlaybackStatusUpdate;
+        return { sound };
+      },
+    );
+
+    const { result } = renderHook(() =>
+      useStep3PreviewPlayback({
+        session,
+        showError,
+        showWarning,
+        useUnifiedPreviewSlots: true,
+      }),
+    );
+
+    result.current.previewVideoSlots[0].ref.current = {
+      setStatusAsync: mockVideoASetStatusAsync,
+    } as never;
+    result.current.previewVideoSlots[1].ref.current = {
+      setStatusAsync: mockVideoBSetStatusAsync,
+    } as never;
+
+    await act(async () => {
+      result.current.handlePreviewSlotReady(
+        "a",
+        result.current.previewVideoSlots[0].requestToken,
+      );
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await result.current.togglePreviewPlayback();
+    });
+
+    await act(async () => {
+      playbackStatus?.({
+        durationMillis: 6000,
+        isLoaded: true,
+        isPlaying: true,
+        positionMillis: 3100,
+      });
+      await Promise.resolve();
+    });
+
+    const pendingStandby = result.current.previewVideoSlots.find(
+      (slot) => slot.key === "b",
+    );
+    const staleToken = Math.max(0, (pendingStandby?.requestToken ?? 1) - 1);
+
+    await act(async () => {
+      result.current.handlePreviewSlotReady("b", staleToken);
+      await Promise.resolve();
+    });
+
+    expect(result.current.previewVideoSlots[0].isActive).toBe(true);
+    expect(result.current.previewVideoSlots[1].isActive).toBe(false);
+
+    await act(async () => {
+      result.current.handlePreviewSlotReady(
+        "b",
+        result.current.previewVideoSlots[1].requestToken,
+      );
+      await Promise.resolve();
+    });
+
+    expect(result.current.previewVideoSlots[0].isActive).toBe(false);
+    expect(result.current.previewVideoSlots[1].isActive).toBe(true);
+  });
+
+  test("does not repeatedly hard-seek the active slot for same-segment ticks within tolerance", async () => {
+    const showWarning = jest.fn();
+    const showError = jest.fn();
+    const session = buildSession();
+    let playbackStatus: ((status: Record<string, unknown>) => void) | undefined;
+    const sound = {
+      unloadAsync: mockUnloadAsync,
+      pauseAsync: mockPauseAsync,
+      playAsync: mockPlayAsync,
+      getStatusAsync: mockGetStatusAsync,
+    };
+    mockCreateAsync.mockImplementation(
+      async (
+        _source: unknown,
+        _status: unknown,
+        onPlaybackStatusUpdate?: (status: Record<string, unknown>) => void,
+      ) => {
+        playbackStatus = onPlaybackStatusUpdate;
+        return { sound };
+      },
+    );
+
+    const { result } = renderHook(() =>
+      useStep3PreviewPlayback({
+        session,
+        showError,
+        showWarning,
+        useUnifiedPreviewSlots: true,
+      }),
+    );
+
+    result.current.previewVideoSlots[0].ref.current = {
+      setStatusAsync: mockVideoASetStatusAsync,
+    } as never;
+
+    await act(async () => {
+      result.current.handlePreviewSlotReady(
+        "a",
+        result.current.previewVideoSlots[0].requestToken,
+      );
+      await Promise.resolve();
+    });
+
+    await act(async () => {
+      await result.current.togglePreviewPlayback();
+    });
+
+    mockVideoASetStatusAsync.mockClear();
+
+    await act(async () => {
+      playbackStatus?.({
+        durationMillis: 6000,
+        isLoaded: true,
+        isPlaying: true,
+        positionMillis: 1000,
+      });
+      await Promise.resolve();
+    });
+    const callsAfterFirstTick = mockVideoASetStatusAsync.mock.calls.length;
+
+    await act(async () => {
+      playbackStatus?.({
+        durationMillis: 6000,
+        isLoaded: true,
+        isPlaying: true,
+        positionMillis: 1120,
+      });
+      await Promise.resolve();
+    });
+
+    expect(mockVideoASetStatusAsync.mock.calls.length).toBe(
+      callsAfterFirstTick,
+    );
   });
 });

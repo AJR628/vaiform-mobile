@@ -157,6 +157,7 @@ export default function StoryEditorScreen() {
     currentSegmentPosterUrl,
     draftVoicePreset,
     handleFollowerVideoLoad,
+    handlePreviewSlotReady,
     hasLocalVoiceDraft,
     isPreviewAvailable,
     isPreviewPlaying,
@@ -167,6 +168,7 @@ export default function StoryEditorScreen() {
     previewPositionSec,
     previewReady,
     previewSentenceIndex,
+    previewVideoSlots,
     renderEstimateSec,
     setDraftVoicePreset,
     stopPreview,
@@ -184,6 +186,7 @@ export default function StoryEditorScreen() {
     showError,
     showSuccess,
     showWarning,
+    useUnifiedPreviewSlots: unifiedStoryboardSurfaceEnabled,
   });
   const renderBlockedMessage =
     (isSyncing
@@ -545,8 +548,6 @@ export default function StoryEditorScreen() {
                 ? `Beat ${previewSentenceIndex + 1}`
                 : null
           }
-          currentSegmentClipUrl={currentSegmentClipUrl}
-          currentSegmentPosterUrl={currentSegmentPosterUrl}
           isPreviewAvailable={isPreviewAvailable}
           isPreviewPlaying={isPreviewPlaying}
           maxVideoHeight={unifiedPreviewMaxVideoHeight}
@@ -554,11 +555,12 @@ export default function StoryEditorScreen() {
           onPressBeat={handleDeckCardPress}
           onStopPreview={() => void stopPreview()}
           onTogglePreview={() => void togglePreviewPlayback()}
-          onVideoLoad={handleFollowerVideoLoad}
+          onPreviewSlotReady={handlePreviewSlotReady}
           playbackSentenceIndex={previewSentenceIndex}
           previewDurationSec={previewDurationSec}
           previewPositionSec={previewPositionSec}
           previewReady={previewReady}
+          previewVideoSlots={previewVideoSlots}
           railItems={beatRailItems}
           selectedSentenceIndex={selectedSentenceIndex}
           theme={{
@@ -570,7 +572,6 @@ export default function StoryEditorScreen() {
             tabIconDefault: theme.tabIconDefault,
             text: theme.text,
           }}
-          videoRef={videoRef}
         />
       ) : (
         <>

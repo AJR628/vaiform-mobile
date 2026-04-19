@@ -21,6 +21,7 @@ interface UseStep3SessionModelOptions {
   showError: (message: string) => void;
   showSuccess: (message: string) => void;
   showWarning: (message: string) => void;
+  useUnifiedPreviewSlots?: boolean;
 }
 
 export function useStep3SessionModel({
@@ -31,6 +32,7 @@ export function useStep3SessionModel({
   showError,
   showSuccess,
   showWarning,
+  useUnifiedPreviewSlots = false,
 }: UseStep3SessionModelOptions) {
   const voiceSyncModel = useStoryVoiceSync({
     refreshUsage,
@@ -45,6 +47,7 @@ export function useStep3SessionModel({
     session,
     showError,
     showWarning,
+    useUnifiedPreviewSlots,
   });
 
   const previewReadiness = useMemo(

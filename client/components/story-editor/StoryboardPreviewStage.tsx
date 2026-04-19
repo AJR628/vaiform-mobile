@@ -12,21 +12,23 @@ import { ResizeMode, Video } from "expo-av";
 import { ThemedText } from "@/components/ThemedText";
 import { BorderRadius, Spacing } from "@/constants/theme";
 import type { CaptionPlacement } from "@/screens/story-editor/model";
+import type { Step3PreviewVideoSlot } from "@/screens/story-editor/useStep3PreviewPlayback";
 
 interface StoryboardPreviewStageProps {
   blockedMessage: string | null;
   captionPlacement: CaptionPlacement;
   currentCaptionText: string | null;
-  currentSegmentClipUrl: string | null;
-  currentSegmentPosterUrl: string | null;
   maxVideoHeight?: number | null;
-  onVideoLoad: () => void;
+  onPreviewSlotReady: (
+    slotKey: Step3PreviewVideoSlot["key"],
+    requestToken: number,
+  ) => void;
   previewReady: boolean;
+  previewVideoSlots: Step3PreviewVideoSlot[];
   theme: {
     backgroundSecondary: string;
     tabIconDefault: string;
   };
-  videoRef: React.RefObject<Video | null>;
 }
 
 function clamp(value: number, min: number, max: number): number {
@@ -37,13 +39,11 @@ export function StoryboardPreviewStage({
   blockedMessage,
   captionPlacement,
   currentCaptionText,
-  currentSegmentClipUrl,
-  currentSegmentPosterUrl,
   maxVideoHeight,
-  onVideoLoad,
+  onPreviewSlotReady,
   previewReady,
+  previewVideoSlots,
   theme,
-  videoRef,
 }: StoryboardPreviewStageProps) {
   const [availableWidth, setAvailableWidth] = useState(0);
 
@@ -106,6 +106,8 @@ export function StoryboardPreviewStage({
     };
   }, [captionPlacement, frameSize.height, frameSize.width]);
 
+  const hasPreviewSlot = previewVideoSlots.some((slot) => !!slot.clipUrl);
+
   return (
     <View
       style={styles.stage}
@@ -120,25 +122,34 @@ export function StoryboardPreviewStage({
         ]}
         testID="storyboard-preview-frame"
       >
-        {previewReady && currentSegmentClipUrl ? (
+        {previewReady && hasPreviewSlot ? (
           <>
-            <Video
-              ref={videoRef}
-              source={{ uri: currentSegmentClipUrl }}
-              style={styles.video}
-              resizeMode={ResizeMode.COVER}
-              shouldPlay={false}
-              isLooping={false}
-              progressUpdateIntervalMillis={250}
-              onLoad={onVideoLoad}
-              onReadyForDisplay={onVideoLoad}
-              posterSource={
-                currentSegmentPosterUrl
-                  ? { uri: currentSegmentPosterUrl }
-                  : undefined
-              }
-              usePoster={Boolean(currentSegmentPosterUrl)}
-            />
+            {previewVideoSlots.map((slot) =>
+              slot.clipUrl ? (
+                <Video
+                  key={`${slot.key}-${slot.requestToken}`}
+                  ref={slot.ref}
+                  source={{ uri: slot.clipUrl }}
+                  style={[
+                    styles.video,
+                    slot.isActive ? styles.videoActive : styles.videoStandby,
+                  ]}
+                  resizeMode={ResizeMode.COVER}
+                  shouldPlay={false}
+                  isLooping={false}
+                  progressUpdateIntervalMillis={250}
+                  onLoad={() => onPreviewSlotReady(slot.key, slot.requestToken)}
+                  onReadyForDisplay={() =>
+                    onPreviewSlotReady(slot.key, slot.requestToken)
+                  }
+                  posterSource={
+                    slot.posterUrl ? { uri: slot.posterUrl } : undefined
+                  }
+                  testID={`storyboard-preview-video-${slot.key}`}
+                  usePoster={Boolean(slot.posterUrl)}
+                />
+              ) : null,
+            )}
             <View style={captionStyle.overlay} pointerEvents="none">
               <ThemedText
                 style={[styles.captionText, captionStyle.text]}
@@ -195,7 +206,18 @@ const styles = StyleSheet.create({
     width: "100%",
   },
   video: {
+    bottom: 0,
     height: "100%",
+    left: 0,
+    position: "absolute",
+    right: 0,
+    top: 0,
     width: "100%",
+  },
+  videoActive: {
+    opacity: 1,
+  },
+  videoStandby: {
+    opacity: 0,
   },
 });
