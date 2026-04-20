@@ -1,5 +1,7 @@
 import type {
   StoryCaption,
+  StoryCaptionOverlayV1,
+  StoryDraftPreviewV1,
   StoryPlaybackTimelineSegmentV1,
   StoryPlaybackTimelineV1,
   StoryPreviewReadinessV1,
@@ -10,6 +12,18 @@ export interface Step3PreviewReadiness {
   ready: boolean;
   reasonCode: string | null;
   missingBeatIndices: number[];
+}
+
+export interface Step3DraftPreview {
+  state: string;
+  artifactUrl: string | null;
+  durationSec: number | null;
+  width: number | null;
+  height: number | null;
+  blockedReasonCode: string | null;
+  missingBeatIndices: number[];
+  errorMessage: string | null;
+  attemptId: string | null;
 }
 
 export interface Step3CaptionTimelineItem {
@@ -62,6 +76,58 @@ export function getStep3PreviewReadiness(
   };
 }
 
+export function getStep3DraftPreview(
+  session: StorySession | null | undefined,
+): Step3DraftPreview {
+  const preview = session?.draftPreviewV1 as
+    | StoryDraftPreviewV1
+    | null
+    | undefined;
+  const state =
+    typeof preview?.state === "string" && preview.state.length > 0
+      ? preview.state
+      : "not_requested";
+  const isReady = state === "ready";
+  return {
+    state,
+    artifactUrl: isReady ? (preview?.artifact?.url ?? null) : null,
+    durationSec: isReady
+      ? toFiniteNumber(preview?.artifact?.durationSec)
+      : null,
+    width: isReady ? toFiniteNumber(preview?.artifact?.width) : null,
+    height: isReady ? toFiniteNumber(preview?.artifact?.height) : null,
+    blockedReasonCode:
+      typeof preview?.blocked?.reasonCode === "string"
+        ? preview.blocked.reasonCode
+        : null,
+    missingBeatIndices: normalizeBeatIndices(
+      preview?.blocked?.missingBeatIndices,
+    ),
+    errorMessage:
+      typeof preview?.error?.message === "string"
+        ? preview.error.message
+        : null,
+    attemptId:
+      typeof preview?.job?.attemptId === "string"
+        ? preview.job.attemptId
+        : null,
+  };
+}
+
+export function getStep3CaptionOverlay(
+  session: StorySession | null | undefined,
+): StoryCaptionOverlayV1 | null {
+  const overlay = session?.captionOverlayV1;
+  if (
+    !overlay ||
+    Number(overlay.version) !== 1 ||
+    !Array.isArray(overlay.segments)
+  ) {
+    return null;
+  }
+  return overlay;
+}
+
 export function getStep3PlaybackTimeline(
   session: StorySession | null | undefined,
 ): StoryPlaybackTimelineV1 | null {
@@ -107,8 +173,8 @@ export function getStep3CaptionTimeline(
 export function isStep3PreviewReady(
   session: StorySession | null | undefined,
 ): boolean {
-  const readiness = getStep3PreviewReadiness(session);
-  return readiness?.ready === true && !!getStep3PlaybackTimeline(session);
+  const draftPreview = getStep3DraftPreview(session);
+  return draftPreview.state === "ready" && !!draftPreview.artifactUrl;
 }
 
 export function getStep3BlockedReasonCode(
@@ -124,7 +190,29 @@ export function getStep3BlockedMessage(
 ): string | null {
   if (isStep3PreviewReady(session)) return null;
 
-  switch (getStep3BlockedReasonCode(session)) {
+  const draftPreview = getStep3DraftPreview(session);
+  switch (draftPreview.state) {
+    case "stale":
+      return "Preview needs regeneration before playback.";
+    case "queued":
+      return "Preview generation is queued.";
+    case "running":
+      return "Preview generation is running.";
+    case "failed":
+      return (
+        draftPreview.errorMessage ??
+        "Preview generation failed. Try regenerating it."
+      );
+    case "not_requested":
+      return "Generate a synced preview to play this storyboard.";
+    default:
+      break;
+  }
+
+  switch (
+    draftPreview.blockedReasonCode ??
+    getStep3BlockedReasonCode(session)
+  ) {
     case "VOICE_SYNC_NOT_CURRENT":
       return "Sync voice and timing to unlock the synced preview.";
     case "PREVIEW_AUDIO_MISSING":

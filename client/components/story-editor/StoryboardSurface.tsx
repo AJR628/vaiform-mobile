@@ -5,7 +5,9 @@ import { ThemedText } from "@/components/ThemedText";
 import { BorderRadius, Spacing } from "@/constants/theme";
 import type { CaptionPlacement } from "@/screens/story-editor/model";
 import type { Step3BeatRailItem } from "@/screens/story-editor/step3";
-import type { Step3PreviewVideoSlot } from "@/screens/story-editor/useStep3PreviewPlayback";
+import type { AVPlaybackStatus, Video } from "expo-av";
+import type { RefObject } from "react";
+import type { StoryCaptionOverlayV1 } from "@/types/story";
 
 import { StoryboardPreviewStage } from "./StoryboardPreviewStage";
 import { StoryTimelineRail } from "./StoryTimelineRail";
@@ -21,19 +23,20 @@ interface StoryboardSurfaceProps {
   maxVideoHeight?: number | null;
   onLongPressBeat: (sentenceIndex: number) => void;
   onPressBeat: (sentenceIndex: number) => void;
+  onPreviewPlaybackStatus: (status: AVPlaybackStatus) => void;
+  onRequestPreview: () => void;
   onStopPreview: () => void;
   onTogglePreview: () => void;
-  onPreviewSlotReady: (
-    slotKey: Step3PreviewVideoSlot["key"],
-    requestToken: number,
-  ) => void;
   playbackSentenceIndex: number | null;
+  captionOverlay: StoryCaptionOverlayV1 | null;
+  previewArtifactUrl: string | null;
   previewDurationSec: number | null;
+  previewIsRequesting: boolean;
   previewPositionSec: number;
   previewReady: boolean;
-  previewVideoSlots: Step3PreviewVideoSlot[];
   railItems: Step3BeatRailItem[];
   selectedSentenceIndex: number | null;
+  videoRef: RefObject<Video | null>;
   theme: {
     backgroundDefault: string;
     backgroundSecondary: string;
@@ -56,16 +59,20 @@ export function StoryboardSurface({
   maxVideoHeight,
   onLongPressBeat,
   onPressBeat,
+  onPreviewPlaybackStatus,
+  onRequestPreview,
   onStopPreview,
   onTogglePreview,
-  onPreviewSlotReady,
   playbackSentenceIndex,
+  captionOverlay,
+  previewArtifactUrl,
   previewDurationSec,
+  previewIsRequesting,
   previewPositionSec,
   previewReady,
-  previewVideoSlots,
   railItems,
   selectedSentenceIndex,
+  videoRef,
   theme,
 }: StoryboardSurfaceProps) {
   return (
@@ -92,12 +99,16 @@ export function StoryboardSurface({
       <StoryboardPreviewStage
         blockedMessage={blockedMessage}
         captionPlacement={captionPlacement}
+        captionOverlay={captionOverlay}
         currentCaptionText={currentCaptionText}
         maxVideoHeight={maxVideoHeight}
-        onPreviewSlotReady={onPreviewSlotReady}
+        onPlaybackStatusUpdate={onPreviewPlaybackStatus}
+        onRequestPreview={onRequestPreview}
+        previewArtifactUrl={previewArtifactUrl}
+        previewIsRequesting={previewIsRequesting}
         previewReady={previewReady}
-        previewVideoSlots={previewVideoSlots}
         theme={theme}
+        videoRef={videoRef}
       />
 
       <StoryTimelineRail

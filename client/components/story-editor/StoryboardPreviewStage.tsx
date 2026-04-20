@@ -1,30 +1,33 @@
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState, type RefObject } from "react";
 import {
+  Pressable,
   StyleSheet,
   View,
   type LayoutChangeEvent,
   type StyleProp,
+  type TextStyle,
   type ViewStyle,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
-import { ResizeMode, Video } from "expo-av";
+import { ResizeMode, Video, type AVPlaybackStatus } from "expo-av";
 
 import { ThemedText } from "@/components/ThemedText";
 import { BorderRadius, Spacing } from "@/constants/theme";
 import type { CaptionPlacement } from "@/screens/story-editor/model";
-import type { Step3PreviewVideoSlot } from "@/screens/story-editor/useStep3PreviewPlayback";
+import type { StoryCaptionOverlayV1 } from "@/types/story";
 
 interface StoryboardPreviewStageProps {
   blockedMessage: string | null;
   captionPlacement: CaptionPlacement;
+  captionOverlay: StoryCaptionOverlayV1 | null;
   currentCaptionText: string | null;
   maxVideoHeight?: number | null;
-  onPreviewSlotReady: (
-    slotKey: Step3PreviewVideoSlot["key"],
-    requestToken: number,
-  ) => void;
+  onPlaybackStatusUpdate: (status: AVPlaybackStatus) => void;
+  onRequestPreview: () => void;
+  previewArtifactUrl: string | null;
+  previewIsRequesting: boolean;
   previewReady: boolean;
-  previewVideoSlots: Step3PreviewVideoSlot[];
+  videoRef: RefObject<Video | null>;
   theme: {
     backgroundSecondary: string;
     tabIconDefault: string;
@@ -38,12 +41,16 @@ function clamp(value: number, min: number, max: number): number {
 export function StoryboardPreviewStage({
   blockedMessage,
   captionPlacement,
+  captionOverlay,
   currentCaptionText,
   maxVideoHeight,
-  onPreviewSlotReady,
+  onPlaybackStatusUpdate,
+  onRequestPreview,
+  previewArtifactUrl,
+  previewIsRequesting,
   previewReady,
-  previewVideoSlots,
   theme,
+  videoRef,
 }: StoryboardPreviewStageProps) {
   const [availableWidth, setAvailableWidth] = useState(0);
 
@@ -74,19 +81,33 @@ export function StoryboardPreviewStage({
   }, [availableWidth, maxVideoHeight]);
 
   const captionStyle = useMemo(() => {
-    const fontSize = clamp(frameSize.width * 0.07, 13, 24);
+    const style = captionOverlay?.style ?? {};
+    const frame = captionOverlay?.frame;
+    const frameWidth = Number(frame?.width) > 0 ? Number(frame?.width) : 1080;
+    const scale = frameSize.width > 0 ? frameSize.width / frameWidth : 1;
+    const fontSize = clamp(Number(style.fontPx || 76) * scale, 13, 28);
     const lineHeight = Math.round(fontSize * 1.16);
     const horizontalInset = clamp(frameSize.width * 0.08, 12, 28);
     const verticalInset = clamp(frameSize.height * 0.055, 12, 30);
+    const yPct = Number(style.yPct);
+    const placement =
+      style.placement ?? captionOverlay?.placement ?? captionPlacement;
     const centerTop = Math.max(
       verticalInset,
       frameSize.height / 2 - lineHeight * 1.2,
     );
 
-    const placementStyle: StyleProp<ViewStyle> =
-      captionPlacement === "top"
+    const placementStyle: StyleProp<ViewStyle> = Number.isFinite(yPct)
+      ? {
+          top: clamp(
+            yPct * frameSize.height,
+            verticalInset,
+            frameSize.height - verticalInset - lineHeight * 2,
+          ),
+        }
+      : placement === "top"
         ? { top: verticalInset }
-        : captionPlacement === "center"
+        : placement === "center"
           ? { top: centerTop }
           : { bottom: verticalInset };
 
@@ -100,13 +121,16 @@ export function StoryboardPreviewStage({
         },
       ] as StyleProp<ViewStyle>,
       text: {
+        color: typeof style.color === "string" ? style.color : "#fff",
         fontSize,
+        fontStyle: style.fontStyle === "italic" ? "italic" : "normal",
+        fontWeight: style.weightCss === "normal" ? "400" : "700",
         lineHeight,
-      },
+      } as TextStyle,
     };
-  }, [captionPlacement, frameSize.height, frameSize.width]);
+  }, [captionOverlay, captionPlacement, frameSize.height, frameSize.width]);
 
-  const hasPreviewSlot = previewVideoSlots.some((slot) => !!slot.clipUrl);
+  const hasPlayablePreview = previewReady && !!previewArtifactUrl;
 
   return (
     <View
@@ -122,34 +146,19 @@ export function StoryboardPreviewStage({
         ]}
         testID="storyboard-preview-frame"
       >
-        {previewReady && hasPreviewSlot ? (
+        {hasPlayablePreview ? (
           <>
-            {previewVideoSlots.map((slot) =>
-              slot.clipUrl ? (
-                <Video
-                  key={`${slot.key}-${slot.requestToken}`}
-                  ref={slot.ref}
-                  source={{ uri: slot.clipUrl }}
-                  style={[
-                    styles.video,
-                    slot.isActive ? styles.videoActive : styles.videoStandby,
-                  ]}
-                  resizeMode={ResizeMode.COVER}
-                  shouldPlay={false}
-                  isLooping={false}
-                  progressUpdateIntervalMillis={250}
-                  onLoad={() => onPreviewSlotReady(slot.key, slot.requestToken)}
-                  onReadyForDisplay={() =>
-                    onPreviewSlotReady(slot.key, slot.requestToken)
-                  }
-                  posterSource={
-                    slot.posterUrl ? { uri: slot.posterUrl } : undefined
-                  }
-                  testID={`storyboard-preview-video-${slot.key}`}
-                  usePoster={Boolean(slot.posterUrl)}
-                />
-              ) : null,
-            )}
+            <Video
+              ref={videoRef}
+              source={{ uri: previewArtifactUrl }}
+              style={styles.video}
+              resizeMode={ResizeMode.COVER}
+              shouldPlay={false}
+              isLooping={false}
+              progressUpdateIntervalMillis={250}
+              onPlaybackStatusUpdate={onPlaybackStatusUpdate}
+              testID="storyboard-preview-video"
+            />
             <View style={captionStyle.overlay} pointerEvents="none">
               <ThemedText
                 style={[styles.captionText, captionStyle.text]}
@@ -165,6 +174,19 @@ export function StoryboardPreviewStage({
             <ThemedText style={styles.blockedText}>
               {blockedMessage ?? "Synced preview is blocked for this session."}
             </ThemedText>
+            <Pressable
+              onPress={onRequestPreview}
+              disabled={previewIsRequesting}
+              style={[
+                styles.regenerateButton,
+                { opacity: previewIsRequesting ? 0.6 : 1 },
+              ]}
+              testID="storyboard-preview-regenerate"
+            >
+              <ThemedText style={styles.regenerateText}>
+                {previewIsRequesting ? "Generating..." : "Generate Preview"}
+              </ThemedText>
+            </Pressable>
           </View>
         )}
       </View>
@@ -189,7 +211,6 @@ const styles = StyleSheet.create({
     position: "absolute",
   },
   captionText: {
-    color: "#fff",
     fontWeight: "700",
     textAlign: "center",
     textShadowColor: "rgba(0,0,0,0.75)",
@@ -214,10 +235,16 @@ const styles = StyleSheet.create({
     top: 0,
     width: "100%",
   },
-  videoActive: {
-    opacity: 1,
+  regenerateButton: {
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.22)",
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
   },
-  videoStandby: {
-    opacity: 0,
+  regenerateText: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "800",
   },
 });

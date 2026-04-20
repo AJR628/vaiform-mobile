@@ -3,14 +3,17 @@ import { useMemo } from "react";
 import type { StorySession } from "@/types/story";
 
 import {
+  findStep3CaptionAtTime,
+  getStep3CaptionOverlay,
   getStep3BlockedMessage,
   getStep3BeatRailItems,
   getStep3CaptionTimeline,
+  getStep3DraftPreview,
   getStep3PlaybackTimeline,
   getStep3PreviewReadiness,
   isStep3PreviewReady,
 } from "./step3";
-import { useStep3PreviewPlayback } from "./useStep3PreviewPlayback";
+import { useStep3PreviewArtifact } from "./useStep3PreviewArtifact";
 import { useStoryVoiceSync } from "./useStoryVoiceSync";
 
 interface UseStep3SessionModelOptions {
@@ -43,11 +46,14 @@ export function useStep3SessionModel({
     showSuccess,
     showWarning,
   });
-  const previewPlaybackModel = useStep3PreviewPlayback({
+  void useUnifiedPreviewSlots;
+  const previewPlaybackModel = useStep3PreviewArtifact({
     session,
+    sessionId,
+    setSession,
     showError,
+    showSuccess,
     showWarning,
-    useUnifiedPreviewSlots,
   });
 
   const previewReadiness = useMemo(
@@ -71,15 +77,36 @@ export function useStep3SessionModel({
     () => getStep3BeatRailItems(session),
     [session],
   );
+  const draftPreview = useMemo(() => getStep3DraftPreview(session), [session]);
+  const captionOverlay = useMemo(
+    () => getStep3CaptionOverlay(session),
+    [session],
+  );
+  const currentPreviewCaption = useMemo(
+    () =>
+      findStep3CaptionAtTime(session, previewPlaybackModel.previewPositionSec),
+    [previewPlaybackModel.previewPositionSec, session],
+  );
+  const previewSentenceIndex = currentPreviewCaption?.sentenceIndex ?? null;
 
   return {
     ...previewPlaybackModel,
     ...voiceSyncModel,
     beatRailItems,
+    captionOverlay,
     captionTimeline,
+    currentPreviewCaption,
+    currentSegmentClipUrl: null,
+    currentSegmentPosterUrl: null,
+    draftPreview,
+    handleFollowerVideoLoad: () => {},
+    handlePreviewSlotReady: () => {},
     playbackTimeline,
+    playbackOwnerSentenceIndex: previewSentenceIndex,
     previewBlockedMessage,
     previewReadiness,
     previewReady,
+    previewSentenceIndex,
+    previewVideoSlots: [],
   };
 }

@@ -5,7 +5,6 @@ import { describe, expect, jest, test } from "@jest/globals";
 
 import { StoryboardSurface } from "@/components/story-editor/StoryboardSurface";
 import type { Step3BeatRailItem } from "@/screens/story-editor/step3";
-import type { Step3PreviewVideoSlot } from "@/screens/story-editor/useStep3PreviewPlayback";
 
 jest.mock("expo-av", () => ({
   Video: "Video",
@@ -39,52 +38,6 @@ const railItems: Step3BeatRailItem[] = [
   },
 ];
 
-const blockedSlots: Step3PreviewVideoSlot[] = [
-  {
-    clipUrl: null,
-    isActive: true,
-    isReady: false,
-    key: "a",
-    posterUrl: null,
-    ref: { current: null },
-    requestToken: 0,
-    segmentIndex: null,
-  },
-  {
-    clipUrl: null,
-    isActive: false,
-    isReady: false,
-    key: "b",
-    posterUrl: null,
-    ref: { current: null },
-    requestToken: 0,
-    segmentIndex: null,
-  },
-];
-
-const readySlots: Step3PreviewVideoSlot[] = [
-  {
-    clipUrl: "https://cdn.example.com/clip-a.mp4",
-    isActive: true,
-    isReady: true,
-    key: "a",
-    posterUrl: "https://cdn.example.com/poster-a.jpg",
-    ref: { current: null },
-    requestToken: 1,
-    segmentIndex: 0,
-  },
-  {
-    clipUrl: "https://cdn.example.com/clip-b.mp4",
-    isActive: false,
-    isReady: false,
-    key: "b",
-    posterUrl: "https://cdn.example.com/poster-b.jpg",
-    ref: { current: null },
-    requestToken: 2,
-    segmentIndex: 1,
-  },
-];
-
 describe("client/components/story-editor/StoryboardSurface", () => {
   test("renders blocked state and compact rail inside one surface", () => {
     const { getByTestId, getAllByText } = render(
@@ -99,16 +52,20 @@ describe("client/components/story-editor/StoryboardSurface", () => {
         maxVideoHeight={260}
         onLongPressBeat={jest.fn()}
         onPressBeat={jest.fn()}
-        onPreviewSlotReady={jest.fn()}
+        onPreviewPlaybackStatus={jest.fn()}
+        onRequestPreview={jest.fn()}
         onStopPreview={jest.fn()}
         onTogglePreview={jest.fn()}
         playbackSentenceIndex={null}
+        captionOverlay={null}
+        previewArtifactUrl={null}
         previewDurationSec={null}
+        previewIsRequesting={false}
         previewPositionSec={0}
         previewReady={false}
-        previewVideoSlots={blockedSlots}
         railItems={railItems}
         selectedSentenceIndex={null}
+        videoRef={{ current: null }}
         theme={theme}
       />,
     );
@@ -134,16 +91,28 @@ describe("client/components/story-editor/StoryboardSurface", () => {
         maxVideoHeight={280}
         onLongPressBeat={jest.fn()}
         onPressBeat={jest.fn()}
-        onPreviewSlotReady={jest.fn()}
+        onPreviewPlaybackStatus={jest.fn()}
+        onRequestPreview={jest.fn()}
         onStopPreview={jest.fn()}
         onTogglePreview={jest.fn()}
         playbackSentenceIndex={0}
+        captionOverlay={{
+          version: 1,
+          contractVersion: "caption-overlay-v1",
+          rendererVersion: "caption-overlay-v1",
+          frame: { width: 1080, height: 1920 },
+          placement: "center",
+          style: { placement: "center", fontPx: 72 },
+          segments: [],
+        }}
+        previewArtifactUrl="https://cdn.example.com/base.mp4"
         previewDurationSec={10}
+        previewIsRequesting={false}
         previewPositionSec={4}
         previewReady
-        previewVideoSlots={readySlots}
         railItems={railItems}
         selectedSentenceIndex={0}
+        videoRef={{ current: null }}
         theme={theme}
       />,
     );
@@ -156,9 +125,8 @@ describe("client/components/story-editor/StoryboardSurface", () => {
       getByTestId("storyboard-preview-caption").props.style,
     );
 
-    expect(getByTestId("storyboard-preview-video-a")).toBeTruthy();
-    expect(getByTestId("storyboard-preview-video-b")).toBeTruthy();
+    expect(getByTestId("storyboard-preview-video")).toBeTruthy();
     expect(captionStyle.fontSize).toBeGreaterThanOrEqual(13);
-    expect(captionStyle.fontSize).toBeLessThanOrEqual(24);
+    expect(captionStyle.fontSize).toBeLessThanOrEqual(28);
   });
 });

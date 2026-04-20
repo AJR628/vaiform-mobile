@@ -6,6 +6,8 @@ import {
   getStep3BeatRailItems,
   getStep3BlockedMessage,
   getStep3CaptionTimeline,
+  getStep3CaptionOverlay,
+  getStep3DraftPreview,
   getStep3PlaybackOwnerSentenceIndex,
   getStep3PlaybackTimeline,
   getStep3PreviewReadiness,
@@ -55,6 +57,32 @@ function buildSession(overrides: Partial<StorySession> = {}): StorySession {
       reasonCode: null,
       missingBeatIndices: [],
     },
+    draftPreviewV1: {
+      version: 1,
+      state: "ready",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+      artifact: {
+        url: "https://cdn.example.com/base.mp4",
+        contentType: "video/mp4",
+        durationSec: 6,
+        width: 1080,
+        height: 1920,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        expiresAt: "2026-01-02T00:00:00.000Z",
+      },
+    },
+    captionOverlayV1: {
+      version: 1,
+      contractVersion: "caption-overlay-v1",
+      rendererVersion: "caption-overlay-v1",
+      frame: { width: 1080, height: 1920 },
+      placement: "bottom",
+      style: { placement: "bottom" },
+      segments: [
+        { beatIndex: 0, startSec: 0, endSec: 3, text: "Beat one" },
+        { beatIndex: 1, startSec: 3, endSec: 6, text: "Beat two" },
+      ],
+    },
     playbackTimelineV1: {
       version: 1,
       source: "auto",
@@ -98,6 +126,11 @@ describe("client/screens/story-editor/step3", () => {
       missingBeatIndices: [],
     });
     expect(isStep3PreviewReady(session)).toBe(true);
+    expect(getStep3DraftPreview(session)).toMatchObject({
+      state: "ready",
+      artifactUrl: "https://cdn.example.com/base.mp4",
+    });
+    expect(getStep3CaptionOverlay(session)?.segments).toHaveLength(2);
     expect(getStep3PlaybackTimeline(session)).toEqual(
       session.playbackTimelineV1,
     );
@@ -111,6 +144,14 @@ describe("client/screens/story-editor/step3", () => {
         reasonCode: "MISSING_CLIP_COVERAGE",
         missingBeatIndices: [1],
       },
+      draftPreviewV1: {
+        version: 1,
+        state: "blocked",
+        blocked: {
+          reasonCode: "MISSING_CLIP_COVERAGE",
+          missingBeatIndices: [1],
+        },
+      },
       playbackTimelineV1: null,
     });
     const staleSyncSession = buildSession({
@@ -119,6 +160,14 @@ describe("client/screens/story-editor/step3", () => {
         ready: false,
         reasonCode: "VOICE_SYNC_NOT_CURRENT",
         missingBeatIndices: [],
+      },
+      draftPreviewV1: {
+        version: 1,
+        state: "blocked",
+        blocked: {
+          reasonCode: "VOICE_SYNC_NOT_CURRENT",
+          missingBeatIndices: [],
+        },
       },
       playbackTimelineV1: null,
     });

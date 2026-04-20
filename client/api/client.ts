@@ -709,6 +709,82 @@ export async function storyGet(
   });
 }
 
+export interface StoryPreviewPendingMeta {
+  state?: "pending" | string;
+  attemptId?: string | null;
+}
+
+export type StoryPreviewResult = NormalizedResponse<StorySession> & {
+  status: number;
+  preview?: StoryPreviewPendingMeta | null;
+};
+
+export async function storyPreview(
+  body: { sessionId: string },
+  options: { idempotencyKey: string },
+): Promise<StoryPreviewResult> {
+  const idempotencyKey = options.idempotencyKey?.trim();
+  if (!idempotencyKey) {
+    throw new Error("storyPreview requires a non-empty idempotencyKey option");
+  }
+
+  const endpoint = "/api/story/preview";
+  const requestHeaders: Record<string, string> = {
+    "Content-Type": "application/json",
+    "x-client": "mobile",
+    "X-Idempotency-Key": idempotencyKey,
+  };
+  const idToken = await getIdToken();
+  if (idToken) {
+    requestHeaders.Authorization = `Bearer ${idToken}`;
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: "POST",
+      headers: requestHeaders,
+      body: JSON.stringify(body),
+    });
+    const responseRequestId = response.headers.get("x-request-id");
+    const contentType = response.headers.get("content-type");
+    const json: unknown =
+      contentType && contentType.includes("application/json")
+        ? await response.json()
+        : { message: await response.text() };
+    const normalized = normalizeResponse<StorySession>(
+      json,
+      response.status,
+      responseRequestId,
+    );
+    if (!normalized.ok) {
+      recordNormalizedFailure(endpoint, "POST", normalized);
+    }
+    const preview =
+      typeof json === "object" && json !== null
+        ? ((json as { preview?: StoryPreviewPendingMeta }).preview ?? null)
+        : null;
+    return {
+      ...normalized,
+      status: response.status,
+      preview,
+    };
+  } catch (error) {
+    const normalized: NormalizedError = {
+      ok: false,
+      status: 0,
+      code: "NETWORK_ERROR",
+      message: error instanceof Error ? error.message : "Network error",
+      requestId: null,
+    };
+    recordNormalizedFailure(endpoint, "POST", normalized);
+    return {
+      ...normalized,
+      status: 0,
+      preview: null,
+    };
+  }
+}
+
 export interface StoryBeatTextUpdateData {
   sentences: string[];
   shots: unknown[];

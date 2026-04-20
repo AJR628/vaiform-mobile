@@ -1,4 +1,9 @@
-export type StoryVoiceSyncState = "never_synced" | "stale" | "current" | "syncing" | string;
+export type StoryVoiceSyncState =
+  | "never_synced"
+  | "stale"
+  | "current"
+  | "syncing"
+  | string;
 export type StoryVoiceSyncScope = "none" | "beat" | "full" | string;
 
 export interface StoryInput {
@@ -71,6 +76,62 @@ export interface StoryPreviewReadinessV1 {
   ready: boolean;
   reasonCode?: string | null;
   missingBeatIndices?: number[];
+}
+
+export type StoryDraftPreviewState =
+  | "not_requested"
+  | "blocked"
+  | "queued"
+  | "running"
+  | "ready"
+  | "failed"
+  | "stale"
+  | string;
+
+export interface StoryDraftPreviewV1 {
+  version: 1;
+  state: StoryDraftPreviewState;
+  updatedAt?: string | null;
+  artifact?: {
+    url?: string | null;
+    contentType?: string | null;
+    durationSec?: number | null;
+    width?: number | null;
+    height?: number | null;
+    createdAt?: string | null;
+    expiresAt?: string | null;
+  } | null;
+  blocked?: {
+    reasonCode?: string | null;
+    missingBeatIndices?: number[];
+  } | null;
+  job?: {
+    state?: string | null;
+    attemptId?: string | null;
+    retryAfterSec?: number | null;
+  } | null;
+  error?: {
+    code?: string | null;
+    message?: string | null;
+  } | null;
+}
+
+export interface StoryCaptionOverlayV1 {
+  version: 1;
+  contractVersion: "caption-overlay-v1" | string;
+  rendererVersion: "caption-overlay-v1" | string;
+  frame: {
+    width: number;
+    height: number;
+  };
+  placement?: "top" | "center" | "bottom" | "custom" | string;
+  style?: StoryOverlayCaptionStyle;
+  segments: {
+    beatIndex: number;
+    startSec: number;
+    endSec: number;
+    text: string;
+  }[];
 }
 
 export interface StoryCaptionMeta {
@@ -193,6 +254,8 @@ export interface StorySession {
   voiceSync?: StoryVoiceSync;
   playbackTimelineV1?: StoryPlaybackTimelineV1 | null;
   previewReadinessV1?: StoryPreviewReadinessV1 | null;
+  draftPreviewV1?: StoryDraftPreviewV1 | null;
+  captionOverlayV1?: StoryCaptionOverlayV1 | null;
   billingEstimate?: StoryBillingEstimate;
   billing?: StoryBilling;
   renderRecovery?: StoryRenderRecovery | null;

@@ -152,24 +152,27 @@ export default function StoryEditorScreen() {
   const canAttemptRender = Boolean(usageSnapshot);
   const {
     beatRailItems,
+    captionOverlay,
     currentPreviewCaption,
     currentSegmentClipUrl,
     currentSegmentPosterUrl,
     draftVoicePreset,
     handleFollowerVideoLoad,
-    handlePreviewSlotReady,
+    handlePreviewPlaybackStatus,
     hasLocalVoiceDraft,
     isPreviewAvailable,
     isPreviewPlaying,
+    isPreviewRequesting,
     isSyncing,
     playbackOwnerSentenceIndex,
     previewDurationSec,
+    previewArtifactUrl,
     previewBlockedMessage,
     previewPositionSec,
     previewReady,
     previewSentenceIndex,
-    previewVideoSlots,
     renderEstimateSec,
+    requestPreview,
     setDraftVoicePreset,
     stopPreview,
     syncEstimateSec,
@@ -555,14 +558,18 @@ export default function StoryEditorScreen() {
           onPressBeat={handleDeckCardPress}
           onStopPreview={() => void stopPreview()}
           onTogglePreview={() => void togglePreviewPlayback()}
-          onPreviewSlotReady={handlePreviewSlotReady}
+          onRequestPreview={() => void requestPreview()}
           playbackSentenceIndex={previewSentenceIndex}
+          captionOverlay={captionOverlay}
+          onPreviewPlaybackStatus={handlePreviewPlaybackStatus}
+          previewArtifactUrl={previewArtifactUrl}
           previewDurationSec={previewDurationSec}
+          previewIsRequesting={isPreviewRequesting}
           previewPositionSec={previewPositionSec}
           previewReady={previewReady}
-          previewVideoSlots={previewVideoSlots}
           railItems={beatRailItems}
           selectedSentenceIndex={selectedSentenceIndex}
+          videoRef={videoRef}
           theme={{
             backgroundDefault: theme.backgroundDefault,
             backgroundSecondary: theme.backgroundSecondary,
