@@ -4,7 +4,7 @@
 - Owner repo: mobile
 - Purpose: Single source of truth for the mobile Preview-flow refactor so phased implementation stays aligned with approved UX direction, current repo architecture, and existing backend/mobile behavior.
 - Last verified against repo: 2026-04-23
-- Current phase: Not started
+- Current phase: Phase 1 completed; Phase 2 not started
 
 ## Goal
 
@@ -61,6 +61,8 @@
 
 ### Phase 1: Flow Truth And Preview Entry Point
 
+- Implementation status: Completed on 2026-04-23.
+- Actual outcome: Runtime change stayed header-only in `client/components/FlowTabsHeader.tsx`. Internal `storyboard` and `speech` step wiring, existing `currentStep="storyboard"` callsites, and existing `onStoryboardPress` / `onSpeechPress` props remained unchanged.
 - Objective: Make the visible flow tell the truth with the smallest possible diff.
 - Why this phase is isolated: It is presentation-only flow correction and should not change state ownership, route semantics, or backend behavior.
 - In scope:
@@ -228,6 +230,41 @@ Additional execution rules:
 - Tests run:
 - Env / feature flag state:
 - Follow-ups discovered:
+
+### Phase 1 Update
+
+- Phase: Phase 1 - Flow Truth And Preview Entry Point
+- Date: 2026-04-23
+- Branch / PR: local working tree on `main`
+- Files changed:
+  - `client/components/FlowTabsHeader.tsx`
+  - `docs/PREVIEW_FLOW_REFACTOR_PLAN.md`
+- What actually changed:
+  - changed the visible `storyboard` pill label from `Storyboard` to `Preview`
+  - removed the visible `Speech` pill from the rendered header list
+  - preserved internal `FlowStep` values, including `storyboard` and `speech`
+  - preserved existing `onStoryboardPress`, `onSpeechPress`, and `currentStep="storyboard"` callsites unchanged
+- What differed from plan:
+  - no runtime compatibility edits outside `FlowTabsHeader.tsx` were required
+  - Phase 1 stayed header-only for runtime behavior
+- Manual verification performed:
+  - audited `HomeStackNavigator`, `StoryEditorScreen`, and `StoryEditorScreen.test.tsx` before editing
+  - confirmed Home header still renders through `FlowTabsHeader` with `currentStep="create"`
+  - confirmed Script header still renders through `FlowTabsHeader` with `currentStep="script"`
+  - confirmed StoryEditor header still renders through `FlowTabsHeader` with `currentStep="storyboard"`
+  - confirmed visible header flow is now `Create`, `Script`, `Preview`, `Render`
+  - confirmed `Preview` still maps to the existing `storyboard` internal step and existing `StoryEditor` route wiring
+  - confirmed no visible `Speech` pill remains
+  - confirmed render gating logic in `StoryEditorScreen` is unchanged
+  - confirmed unified and legacy Step 3 body selection logic is unchanged
+- Tests run:
+  - `npm run check:types`
+  - `npm run test:ci -- StoryEditorScreen.test.tsx`
+- Env / feature flag state:
+  - `EXPO_PUBLIC_STEP3_UNIFIED_SURFACE` behavior unchanged
+  - existing legacy/unified Step 3 gating preserved
+- Follow-ups discovered:
+  - Phase 2 can build on unchanged `StoryEditorScreen` ownership and modal wiring without additional Phase 1 cleanup
 
 ## Current Open Questions
 

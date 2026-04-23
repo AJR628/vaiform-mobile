@@ -8,7 +8,7 @@ export type FlowStep = "create" | "script" | "storyboard" | "speech" | "render";
 const STEPS: { key: FlowStep; label: string }[] = [
   { key: "create", label: "Create" },
   { key: "script", label: "Script" },
-  { key: "storyboard", label: "Storyboard" },
+  { key: "storyboard", label: "Preview" },
   { key: "speech", label: "Speech" },
   { key: "render", label: "Render" },
 ];
@@ -50,7 +50,7 @@ export function FlowTabsHeader({
 
   return (
     <View style={styles.container}>
-      {STEPS.map(({ key, label }) => {
+      {STEPS.filter(({ key }) => key !== "speech").map(({ key, label }) => {
         const isCurrent = key === currentStep;
         const isRender = key === "render";
         const isSpeech = key === "speech";
