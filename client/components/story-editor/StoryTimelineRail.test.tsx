@@ -40,18 +40,29 @@ const items: Step3BeatRailItem[] = [
     durationSec: 4,
     hasSelectedClip: false,
   },
+  {
+    sentenceIndex: 2,
+    text: "Beat three",
+    clipThumbUrl: null,
+    clipUrl: null,
+    startTimeSec: null,
+    endTimeSec: null,
+    durationSec: null,
+    hasSelectedClip: false,
+  },
 ];
 
 describe("client/components/story-editor/StoryTimelineRail", () => {
-  test("renders one compact beat tile per rail item and preserves beat selection", () => {
+  test("renders a connected filmstrip and preserves beat interactions", () => {
     const onPressBeat = jest.fn();
-    const { getByTestId, getByText } = render(
+    const onLongPressBeat = jest.fn();
+    const { getByTestId, getByText, queryByTestId } = render(
       <StoryTimelineRail
         activeSentenceIndex={0}
         isPreviewAvailable
         isPreviewPlaying={false}
         items={items}
-        onLongPressBeat={jest.fn()}
+        onLongPressBeat={onLongPressBeat}
         onPressBeat={onPressBeat}
         onStopPreview={jest.fn()}
         onTogglePreview={jest.fn()}
@@ -65,10 +76,17 @@ describe("client/components/story-editor/StoryTimelineRail", () => {
 
     expect(getByText("B1")).toBeTruthy();
     expect(getByText("B2")).toBeTruthy();
+    expect(getByTestId("story-timeline-strip")).toBeTruthy();
+    expect(getByTestId("story-timeline-selected-1")).toBeTruthy();
+    expect(getByTestId("story-timeline-playback-0")).toBeTruthy();
+    expect(getByTestId("story-timeline-playback-marker-0")).toBeTruthy();
+    expect(queryByTestId("story-timeline-selected-0")).toBeNull();
 
     fireEvent.press(getByTestId("story-timeline-tile-1"));
+    fireEvent(getByTestId("story-timeline-tile-0"), "longPress");
 
     expect(onPressBeat).toHaveBeenCalledWith(1);
+    expect(onLongPressBeat).toHaveBeenCalledWith(0);
   });
 
   test("shows passive progress from provided preview clock values", () => {
@@ -95,5 +113,40 @@ describe("client/components/story-editor/StoryTimelineRail", () => {
     );
 
     expect(progressStyle.width).toBe("40%");
+  });
+
+  test("uses stable mobile width clamps and fallback thumbnail rendering", () => {
+    const { getAllByText, getByTestId } = render(
+      <StoryTimelineRail
+        activeSentenceIndex={2}
+        isPreviewAvailable={false}
+        isPreviewPlaying={false}
+        items={items}
+        onLongPressBeat={jest.fn()}
+        onPressBeat={jest.fn()}
+        onStopPreview={jest.fn()}
+        onTogglePreview={jest.fn()}
+        playbackSentenceIndex={2}
+        previewDurationSec={null}
+        previewPositionSec={0}
+        selectedSentenceIndex={2}
+        theme={theme}
+      />,
+    );
+
+    const shortStyle = StyleSheet.flatten(
+      getByTestId("story-timeline-tile-0").props.style,
+    );
+    const longerStyle = StyleSheet.flatten(
+      getByTestId("story-timeline-tile-1").props.style,
+    );
+    const fallbackStyle = StyleSheet.flatten(
+      getByTestId("story-timeline-tile-2").props.style,
+    );
+
+    expect(longerStyle.width).toBeGreaterThan(shortStyle.width);
+    expect(fallbackStyle.width).toBe(72);
+    expect(getByTestId("story-timeline-fallback-2")).toBeTruthy();
+    expect(getAllByText("--:--").length).toBeGreaterThanOrEqual(1);
   });
 });

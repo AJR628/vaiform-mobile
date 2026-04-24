@@ -43,6 +43,12 @@ function getTileWidth(item: Step3BeatRailItem): number {
   return Math.round(Math.min(Math.max(60 + duration * 6, 68), 116));
 }
 
+function getDurationLabel(value: number | null): string {
+  return formatDuration(value);
+}
+
+const SEGMENT_HEIGHT = 96;
+
 export function StoryTimelineRail({
   activeSentenceIndex,
   isPreviewAvailable,
@@ -128,62 +134,113 @@ export function StoryTimelineRail({
         contentContainerStyle={styles.railContent}
         testID="story-timeline-scroll"
       >
-        {items.map((item) => {
-          const isSelected = selectedSentenceIndex === item.sentenceIndex;
-          const isPlaybackActive = playbackSentenceIndex === item.sentenceIndex;
-          const isActive = activeSentenceIndex === item.sentenceIndex;
+        <View
+          style={[
+            styles.strip,
+            {
+              backgroundColor: "rgba(255,255,255,0.04)",
+              borderColor: theme.border,
+            },
+          ]}
+          testID="story-timeline-strip"
+        >
+          {items.map((item, index) => {
+            const isSelected = selectedSentenceIndex === item.sentenceIndex;
+            const isPlaybackActive = playbackSentenceIndex === item.sentenceIndex;
+            const isActive = activeSentenceIndex === item.sentenceIndex;
+            const durationLabel = getDurationLabel(item.durationSec);
 
-          return (
-            <Pressable
-              key={`rail-${item.sentenceIndex}`}
-              onPress={() => onPressBeat(item.sentenceIndex)}
-              onLongPress={() => onLongPressBeat(item.sentenceIndex)}
-              style={[
-                styles.tile,
-                {
-                  width: getTileWidth(item),
-                  borderColor: isPlaybackActive
-                    ? theme.link
-                    : isSelected
-                      ? "rgba(255,255,255,0.5)"
-                      : theme.border,
-                  backgroundColor: isActive
-                    ? "rgba(255,255,255,0.14)"
-                    : "rgba(255,255,255,0.06)",
-                },
-              ]}
-              testID={`story-timeline-tile-${item.sentenceIndex}`}
-            >
-              {item.clipThumbUrl ? (
-                <Image
-                  source={{ uri: item.clipThumbUrl }}
-                  style={styles.tileThumb}
-                  resizeMode="cover"
-                />
-              ) : (
-                <View style={styles.tileEmpty}>
-                  <Feather
-                    name="video"
-                    size={14}
-                    color={theme.tabIconDefault}
+            return (
+              <Pressable
+                key={`rail-${item.sentenceIndex}`}
+                onPress={() => onPressBeat(item.sentenceIndex)}
+                onLongPress={() => onLongPressBeat(item.sentenceIndex)}
+                style={[
+                  styles.tile,
+                  {
+                    width: getTileWidth(item),
+                    height: SEGMENT_HEIGHT,
+                    backgroundColor: isActive
+                      ? "rgba(255,255,255,0.14)"
+                      : "rgba(255,255,255,0.06)",
+                    borderRightColor:
+                      index < items.length - 1 ? theme.border : "transparent",
+                  },
+                ]}
+                testID={`story-timeline-tile-${item.sentenceIndex}`}
+              >
+                {item.clipThumbUrl ? (
+                  <Image
+                    source={{ uri: item.clipThumbUrl }}
+                    style={styles.tileThumb}
+                    resizeMode="cover"
                   />
+                ) : (
+                  <View
+                    style={styles.tileEmpty}
+                    testID={`story-timeline-fallback-${item.sentenceIndex}`}
+                  >
+                    <Feather
+                      name="video"
+                      size={14}
+                      color={theme.tabIconDefault}
+                    />
+                  </View>
+                )}
+                <View style={styles.tileScrim} pointerEvents="none" />
+                <View style={styles.tileMetaRow} pointerEvents="none">
+                  <ThemedText style={styles.tileBeat}>
+                    B{item.sentenceIndex + 1}
+                  </ThemedText>
+                  <ThemedText
+                    style={[styles.tileDuration, { color: "#fff" }]}
+                    testID={`story-timeline-duration-${item.sentenceIndex}`}
+                  >
+                    {durationLabel}
+                  </ThemedText>
                 </View>
-              )}
-              <View style={styles.tileScrim} pointerEvents="none" />
-              <View style={styles.tileCopy} pointerEvents="none">
-                <ThemedText style={styles.tileBeat}>
-                  B{item.sentenceIndex + 1}
-                </ThemedText>
-                <ThemedText
-                  numberOfLines={1}
-                  style={[styles.tileText, { color: theme.text }]}
-                >
-                  {item.text || "Untitled"}
-                </ThemedText>
-              </View>
-            </Pressable>
-          );
-        })}
+                <View style={styles.tileCopy} pointerEvents="none">
+                  <ThemedText
+                    numberOfLines={1}
+                    style={[styles.tileText, { color: theme.text }]}
+                  >
+                    {item.text || "Untitled"}
+                  </ThemedText>
+                </View>
+                {isSelected ? (
+                  <View
+                    pointerEvents="none"
+                    style={[
+                      styles.selectionRing,
+                      { borderColor: "rgba(255,255,255,0.6)" },
+                    ]}
+                    testID={`story-timeline-selected-${item.sentenceIndex}`}
+                  />
+                ) : null}
+                {isPlaybackActive ? (
+                  <>
+                    <View
+                      pointerEvents="none"
+                      style={[
+                        styles.playbackRing,
+                        { borderColor: theme.link },
+                      ]}
+                      testID={`story-timeline-playback-${item.sentenceIndex}`}
+                    />
+                    <View
+                      pointerEvents="none"
+                      style={[
+                        styles.playbackMarker,
+                        { backgroundColor: theme.link },
+                      ]}
+                      testID={`story-timeline-playback-marker-${item.sentenceIndex}`}
+                    />
+                  </>
+                ) : null}
+              </Pressable>
+            );
+          })}
+        </View>
       </ScrollView>
     </View>
   );
@@ -222,23 +279,57 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   railContent: {
-    gap: Spacing.xs,
     paddingVertical: 2,
   },
-  tile: {
-    aspectRatio: 9 / 16,
-    borderRadius: BorderRadius.md,
+  selectionRing: {
+    borderRadius: BorderRadius.sm,
+    borderWidth: 2,
+    bottom: 4,
+    left: 4,
+    position: "absolute",
+    right: 4,
+    top: 4,
+  },
+  playbackMarker: {
+    borderRadius: BorderRadius.full,
+    height: 4,
+    left: "32%",
+    position: "absolute",
+    right: "32%",
+    top: 0,
+  },
+  playbackRing: {
+    borderRadius: BorderRadius.sm,
+    borderWidth: 2,
+    bottom: 3,
+    left: 3,
+    position: "absolute",
+    right: 3,
+    top: 3,
+  },
+  strip: {
+    borderRadius: BorderRadius.lg,
     borderWidth: 1,
+    flexDirection: "row",
     overflow: "hidden",
+  },
+  tile: {
+    borderRightWidth: 1,
+    overflow: "hidden",
+    position: "relative",
   },
   tileBeat: {
     color: "#fff",
     fontSize: 10,
     fontWeight: "800",
-    letterSpacing: 0.5,
+  },
+  tileDuration: {
+    fontSize: 10,
+    fontVariant: ["tabular-nums"],
+    fontWeight: "700",
   },
   tileCopy: {
-    bottom: 6,
+    bottom: 8,
     left: 6,
     position: "absolute",
     right: 6,
@@ -251,10 +342,19 @@ const styles = StyleSheet.create({
   tileScrim: {
     backgroundColor: "rgba(0,0,0,0.42)",
     bottom: 0,
-    height: "48%",
+    height: "54%",
     left: 0,
     position: "absolute",
     right: 0,
+  },
+  tileMetaRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    justifyContent: "space-between",
+    left: 6,
+    position: "absolute",
+    right: 6,
+    top: 6,
   },
   tileText: {
     color: "#fff",

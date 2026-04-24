@@ -4,7 +4,7 @@
 - Owner repo: mobile
 - Purpose: Single source of truth for the mobile Preview-flow refactor so phased implementation stays aligned with approved UX direction, current repo architecture, and existing backend/mobile behavior.
 - Last verified against repo: 2026-04-23
-- Current phase: Phase 2 completed; Phase 3 not started
+- Current phase: Phase 3 completed; Phase 4 not started
 
 ## Goal
 
@@ -35,7 +35,7 @@
 - `StoryEditorScreen` still owns `openVoiceSyncModal()` and still passes `onSpeechPress` into `FlowTabsHeader`, but visible voice-sync entry now lives inside the Step 3 Preview workspace surfaces instead of the top pill row. Evidence: `client/screens/StoryEditorScreen.tsx:541-583`, `client/screens/StoryEditorScreen.tsx:630-714`.
 - `StoryboardSurface` is already the unified Step 3 Preview workspace render surface, composing `StoryboardPreviewStage` and `StoryTimelineRail`, and now renders the Phase 2 Preview header/status/CTA treatment from screen-derived props. Evidence: `client/components/story-editor/StoryboardSurface.tsx:16-55`, `client/components/story-editor/StoryboardSurface.tsx:117-207`.
 - `StoryPreviewShell` remains the legacy Step 3 fallback path behind the feature flag and now carries a minimal fallback Preview header/status/CTA treatment so voice sync stays reachable when unified Step 3 is off. Evidence: `client/components/story-editor/StoryPreviewShell.tsx:14-43`, `client/components/story-editor/StoryPreviewShell.tsx:124-280`.
-- `StoryTimelineRail` already remains the rail owner and already derives tile width from `durationSec`, but renders disconnected portrait cards today. Evidence: `client/components/story-editor/StoryTimelineRail.tsx:40-44`, `client/components/story-editor/StoryTimelineRail.tsx:125-187`, `client/components/story-editor/StoryTimelineRail.tsx:224-233`.
+- `StoryTimelineRail` remains the rail owner, still derives width from `durationSec` using stable mobile clamps, and now renders a connected fixed-height filmstrip while keeping the top progress bar as the moving playback indicator. Evidence: `client/components/story-editor/StoryTimelineRail.tsx:40-48`, `client/components/story-editor/StoryTimelineRail.tsx:67-188`, `client/components/story-editor/StoryTimelineRail.tsx:224-302`.
 - `useStep3SessionModel` remains the composition point for preview playback state plus voice sync state. Evidence: `client/screens/story-editor/useStep3SessionModel.ts:40-57`, `client/screens/story-editor/useStep3SessionModel.ts:59-111`.
 - `Step3BeatRailItem` remains the rail data contract and already contains `startTimeSec`, `endTimeSec`, `durationSec`, `clipThumbUrl`, `clipUrl`, `sentenceIndex`, and `text`. Evidence: `client/screens/story-editor/step3.ts:36-45`, `client/screens/story-editor/step3.ts:314-349`.
 - Unified Step 3 is still behind the feature flag `EXPO_PUBLIC_STEP3_UNIFIED_SURFACE === "1"`. Evidence: `client/screens/story-editor/featureFlags.ts:1-3`, `client/screens/StoryEditorScreen.tsx:148`, `client/screens/StoryEditorScreen.tsx:630-725`, `client/screens/StoryEditorScreen.test.tsx:219-310`.
@@ -138,6 +138,8 @@
 
 ### Phase 3: Connected Duration Filmstrip Rail
 
+- Implementation status: Completed on 2026-04-23.
+- Actual outcome: `StoryTimelineRail` was restyled into a connected fixed-height filmstrip with duration-derived clamped widths, stronger selected/playback emphasis, and preserved transport/interactions. No screen, model, or backend-facing files were changed.
 - Objective: Restyle the existing rail into a connected duration-based filmstrip without changing its data contract.
 - Why this phase is isolated: It is a rail presentation/layout refactor on top of already-proven Step 3 timing data.
 - In scope:
@@ -313,6 +315,45 @@ Additional execution rules:
 - Follow-ups discovered:
   - Phase 3 can restyle the rail without revisiting Phase 2 status ownership
   - `StoryPreviewShell` still remains a legacy fallback shell and was intentionally not brought to full mockup parity in this phase
+
+### Phase 3 Update
+
+- Phase: Phase 3 - Connected Duration Filmstrip Rail
+- Date: 2026-04-23
+- Branch / PR: local working tree on `main`
+- Files changed:
+  - `client/components/story-editor/StoryTimelineRail.tsx`
+  - `client/components/story-editor/StoryTimelineRail.test.tsx`
+  - `docs/PREVIEW_FLOW_REFACTOR_PLAN.md`
+- What actually changed:
+  - restyled `StoryTimelineRail` from separated portrait cards into a connected fixed-height filmstrip
+  - kept the existing top transport row and top progress bar as-is for playback controls and moving progress indication
+  - preserved local width behavior inside `StoryTimelineRail` using duration-derived mobile clamps and a stable fallback width for missing or invalid duration
+  - preserved beat labels, missing-thumbnail fallback, press behavior, long-press behavior, Play/Pause, and Stop behavior
+  - added clearer selected and playback-active emphasis inside the rail without changing data flow or ownership
+  - kept `Step3BeatRailItem`, `step3.ts`, and `useStep3SessionModel.ts` unchanged
+- What differed from plan:
+  - no compatibility edits were required in `StoryboardSurface.tsx`, `StoryboardSurface.test.tsx`, or `StoryEditorScreen.tsx`
+  - global strip-level playhead was intentionally deferred; Phase 3 keeps the top progress bar as the only moving playback indicator
+- Manual verification performed:
+  - re-audited the Phase 3 SSOT section, `StoryTimelineRail.tsx`, `StoryTimelineRail.test.tsx`, `StoryboardSurface.tsx`, `StoryboardSurface.test.tsx`, `step3.ts`, `useStep3SessionModel.ts`, and `StoryEditorScreen.tsx` before editing
+  - confirmed unified Preview path still mounts `StoryTimelineRail` inside `StoryboardSurface`
+  - confirmed the top transport row still exposes Play/Pause, current time, top progress bar, total duration, and Stop
+  - confirmed the strip now reads as one connected filmstrip with same-height segments
+  - confirmed segment widths remain duration-derived and visibly duration-correlated with stable mobile clamps
+  - confirmed selected and playback-active states are both still visible, with playback-active stronger than selected-only
+  - confirmed beat press and long-press wiring remains local to `StoryTimelineRail`
+  - confirmed missing-thumbnail fallback still renders intentionally
+  - confirmed legacy path remains unchanged because it does not render `StoryTimelineRail`
+- Tests run:
+  - `npm run check:types`
+  - `npm run test:ci -- client/components/story-editor/StoryTimelineRail.test.tsx`
+- Env / feature flag state:
+  - `EXPO_PUBLIC_STEP3_UNIFIED_SURFACE` behavior unchanged
+  - unified and legacy Step 3 branch selection preserved
+- Follow-ups discovered:
+  - width behavior remains duration-derived with mobile clamps, not exact total-duration proportional layout math
+  - global strip-level playhead remains deferred unless a later phase explicitly introduces safe strip measurement/state ownership for it
 
 ## Current Open Questions
 
