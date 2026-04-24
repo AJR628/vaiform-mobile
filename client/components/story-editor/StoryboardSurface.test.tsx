@@ -39,18 +39,21 @@ const railItems: Step3BeatRailItem[] = [
 ];
 
 describe("client/components/story-editor/StoryboardSurface", () => {
-  test("renders blocked state and compact rail inside one surface", () => {
-    const { getByTestId, getAllByText } = render(
+  test("renders blocked state, header chrome, and compact rail inside one surface", () => {
+    const onOpenVoiceSync = jest.fn();
+    const { getByTestId, getAllByText, getByText } = render(
       <StoryboardSurface
         activeSentenceIndex={null}
         blockedMessage="Sync voice and timing to unlock the synced preview."
         captionPlacement="bottom"
         currentCaptionText={null}
         currentPreviewBeatLabel={null}
+        helperBannerCopy="Clip selection first, then voice sync locks timing."
         isPreviewAvailable={false}
         isPreviewPlaying={false}
         maxVideoHeight={260}
         onLongPressBeat={jest.fn()}
+        onOpenVoiceSync={onOpenVoiceSync}
         onPressBeat={jest.fn()}
         onPreviewPlaybackStatus={jest.fn()}
         onRequestPreview={jest.fn()}
@@ -63,6 +66,9 @@ describe("client/components/story-editor/StoryboardSurface", () => {
         previewIsRequesting={false}
         previewPositionSec={0}
         previewReady={false}
+        previewStatusLabel="Rough Preview"
+        previewStatusTone="neutral"
+        previewSupportingText="Sync voice and timing to unlock the synced preview."
         railItems={railItems}
         selectedSentenceIndex={null}
         videoRef={{ current: null }}
@@ -72,24 +78,31 @@ describe("client/components/story-editor/StoryboardSurface", () => {
 
     expect(getByTestId("storyboard-surface")).toBeTruthy();
     expect(getByTestId("story-timeline-rail")).toBeTruthy();
+    expect(getByText("Preview")).toBeTruthy();
+    expect(getByTestId("preview-status-chip")).toBeTruthy();
+    expect(getByTestId("preview-helper-banner")).toBeTruthy();
     expect(
       getAllByText("Sync voice and timing to unlock the synced preview.")
         .length,
     ).toBeGreaterThanOrEqual(1);
+    fireEvent.press(getByTestId("preview-voice-timing-cta"));
+    expect(onOpenVoiceSync).toHaveBeenCalledTimes(1);
   });
 
   test("renders ready preview without depending on caption raster assets", () => {
-    const { getByTestId } = render(
+    const { getByTestId, getByText, queryByTestId } = render(
       <StoryboardSurface
         activeSentenceIndex={0}
         blockedMessage={null}
         captionPlacement="center"
         currentCaptionText="Caption from canonical session timing"
         currentPreviewBeatLabel="Beat 1"
+        helperBannerCopy={null}
         isPreviewAvailable
         isPreviewPlaying={false}
         maxVideoHeight={280}
         onLongPressBeat={jest.fn()}
+        onOpenVoiceSync={jest.fn()}
         onPressBeat={jest.fn()}
         onPreviewPlaybackStatus={jest.fn()}
         onRequestPreview={jest.fn()}
@@ -110,6 +123,9 @@ describe("client/components/story-editor/StoryboardSurface", () => {
         previewIsRequesting={false}
         previewPositionSec={4}
         previewReady
+        previewStatusLabel="Synced Preview"
+        previewStatusTone="success"
+        previewSupportingText="Timing locked to narration."
         railItems={railItems}
         selectedSentenceIndex={0}
         videoRef={{ current: null }}
@@ -126,6 +142,8 @@ describe("client/components/story-editor/StoryboardSurface", () => {
     );
 
     expect(getByTestId("storyboard-preview-video")).toBeTruthy();
+    expect(getByText("Synced Preview")).toBeTruthy();
+    expect(queryByTestId("preview-helper-banner")).toBeNull();
     expect(captionStyle.fontSize).toBeGreaterThanOrEqual(13);
     expect(captionStyle.fontSize).toBeLessThanOrEqual(28);
   });

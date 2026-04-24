@@ -1,5 +1,6 @@
 import React from "react";
-import { StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
+import { Feather } from "@expo/vector-icons";
 
 import { ThemedText } from "@/components/ThemedText";
 import { BorderRadius, Spacing } from "@/constants/theme";
@@ -18,10 +19,12 @@ interface StoryboardSurfaceProps {
   captionPlacement: CaptionPlacement;
   currentCaptionText: string | null;
   currentPreviewBeatLabel: string | null;
+  helperBannerCopy: string | null;
   isPreviewAvailable: boolean;
   isPreviewPlaying: boolean;
   maxVideoHeight?: number | null;
   onLongPressBeat: (sentenceIndex: number) => void;
+  onOpenVoiceSync: () => void;
   onPressBeat: (sentenceIndex: number) => void;
   onPreviewPlaybackStatus: (status: AVPlaybackStatus) => void;
   onRequestPreview: () => void;
@@ -34,6 +37,9 @@ interface StoryboardSurfaceProps {
   previewIsRequesting: boolean;
   previewPositionSec: number;
   previewReady: boolean;
+  previewStatusLabel: string;
+  previewStatusTone: "neutral" | "success" | "warning" | "info";
+  previewSupportingText: string;
   railItems: Step3BeatRailItem[];
   selectedSentenceIndex: number | null;
   videoRef: RefObject<Video | null>;
@@ -54,10 +60,12 @@ export function StoryboardSurface({
   captionPlacement,
   currentCaptionText,
   currentPreviewBeatLabel,
+  helperBannerCopy,
   isPreviewAvailable,
   isPreviewPlaying,
   maxVideoHeight,
   onLongPressBeat,
+  onOpenVoiceSync,
   onPressBeat,
   onPreviewPlaybackStatus,
   onRequestPreview,
@@ -70,11 +78,31 @@ export function StoryboardSurface({
   previewIsRequesting,
   previewPositionSec,
   previewReady,
+  previewStatusLabel,
+  previewStatusTone,
+  previewSupportingText,
   railItems,
   selectedSentenceIndex,
   videoRef,
   theme,
 }: StoryboardSurfaceProps) {
+  const statusAccentColor =
+    previewStatusTone === "success"
+      ? "#66d17a"
+      : previewStatusTone === "warning"
+        ? "#f2b24d"
+        : previewStatusTone === "info"
+          ? theme.link
+          : theme.text;
+  const statusBackgroundColor =
+    previewStatusTone === "success"
+      ? "rgba(102, 209, 122, 0.14)"
+      : previewStatusTone === "warning"
+        ? "rgba(242, 178, 77, 0.14)"
+        : previewStatusTone === "info"
+          ? "rgba(74, 95, 255, 0.14)"
+          : theme.backgroundSecondary;
+
   return (
     <View
       style={[
@@ -87,14 +115,64 @@ export function StoryboardSurface({
       testID="storyboard-surface"
     >
       <View style={styles.header}>
-        <ThemedText style={styles.title}>Storyboard Preview</ThemedText>
+        <View style={styles.headerTopRow}>
+          <ThemedText style={styles.title}>Preview</ThemedText>
+          <Pressable
+            accessibilityRole="button"
+            onPress={onOpenVoiceSync}
+            style={[
+              styles.voiceSyncButton,
+              {
+                backgroundColor: theme.backgroundSecondary,
+                borderColor: theme.border,
+              },
+            ]}
+            testID="preview-voice-timing-cta"
+          >
+            <Feather name="radio" size={14} color={theme.text} />
+            <ThemedText style={styles.voiceSyncButtonText}>
+              {"Voice & Timing"}
+            </ThemedText>
+          </Pressable>
+        </View>
+        <View style={styles.headerStatusRow}>
+          <View
+            style={[
+              styles.statusChip,
+              {
+                backgroundColor: statusBackgroundColor,
+                borderColor: statusAccentColor,
+              },
+            ]}
+            testID="preview-status-chip"
+          >
+            <ThemedText style={[styles.statusChipText, { color: statusAccentColor }]}>
+              {previewStatusLabel}
+            </ThemedText>
+          </View>
+        </View>
         <ThemedText style={[styles.copy, { color: theme.tabIconDefault }]}>
-          {previewReady
-            ? (currentPreviewBeatLabel ??
-              "Preview follows synced narration timing.")
-            : (blockedMessage ?? "Synced preview is currently unavailable.")}
+          {previewSupportingText}
         </ThemedText>
       </View>
+
+      {helperBannerCopy ? (
+        <View
+          style={[
+            styles.helperBanner,
+            {
+              backgroundColor: theme.backgroundSecondary,
+              borderColor: theme.border,
+            },
+          ]}
+          testID="preview-helper-banner"
+        >
+          <Feather name="star" size={14} color={theme.tabIconDefault} />
+          <ThemedText style={styles.helperBannerText}>
+            {helperBannerCopy}
+          </ThemedText>
+        </View>
+      ) : null}
 
       <StoryboardPreviewStage
         blockedMessage={blockedMessage}
@@ -146,8 +224,54 @@ const styles = StyleSheet.create({
   header: {
     gap: Spacing.xs,
   },
+  headerStatusRow: {
+    alignItems: "flex-start",
+  },
+  headerTopRow: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: Spacing.sm,
+    justifyContent: "space-between",
+  },
+  helperBanner: {
+    alignItems: "center",
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  helperBannerText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  statusChip: {
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+  },
+  statusChipText: {
+    fontSize: 13,
+    fontWeight: "700",
+  },
   title: {
     fontSize: 17,
     fontWeight: "800",
+  },
+  voiceSyncButton: {
+    alignItems: "center",
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  voiceSyncButtonText: {
+    fontSize: 13,
+    fontWeight: "600",
   },
 });

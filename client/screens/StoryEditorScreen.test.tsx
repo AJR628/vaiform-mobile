@@ -33,6 +33,7 @@ const mockLoadStoredAttempt = jest.fn();
 const mockStoreAttempt = jest.fn(async () => {});
 const mockClearAttempt = jest.fn(async () => {});
 const mockStoryboardSurfaceRender = jest.fn(() => null);
+const mockStoryPreviewShellRender = jest.fn(() => null);
 const mockStoryDeckRender = jest.fn(() => null);
 
 let mockRouteParams = { sessionId: "session-1" };
@@ -108,7 +109,7 @@ jest.mock("@/api/client", () => ({
 }));
 
 jest.mock("@/components/story-editor/StoryPreviewShell", () => ({
-  StoryPreviewShell: () => null,
+  StoryPreviewShell: (props: unknown) => mockStoryPreviewShellRender(props),
 }));
 
 jest.mock("@/components/story-editor/StoryboardSurface", () => {
@@ -205,6 +206,7 @@ describe("client/screens/StoryEditorScreen", () => {
     mockStoreAttempt.mockClear();
     mockClearAttempt.mockClear();
     mockStoryboardSurfaceRender.mockClear();
+    mockStoryPreviewShellRender.mockClear();
     mockStoryDeckRender.mockClear();
   });
 
@@ -227,6 +229,17 @@ describe("client/screens/StoryEditorScreen", () => {
     });
 
     expect(mockStoryboardSurfaceRender).not.toHaveBeenCalled();
+    expect(mockStoryPreviewShellRender).toHaveBeenCalled();
+    expect(
+      mockStoryPreviewShellRender.mock.calls.at(-1)?.[0],
+    ).toMatchObject({
+      onOpenVoiceSync: expect.any(Function),
+      previewStatusLabel: "Rough Preview",
+      previewStatusTone: "neutral",
+      previewSupportingText:
+        "Generate a synced preview to play this storyboard.",
+      helperBannerCopy: "Clip selection first, then voice sync locks timing.",
+    });
   });
 
   test("uses the unified surface path without mounting the legacy deck when the flag is on", async () => {
@@ -247,6 +260,16 @@ describe("client/screens/StoryEditorScreen", () => {
           ready: true,
           reasonCode: null,
           missingBeatIndices: [],
+        },
+        draftPreviewV1: {
+          version: 1,
+          state: "ready",
+          artifact: {
+            url: "https://cdn.example.com/preview.mp4",
+            durationSec: 4,
+            width: 1080,
+            height: 1920,
+          },
         },
         playbackTimelineV1: {
           version: 1,
@@ -276,6 +299,16 @@ describe("client/screens/StoryEditorScreen", () => {
     });
 
     expect(mockStoryDeckRender).not.toHaveBeenCalled();
+    expect(mockStoryPreviewShellRender).not.toHaveBeenCalled();
+    expect(
+      mockStoryboardSurfaceRender.mock.calls.at(-1)?.[0],
+    ).toMatchObject({
+      onOpenVoiceSync: expect.any(Function),
+      previewStatusLabel: "Synced Preview",
+      previewStatusTone: "success",
+      previewSupportingText: "Timing locked to narration.",
+      helperBannerCopy: null,
+    });
   });
 
   test("shows the insufficient render time message before calling finalize", async () => {

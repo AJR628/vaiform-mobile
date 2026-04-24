@@ -70,6 +70,72 @@ const UNIFIED_PREVIEW_MIN_VIDEO_HEIGHT = 240;
 const UNIFIED_PREVIEW_MAX_VIDEO_HEIGHT = 430;
 const UNIFIED_SURFACE_CHROME_RESERVE = 164;
 
+type PreviewWorkspaceStatusTone = "neutral" | "success" | "warning" | "info";
+
+interface PreviewWorkspaceChrome {
+  helperBannerCopy: string | null;
+  statusLabel: string;
+  statusTone: PreviewWorkspaceStatusTone;
+  supportingText: string;
+}
+
+function getPreviewWorkspaceChrome({
+  draftPreviewState,
+  hasLocalVoiceDraft,
+  isSyncing,
+  previewBlockedMessage,
+  previewReady,
+  voiceSyncState,
+}: {
+  draftPreviewState: string;
+  hasLocalVoiceDraft: boolean;
+  isSyncing: boolean;
+  previewBlockedMessage: string | null;
+  previewReady: boolean;
+  voiceSyncState: string | null | undefined;
+}): PreviewWorkspaceChrome {
+  if (isSyncing) {
+    return {
+      helperBannerCopy: null,
+      statusLabel: "Syncing",
+      statusTone: "info",
+      supportingText: "Updating narration timing for synced preview.",
+    };
+  }
+
+  if (voiceSyncState === "current" && previewReady) {
+    return {
+      helperBannerCopy: null,
+      statusLabel: "Synced Preview",
+      statusTone: "success",
+      supportingText: "Timing locked to narration.",
+    };
+  }
+
+  if (
+    hasLocalVoiceDraft ||
+    voiceSyncState === "stale" ||
+    draftPreviewState === "stale"
+  ) {
+    return {
+      helperBannerCopy: "Voice changed. Re-sync to refresh timing and preview.",
+      statusLabel: "Preview Stale",
+      statusTone: "warning",
+      supportingText:
+        previewBlockedMessage ??
+        "Voice changed. Re-sync to refresh timing and preview.",
+    };
+  }
+
+  return {
+    helperBannerCopy: "Clip selection first, then voice sync locks timing.",
+    statusLabel: "Rough Preview",
+    statusTone: "neutral",
+    supportingText:
+      previewBlockedMessage ?? "Sync voice to unlock the synced preview.",
+  };
+}
+
 export default function StoryEditorScreen() {
   const route = useRoute<StoryEditorRouteProp>();
   const navigation = useNavigation<StoryEditorNavProp>();
@@ -156,6 +222,7 @@ export default function StoryEditorScreen() {
     currentPreviewCaption,
     currentSegmentClipUrl,
     currentSegmentPosterUrl,
+    draftPreview,
     draftVoicePreset,
     handleFollowerVideoLoad,
     handlePreviewPlaybackStatus,
@@ -217,6 +284,28 @@ export default function StoryEditorScreen() {
     userId: user?.uid,
   });
   const activeDeckSentenceIndex = previewSentenceIndex ?? selectedSentenceIndex;
+  const currentPreviewBeatLabel =
+    playbackOwnerSentenceIndex !== null
+      ? `Beat ${playbackOwnerSentenceIndex + 1}`
+      : previewSentenceIndex !== null
+        ? `Beat ${previewSentenceIndex + 1}`
+        : null;
+  const previewWorkspaceChrome = getPreviewWorkspaceChrome({
+    draftPreviewState: draftPreview.state,
+    hasLocalVoiceDraft,
+    isSyncing,
+    previewBlockedMessage,
+    previewReady,
+    voiceSyncState: voiceSync?.state,
+  });
+  const previewShellChromeReserve =
+    PREVIEW_SHELL_CHROME_RESERVE +
+    56 +
+    (previewWorkspaceChrome.helperBannerCopy ? 52 : 0);
+  const unifiedSurfaceChromeReserve =
+    UNIFIED_SURFACE_CHROME_RESERVE +
+    56 +
+    (previewWorkspaceChrome.helperBannerCopy ? 52 : 0);
 
   const scrollX = useSharedValue(0);
   const onDeckScroll = useAnimatedScrollHandler({
@@ -270,7 +359,7 @@ export default function StoryEditorScreen() {
       bottomReserve -
       deckReserve -
       editorReserve -
-      PREVIEW_SHELL_CHROME_RESERVE;
+      previewShellChromeReserve;
 
     return Math.min(
       Math.max(availableForVideo, PREVIEW_MIN_VIDEO_HEIGHT),
@@ -296,7 +385,7 @@ export default function StoryEditorScreen() {
       measuredBodyHeight -
       bottomReserve -
       editorReserve -
-      UNIFIED_SURFACE_CHROME_RESERVE;
+      unifiedSurfaceChromeReserve;
 
     return Math.min(
       Math.max(availableForVideo, UNIFIED_PREVIEW_MIN_VIDEO_HEIGHT),
@@ -544,17 +633,13 @@ export default function StoryEditorScreen() {
           blockedMessage={previewBlockedMessage}
           captionPlacement={captionPlacement}
           currentCaptionText={currentPreviewCaption?.text ?? null}
-          currentPreviewBeatLabel={
-            playbackOwnerSentenceIndex !== null
-              ? `Beat ${playbackOwnerSentenceIndex + 1}`
-              : previewSentenceIndex !== null
-                ? `Beat ${previewSentenceIndex + 1}`
-                : null
-          }
+          currentPreviewBeatLabel={currentPreviewBeatLabel}
+          helperBannerCopy={previewWorkspaceChrome.helperBannerCopy}
           isPreviewAvailable={isPreviewAvailable}
           isPreviewPlaying={isPreviewPlaying}
           maxVideoHeight={unifiedPreviewMaxVideoHeight}
           onLongPressBeat={setShowBeatActionsForIndex}
+          onOpenVoiceSync={openVoiceSyncModal}
           onPressBeat={handleDeckCardPress}
           onStopPreview={() => void stopPreview()}
           onTogglePreview={() => void togglePreviewPlayback()}
@@ -567,6 +652,9 @@ export default function StoryEditorScreen() {
           previewIsRequesting={isPreviewRequesting}
           previewPositionSec={previewPositionSec}
           previewReady={previewReady}
+          previewStatusLabel={previewWorkspaceChrome.statusLabel}
+          previewStatusTone={previewWorkspaceChrome.statusTone}
+          previewSupportingText={previewWorkspaceChrome.supportingText}
           railItems={beatRailItems}
           selectedSentenceIndex={selectedSentenceIndex}
           videoRef={videoRef}
@@ -585,24 +673,23 @@ export default function StoryEditorScreen() {
           <StoryPreviewShell
             blockedMessage={previewBlockedMessage}
             currentCaptionText={currentPreviewCaption?.text ?? null}
-            currentPreviewBeatLabel={
-              playbackOwnerSentenceIndex !== null
-                ? `Beat ${playbackOwnerSentenceIndex + 1}`
-                : previewSentenceIndex !== null
-                  ? `Beat ${previewSentenceIndex + 1}`
-                  : null
-            }
+            currentPreviewBeatLabel={currentPreviewBeatLabel}
             currentSegmentClipUrl={currentSegmentClipUrl}
             currentSegmentPosterUrl={currentSegmentPosterUrl}
+            helperBannerCopy={previewWorkspaceChrome.helperBannerCopy}
             isPreviewAvailable={isPreviewAvailable}
             isPreviewPlaying={isPreviewPlaying}
             maxVideoHeight={previewMaxVideoHeight}
+            onOpenVoiceSync={openVoiceSyncModal}
             onStopPreview={() => void stopPreview()}
             onTogglePreview={() => void togglePreviewPlayback()}
             onVideoLoad={handleFollowerVideoLoad}
             previewDurationSec={previewDurationSec}
             previewPositionSec={previewPositionSec}
             previewReady={previewReady}
+            previewStatusLabel={previewWorkspaceChrome.statusLabel}
+            previewStatusTone={previewWorkspaceChrome.statusTone}
+            previewSupportingText={previewWorkspaceChrome.supportingText}
             theme={{
               backgroundDefault: theme.backgroundDefault,
               backgroundSecondary: theme.backgroundSecondary,
@@ -711,13 +798,7 @@ export default function StoryEditorScreen() {
           <View style={styles.voiceSyncModalSheet}>
             <VoiceSyncPanel
               currentCaptionText={currentPreviewCaption?.text ?? null}
-              currentPreviewBeatLabel={
-                playbackOwnerSentenceIndex !== null
-                  ? `Beat ${playbackOwnerSentenceIndex + 1}`
-                  : previewSentenceIndex !== null
-                    ? `Beat ${previewSentenceIndex + 1}`
-                    : null
-              }
+              currentPreviewBeatLabel={currentPreviewBeatLabel}
               draftVoicePreset={draftVoicePreset}
               hasLocalVoiceDraft={hasLocalVoiceDraft}
               isPreviewAvailable={isPreviewAvailable}

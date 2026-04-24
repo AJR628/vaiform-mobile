@@ -4,7 +4,7 @@
 - Owner repo: mobile
 - Purpose: Single source of truth for the mobile Preview-flow refactor so phased implementation stays aligned with approved UX direction, current repo architecture, and existing backend/mobile behavior.
 - Last verified against repo: 2026-04-23
-- Current phase: Phase 1 completed; Phase 2 not started
+- Current phase: Phase 2 completed; Phase 3 not started
 
 ## Goal
 
@@ -30,14 +30,15 @@
 
 ## Current Repo Truth
 
-- `StoryEditorScreen` owns workspace state, preview playback orchestration, render gating, and the voice-sync modal flow. Evidence: `client/screens/StoryEditorScreen.tsx:91-92`, `client/screens/StoryEditorScreen.tsx:151-193`, `client/screens/StoryEditorScreen.tsx:194-218`, `client/screens/StoryEditorScreen.tsx:452-460`, `client/screens/StoryEditorScreen.tsx:704-748`.
-- `FlowTabsHeader` currently exposes `storyboard` and `speech` as peer visible steps. Evidence: `client/components/FlowTabsHeader.tsx:6-14`, `client/components/FlowTabsHeader.tsx:53-73`.
-- `StoryEditorScreen` currently wires the visible `Speech` pill to `openVoiceSyncModal()` instead of a routed screen. Evidence: `client/screens/StoryEditorScreen.tsx:452-455`, `client/screens/StoryEditorScreen.tsx:468-481`.
-- `StoryboardSurface` is already the unified Step 3 Preview workspace render surface, composing `StoryboardPreviewStage` and `StoryTimelineRail`. Evidence: `client/components/story-editor/StoryboardSurface.tsx:15-49`, `client/components/story-editor/StoryboardSurface.tsx:89-128`.
+- `StoryEditorScreen` owns workspace state, preview playback orchestration, render gating, and the voice-sync modal flow. Evidence: `client/screens/StoryEditorScreen.tsx:148-157`, `client/screens/StoryEditorScreen.tsx:201-285`, `client/screens/StoryEditorScreen.tsx:541-549`, `client/screens/StoryEditorScreen.tsx:792-836`.
+- `FlowTabsHeader` still keeps internal `storyboard` and `speech` step semantics, but only renders `Create`, `Script`, `Preview`, and `Render` after Phase 1. Evidence: `client/components/FlowTabsHeader.tsx:6-14`, `client/components/FlowTabsHeader.tsx:51-53`.
+- `StoryEditorScreen` still owns `openVoiceSyncModal()` and still passes `onSpeechPress` into `FlowTabsHeader`, but visible voice-sync entry now lives inside the Step 3 Preview workspace surfaces instead of the top pill row. Evidence: `client/screens/StoryEditorScreen.tsx:541-583`, `client/screens/StoryEditorScreen.tsx:630-714`.
+- `StoryboardSurface` is already the unified Step 3 Preview workspace render surface, composing `StoryboardPreviewStage` and `StoryTimelineRail`, and now renders the Phase 2 Preview header/status/CTA treatment from screen-derived props. Evidence: `client/components/story-editor/StoryboardSurface.tsx:16-55`, `client/components/story-editor/StoryboardSurface.tsx:117-207`.
+- `StoryPreviewShell` remains the legacy Step 3 fallback path behind the feature flag and now carries a minimal fallback Preview header/status/CTA treatment so voice sync stays reachable when unified Step 3 is off. Evidence: `client/components/story-editor/StoryPreviewShell.tsx:14-43`, `client/components/story-editor/StoryPreviewShell.tsx:124-280`.
 - `StoryTimelineRail` already remains the rail owner and already derives tile width from `durationSec`, but renders disconnected portrait cards today. Evidence: `client/components/story-editor/StoryTimelineRail.tsx:40-44`, `client/components/story-editor/StoryTimelineRail.tsx:125-187`, `client/components/story-editor/StoryTimelineRail.tsx:224-233`.
 - `useStep3SessionModel` remains the composition point for preview playback state plus voice sync state. Evidence: `client/screens/story-editor/useStep3SessionModel.ts:40-57`, `client/screens/story-editor/useStep3SessionModel.ts:59-111`.
 - `Step3BeatRailItem` remains the rail data contract and already contains `startTimeSec`, `endTimeSec`, `durationSec`, `clipThumbUrl`, `clipUrl`, `sentenceIndex`, and `text`. Evidence: `client/screens/story-editor/step3.ts:36-45`, `client/screens/story-editor/step3.ts:314-349`.
-- Unified Step 3 is still behind the feature flag `EXPO_PUBLIC_STEP3_UNIFIED_SURFACE === "1"`. Evidence: `client/screens/story-editor/featureFlags.ts:1-3`, `client/screens/StoryEditorScreen.tsx:82`, `client/screens/StoryEditorScreen.tsx:541-639`, `client/screens/StoryEditorScreen.test.tsx:217-279`.
+- Unified Step 3 is still behind the feature flag `EXPO_PUBLIC_STEP3_UNIFIED_SURFACE === "1"`. Evidence: `client/screens/story-editor/featureFlags.ts:1-3`, `client/screens/StoryEditorScreen.tsx:148`, `client/screens/StoryEditorScreen.tsx:630-725`, `client/screens/StoryEditorScreen.test.tsx:219-310`.
 - Backend/mobile behavior for this refactor is preserved, not redesigned. Mobile caller truth already uses `GET /api/story/:sessionId`, `POST /api/story/preview`, `POST /api/story/sync`, and `POST /api/story/finalize` with the current normalized transport. Evidence: `client/api/client.ts:703-786`, `client/api/client.ts:887-1023`, `docs/MOBILE_USED_SURFACES.md:49-61`, plus backend contract references in backend repo docs `MOBILE_BACKEND_CONTRACT.md` sections covering session projection, preview, and sync.
 
 ## Non-Negotiable Guardrails
@@ -101,6 +102,8 @@
 
 ### Phase 2: Preview Workspace Header, Status, And Voice CTA
 
+- Implementation status: Completed on 2026-04-23.
+- Actual outcome: `StoryEditorScreen` now derives one screen-level Preview workspace chrome view-model and passes it into both runtime branches. `StoryboardSurface` renders the full Preview header/status/CTA treatment. `StoryPreviewShell` was touched as a minimal fallback access/header patch because the unified-surface feature flag still allows the legacy branch.
 - Objective: Make `StoryboardSurface` present itself as the real Preview workspace.
 - Why this phase is isolated: It changes only Step 3 workspace presentation and CTA wiring, while keeping ownership and transport boundaries intact.
 - In scope:
@@ -265,6 +268,51 @@ Additional execution rules:
   - existing legacy/unified Step 3 gating preserved
 - Follow-ups discovered:
   - Phase 2 can build on unchanged `StoryEditorScreen` ownership and modal wiring without additional Phase 1 cleanup
+
+### Phase 2 Update
+
+- Phase: Phase 2 - Preview Workspace Header, Status, And Voice CTA
+- Date: 2026-04-23
+- Branch / PR: local working tree on `main`
+- Files changed:
+  - `client/screens/StoryEditorScreen.tsx`
+  - `client/components/story-editor/StoryboardSurface.tsx`
+  - `client/components/story-editor/StoryPreviewShell.tsx`
+  - `client/screens/StoryEditorScreen.test.tsx`
+  - `client/components/story-editor/StoryboardSurface.test.tsx`
+  - `client/components/story-editor/StoryPreviewShell.test.tsx`
+  - `docs/PREVIEW_FLOW_REFACTOR_PLAN.md`
+- What actually changed:
+  - derived one screen-level Preview workspace chrome view-model in `StoryEditorScreen`
+  - landed the approved Phase 2 status mapping in `StoryEditorScreen`:
+    - `Syncing`: `isSyncing === true`
+    - `Synced Preview`: `voiceSync?.state === "current"` and `previewReady === true`
+    - `Preview Stale`: `hasLocalVoiceDraft === true` or `voiceSync?.state === "stale"` or `draftPreview.state === "stale"`
+    - `Rough Preview`: every remaining pre-sync / not-ready editing state
+  - passed `onOpenVoiceSync={openVoiceSyncModal}` plus derived status/supporting/banner props into both unified and legacy Step 3 branches
+  - updated `StoryboardSurface` to render `Preview`, a status chip, a visible `Voice & Timing` CTA, a supporting line, and an optional helper banner without taking over sync logic
+  - touched `StoryPreviewShell` as a minimal fallback access/header patch only, because `EXPO_PUBLIC_STEP3_UNIFIED_SURFACE` still allows the legacy branch
+  - kept `useStep3SessionModel.ts`, `step3.ts`, and `VoiceSyncPanel.tsx` unchanged
+- What differed from plan:
+  - `StoryPreviewShell.tsx` was required, not optional, because Phase 1 removed the only visible voice-sync entry and the legacy branch still mounts when the unified feature flag is off
+  - a small max-video-height reserve adjustment landed in `StoryEditorScreen.tsx` so the added Phase 2 header/banner chrome does not overrun the Step 3 layout
+- Manual verification performed:
+  - re-audited `StoryEditorScreen`, `StoryboardSurface`, `StoryPreviewShell`, `useStep3SessionModel`, `step3`, `VoiceSyncPanel`, `StoryEditorScreen.test.tsx`, and `featureFlags.ts` before editing
+  - confirmed top pills remain `Create`, `Script`, `Preview`, `Render`
+  - confirmed unified branch now receives and renders Preview title/status/CTA/header-support copy plus the optional helper banner
+  - confirmed legacy branch now receives and renders fallback Preview title/status/CTA/header-support copy plus the optional helper banner
+  - confirmed both branches wire `Voice & Timing` to the existing `openVoiceSyncModal` owner in `StoryEditorScreen`
+  - confirmed blocked/playable preview behavior still flows from existing `previewReady` and `previewBlockedMessage` truth
+  - confirmed render gating logic remains unchanged in `StoryEditorScreen`
+- Tests run:
+  - `npm run check:types`
+  - `npm run test:ci -- client/screens/StoryEditorScreen.test.tsx client/components/story-editor/StoryboardSurface.test.tsx client/components/story-editor/StoryPreviewShell.test.tsx`
+- Env / feature flag state:
+  - `EXPO_PUBLIC_STEP3_UNIFIED_SURFACE` behavior unchanged
+  - unified and legacy Step 3 branch selection preserved
+- Follow-ups discovered:
+  - Phase 3 can restyle the rail without revisiting Phase 2 status ownership
+  - `StoryPreviewShell` still remains a legacy fallback shell and was intentionally not brought to full mockup parity in this phase
 
 ## Current Open Questions
 

@@ -17,15 +17,20 @@ interface StoryPreviewShellProps {
   currentPreviewBeatLabel: string | null;
   currentSegmentClipUrl: string | null;
   currentSegmentPosterUrl: string | null;
+  helperBannerCopy: string | null;
   isPreviewAvailable: boolean;
   isPreviewPlaying: boolean;
   maxVideoHeight?: number | null;
+  onOpenVoiceSync: () => void;
   onStopPreview: () => void;
   onTogglePreview: () => void;
   onVideoLoad: () => void;
   previewDurationSec: number | null;
   previewPositionSec: number;
   previewReady: boolean;
+  previewStatusLabel: string;
+  previewStatusTone: "neutral" | "success" | "warning" | "info";
+  previewSupportingText: string;
   theme: {
     backgroundDefault: string;
     backgroundSecondary: string;
@@ -52,19 +57,40 @@ export function StoryPreviewShell({
   currentPreviewBeatLabel,
   currentSegmentClipUrl,
   currentSegmentPosterUrl,
+  helperBannerCopy,
   isPreviewAvailable,
   isPreviewPlaying,
   maxVideoHeight,
+  onOpenVoiceSync,
   onStopPreview,
   onTogglePreview,
   onVideoLoad,
   previewDurationSec,
   previewPositionSec,
   previewReady,
+  previewStatusLabel,
+  previewStatusTone,
+  previewSupportingText,
   theme,
   videoRef,
 }: StoryPreviewShellProps) {
   const [availableWidth, setAvailableWidth] = useState(0);
+  const statusAccentColor =
+    previewStatusTone === "success"
+      ? "#66d17a"
+      : previewStatusTone === "warning"
+        ? "#f2b24d"
+        : previewStatusTone === "info"
+          ? theme.link
+          : theme.text;
+  const statusBackgroundColor =
+    previewStatusTone === "success"
+      ? "rgba(102, 209, 122, 0.14)"
+      : previewStatusTone === "warning"
+        ? "rgba(242, 178, 77, 0.14)"
+        : previewStatusTone === "info"
+          ? "rgba(74, 95, 255, 0.14)"
+          : theme.backgroundSecondary;
 
   const handleFrameAreaLayout = useCallback((event: LayoutChangeEvent) => {
     const nextWidth = event.nativeEvent.layout.width;
@@ -107,16 +133,67 @@ export function StoryPreviewShell({
     >
       <View style={styles.header}>
         <View style={styles.headerCopy}>
-          <ThemedText style={styles.title}>Synced Preview</ThemedText>
+          <ThemedText style={styles.title}>Preview</ThemedText>
+          <View style={styles.headerStatusRow}>
+            <View
+              style={[
+                styles.statusChip,
+                {
+                  backgroundColor: statusBackgroundColor,
+                  borderColor: statusAccentColor,
+                },
+              ]}
+              testID="preview-status-chip"
+            >
+              <ThemedText
+                style={[styles.statusChipText, { color: statusAccentColor }]}
+              >
+                {previewStatusLabel}
+              </ThemedText>
+            </View>
+          </View>
           <ThemedText
             style={[styles.subtleText, { color: theme.tabIconDefault }]}
           >
-            {previewReady
-              ? "Preview playback follows the backend Step 3 timeline."
-              : (blockedMessage ?? "Synced preview is currently unavailable.")}
+            {previewSupportingText}
           </ThemedText>
         </View>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onOpenVoiceSync}
+          style={[
+            styles.voiceSyncButton,
+            {
+              backgroundColor: theme.backgroundSecondary,
+              borderColor: theme.border,
+            },
+          ]}
+          testID="preview-voice-timing-cta"
+        >
+          <Feather name="radio" size={14} color={theme.text} />
+          <ThemedText style={styles.voiceSyncButtonText}>
+            {"Voice & Timing"}
+          </ThemedText>
+        </Pressable>
       </View>
+
+      {helperBannerCopy ? (
+        <View
+          style={[
+            styles.helperBanner,
+            {
+              backgroundColor: theme.backgroundSecondary,
+              borderColor: theme.border,
+            },
+          ]}
+          testID="preview-helper-banner"
+        >
+          <Feather name="star" size={14} color={theme.tabIconDefault} />
+          <ThemedText style={styles.helperBannerText}>
+            {helperBannerCopy}
+          </ThemedText>
+        </View>
+      ) : null}
 
       <View
         style={styles.frameArea}
@@ -265,11 +342,29 @@ const styles = StyleSheet.create({
   header: {
     alignItems: "flex-start",
     flexDirection: "row",
+    gap: Spacing.sm,
     justifyContent: "space-between",
   },
   headerCopy: {
     flex: 1,
     gap: Spacing.xs,
+  },
+  headerStatusRow: {
+    alignItems: "flex-start",
+  },
+  helperBanner: {
+    alignItems: "center",
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: Spacing.sm,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  helperBannerText: {
+    flex: 1,
+    fontSize: 13,
+    lineHeight: 18,
   },
   secondaryButton: {
     alignItems: "center",
@@ -286,6 +381,16 @@ const styles = StyleSheet.create({
   },
   title: {
     fontSize: 17,
+    fontWeight: "700",
+  },
+  statusChip: {
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: 6,
+  },
+  statusChipText: {
+    fontSize: 13,
     fontWeight: "700",
   },
   transportButton: {
@@ -309,6 +414,19 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: Spacing.md,
     justifyContent: "space-between",
+  },
+  voiceSyncButton: {
+    alignItems: "center",
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    flexDirection: "row",
+    gap: Spacing.xs,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
+  },
+  voiceSyncButtonText: {
+    fontSize: 13,
+    fontWeight: "600",
   },
   video: {
     height: "100%",
