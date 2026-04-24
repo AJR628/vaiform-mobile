@@ -41,12 +41,12 @@ function getStatusCopy(
   hasLocalVoiceDraft: boolean,
 ): string {
   if (hasLocalVoiceDraft)
-    return "Voice changed locally. Sync to commit timing.";
+    return "Voice changed. Sync to update preview timing.";
   const state = voiceSync?.state ?? "never_synced";
-  if (state === "current")
-    return "Timing is current. Render will use these synced artifacts.";
-  if (state === "stale") return "Timing is stale. Re-sync before render.";
-  return "Voice and timing have not been synced yet.";
+  if (state === "current") return "Preview timing is locked to this voice.";
+  if (state === "stale")
+    return "Voice or script changed. Re-sync to update preview timing.";
+  return "Choose a voice and sync timing to unlock the final preview.";
 }
 
 function formatBeatList(indices: number[] | undefined): string | null {
@@ -83,7 +83,7 @@ export function VoiceSyncPanel({
     >
       <View style={styles.header}>
         <View style={styles.headerCopy}>
-          <ThemedText type="h4">Sync Voice & Timing</ThemedText>
+          <ThemedText type="h4">Voice & Timing</ThemedText>
           <ThemedText
             style={[styles.subtleText, { color: theme.tabIconDefault }]}
           >
@@ -181,7 +181,7 @@ export function VoiceSyncPanel({
                   >
                     {[voice.gender, voice.emotion]
                       .filter(Boolean)
-                      .join(" • ") || "Preset voice"}
+                      .join(" - ") || "Preset voice"}
                   </ThemedText>
                 </Pressable>
               );
@@ -193,12 +193,12 @@ export function VoiceSyncPanel({
           <View style={styles.previewHeader}>
             <View>
               <ThemedText style={styles.sectionTitle}>
-                Preview Transport
+                Preview controls
               </ThemedText>
               <ThemedText
                 style={[styles.subtleText, { color: theme.tabIconDefault }]}
               >
-                These controls mirror the inline Step 3 preview.
+                Use these controls to review the synced preview.
               </ThemedText>
             </View>
             <Pressable
@@ -231,8 +231,7 @@ export function VoiceSyncPanel({
               {currentPreviewBeatLabel ?? "Preview state will appear here"}
             </ThemedText>
             <ThemedText>
-              {currentCaptionText ??
-                "Use the inline preview once sync is ready."}
+              {currentCaptionText ?? "Use the inline preview once sync is ready."}
             </ThemedText>
             <ThemedText
               style={[styles.subtleText, { color: theme.tabIconDefault }]}
@@ -241,7 +240,7 @@ export function VoiceSyncPanel({
                 ? `${formatRenderTimeAmount(previewPositionSec)} / ${formatRenderTimeAmount(
                     previewDurationSec,
                   )}`
-                : "Preview becomes available when synced preview readiness is complete."}
+                : "Sync voice and timing to unlock preview playback."}
             </ThemedText>
           </View>
         </View>

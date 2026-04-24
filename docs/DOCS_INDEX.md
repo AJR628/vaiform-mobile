@@ -4,7 +4,7 @@
 - Owner repo: mobile
 - Source of truth for: active mobile-repo docs ownership and where canonical backend/mobile truth lives
 - Canonical counterpart/source: backend repo `docs/FINAL_PAID_BETA_LAUNCH_PLAN.md`, backend repo `docs/MOBILE_BACKEND_CONTRACT.md`, backend repo `docs/MOBILE_HARDENING_PLAN.md`, backend repo `docs/LEGACY_WEB_SURFACES.md`, mobile repo `docs/MOBILE_USED_SURFACES.md`
-- Last verified against: both repos on 2026-04-11
+- Last verified against: both repos on 2026-04-23
 
 ## Cross-Repo Maintenance Front Door
 
@@ -20,6 +20,7 @@ Then return here for mobile caller truth and transport ownership.
 - docs/MOBILE_RELEASE_RUNBOOK.md - active mobile release/config doc for store-build policy and OTA/update discipline.
 - docs/MOBILE_USED_SURFACES.md - CANONICAL in the mobile repo for exact current mobile usage.
 - docs/MOBILE_BACKEND_CONTRACT.md - CONSUMER_NOTE only; points back to backend-owned canonical contract docs.
+- docs/PREVIEW_FLOW_REFACTOR_PLAN.md - active implementation tracker for the Preview-flow refactor; not backend/mobile contract truth.
 - docs/DOCS_INDEX.md - CONSUMER_NOTE for ownership and navigation only.
 
 ## Active Docs Map

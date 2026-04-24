@@ -4,7 +4,7 @@
 - Owner repo: mobile
 - Purpose: Single source of truth for the mobile Preview-flow refactor so phased implementation stays aligned with approved UX direction, current repo architecture, and existing backend/mobile behavior.
 - Last verified against repo: 2026-04-23
-- Current phase: Phase 3 completed; Phase 4 not started
+- Current phase: Completed; final alignment landed
 
 ## Goal
 
@@ -174,6 +174,8 @@
 
 ### Phase 4: Voice Panel Copy, Docs, And Final Alignment
 
+- Implementation status: Completed on 2026-04-23.
+- Actual outcome: `VoiceSyncPanel` copy now reads as a contextual Preview drawer, mobile docs now reflect `Voice & Timing` from Preview as caller truth, and the refactor SSOT is recorded as complete. No runtime behavior, readiness logic, rail behavior, or backend-facing contract usage changed.
 - Objective: Finish terminology alignment and repo-doc truth after the UI behavior lands.
 - Why this phase is isolated: It should only tighten wording, update docs, and record actual implementation truth after the runtime phases are stable.
 - In scope:
@@ -354,6 +356,45 @@ Additional execution rules:
 - Follow-ups discovered:
   - width behavior remains duration-derived with mobile clamps, not exact total-duration proportional layout math
   - global strip-level playhead remains deferred unless a later phase explicitly introduces safe strip measurement/state ownership for it
+
+### Phase 4 Update
+
+- Phase: Phase 4 - Voice Panel Copy, Docs, And Final Alignment
+- Date: 2026-04-23
+- Branch / PR: local working tree on `main`
+- Files changed:
+  - `client/components/story-editor/VoiceSyncPanel.tsx`
+  - `client/components/story-editor/VoiceSyncPanel.test.tsx`
+  - `docs/MOBILE_USED_SURFACES.md`
+  - `docs/DOCS_INDEX.md`
+  - `docs/PREVIEW_FLOW_REFACTOR_PLAN.md`
+- What actually changed:
+  - updated `VoiceSyncPanel` copy to use the `Voice & Timing` product concept and Preview-workspace language
+  - kept the existing sync button labels `Sync Voice & Timing` and `Syncing...`
+  - fixed the voice metadata separator to an ASCII-safe `" - "`
+  - updated `docs/MOBILE_USED_SURFACES.md` so `/api/story/sync` now describes the user opening `Voice & Timing` from the Preview workspace instead of a stale `Speech surface`
+  - added `docs/PREVIEW_FLOW_REFACTOR_PLAN.md` to `docs/DOCS_INDEX.md` as an active implementation tracker only
+  - added a focused `VoiceSyncPanel` render/copy test
+- What differed from plan:
+  - no additional runtime compatibility edits were required outside `VoiceSyncPanel.tsx`
+  - `MOBILE_USED_SURFACES.md` and `DOCS_INDEX.md` both had their verification dates updated while landing the wording fixes
+- Manual verification performed:
+  - re-audited `PREVIEW_FLOW_REFACTOR_PLAN.md`, `VoiceSyncPanel.tsx`, `MOBILE_USED_SURFACES.md`, `DOCS_INDEX.md`, `StoryEditorScreen.tsx`, and existing related test inventory before editing
+  - confirmed `VoiceSyncPanel` still opens from the existing Preview-owned modal flow in `StoryEditorScreen`
+  - confirmed close, sync, and preview-toggle callback wiring remained unchanged in the panel
+  - confirmed no preview readiness, render gating, sync behavior, rail behavior, or feature-flag behavior changed in this phase
+  - confirmed `MOBILE_USED_SURFACES.md` now references `Voice & Timing` from Preview rather than a stale `Speech surface`
+  - confirmed `DOCS_INDEX.md` lists the refactor plan as an implementation tracker only, not contract truth
+  - recorded the user-reported manual Expo verification of the post-Phase-3 connected filmstrip, sync flow, and overall Preview flow as external verification context rather than repo-derived evidence
+- Tests run:
+  - `npm run check:types`
+  - `npm run test:ci -- client/components/story-editor/VoiceSyncPanel.test.tsx`
+- Env / feature flag state:
+  - `EXPO_PUBLIC_STEP3_UNIFIED_SURFACE` behavior unchanged
+  - unified and legacy Step 3 branch selection preserved
+- Follow-ups discovered:
+  - legacy cleanup remains a separate follow-up and was not part of this refactor-completion phase
+  - feature-flag removal remains out-of-scope follow-up work and did not happen here
 
 ## Current Open Questions
 
