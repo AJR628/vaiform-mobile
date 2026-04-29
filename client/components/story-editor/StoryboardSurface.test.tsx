@@ -1,6 +1,5 @@
 import React from "react";
 import { fireEvent, render } from "@testing-library/react-native";
-import { StyleSheet } from "react-native";
 import { describe, expect, jest, test } from "@jest/globals";
 
 import { StoryboardSurface } from "@/components/story-editor/StoryboardSurface";
@@ -45,8 +44,6 @@ describe("client/components/story-editor/StoryboardSurface", () => {
       <StoryboardSurface
         activeSentenceIndex={null}
         blockedMessage="Sync voice and timing to unlock the synced preview."
-        captionPlacement="bottom"
-        currentCaptionText={null}
         currentPreviewBeatLabel={null}
         helperBannerCopy="Clip selection first, then voice sync locks timing."
         isPreviewAvailable={false}
@@ -60,7 +57,6 @@ describe("client/components/story-editor/StoryboardSurface", () => {
         onStopPreview={jest.fn()}
         onTogglePreview={jest.fn()}
         playbackSentenceIndex={null}
-        captionOverlay={null}
         previewArtifactUrl={null}
         previewDurationSec={null}
         previewIsRequesting={false}
@@ -94,8 +90,6 @@ describe("client/components/story-editor/StoryboardSurface", () => {
       <StoryboardSurface
         activeSentenceIndex={0}
         blockedMessage={null}
-        captionPlacement="center"
-        currentCaptionText="Caption from canonical session timing"
         currentPreviewBeatLabel="Beat 1"
         helperBannerCopy={null}
         isPreviewAvailable
@@ -109,15 +103,6 @@ describe("client/components/story-editor/StoryboardSurface", () => {
         onStopPreview={jest.fn()}
         onTogglePreview={jest.fn()}
         playbackSentenceIndex={0}
-        captionOverlay={{
-          version: 1,
-          contractVersion: "caption-overlay-v1",
-          rendererVersion: "caption-overlay-v1",
-          frame: { width: 1080, height: 1920 },
-          placement: "center",
-          style: { placement: "center", fontPx: 72 },
-          segments: [],
-        }}
         previewArtifactUrl="https://cdn.example.com/base.mp4"
         previewDurationSec={10}
         previewIsRequesting={false}
@@ -137,14 +122,9 @@ describe("client/components/story-editor/StoryboardSurface", () => {
       nativeEvent: { layout: { width: 240, height: 0 } },
     });
 
-    const captionStyle = StyleSheet.flatten(
-      getByTestId("storyboard-preview-caption").props.style,
-    );
-
     expect(getByTestId("storyboard-preview-video")).toBeTruthy();
     expect(getByText("Synced Preview")).toBeTruthy();
     expect(queryByTestId("preview-helper-banner")).toBeNull();
-    expect(captionStyle.fontSize).toBeGreaterThanOrEqual(13);
-    expect(captionStyle.fontSize).toBeLessThanOrEqual(28);
+    expect(queryByTestId("storyboard-preview-caption")).toBeNull();
   });
 });

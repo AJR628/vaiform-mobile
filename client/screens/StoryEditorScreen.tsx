@@ -218,7 +218,6 @@ export default function StoryEditorScreen() {
   const canAttemptRender = Boolean(usageSnapshot);
   const {
     beatRailItems,
-    captionOverlay,
     currentPreviewCaption,
     currentSegmentClipUrl,
     currentSegmentPosterUrl,
@@ -631,8 +630,6 @@ export default function StoryEditorScreen() {
         <StoryboardSurface
           activeSentenceIndex={activeDeckSentenceIndex}
           blockedMessage={previewBlockedMessage}
-          captionPlacement={captionPlacement}
-          currentCaptionText={currentPreviewCaption?.text ?? null}
           currentPreviewBeatLabel={currentPreviewBeatLabel}
           helperBannerCopy={previewWorkspaceChrome.helperBannerCopy}
           isPreviewAvailable={isPreviewAvailable}
@@ -645,7 +642,6 @@ export default function StoryEditorScreen() {
           onTogglePreview={() => void togglePreviewPlayback()}
           onRequestPreview={() => void requestPreview()}
           playbackSentenceIndex={previewSentenceIndex}
-          captionOverlay={captionOverlay}
           onPreviewPlaybackStatus={handlePreviewPlaybackStatus}
           previewArtifactUrl={previewArtifactUrl}
           previewDurationSec={previewDurationSec}
@@ -672,7 +668,6 @@ export default function StoryEditorScreen() {
         <>
           <StoryPreviewShell
             blockedMessage={previewBlockedMessage}
-            currentCaptionText={currentPreviewCaption?.text ?? null}
             currentPreviewBeatLabel={currentPreviewBeatLabel}
             currentSegmentClipUrl={currentSegmentClipUrl}
             currentSegmentPosterUrl={currentSegmentPosterUrl}

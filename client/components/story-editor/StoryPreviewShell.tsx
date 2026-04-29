@@ -13,7 +13,6 @@ import { BorderRadius, Spacing } from "@/constants/theme";
 
 interface StoryPreviewShellProps {
   blockedMessage: string | null;
-  currentCaptionText: string | null;
   currentPreviewBeatLabel: string | null;
   currentSegmentClipUrl: string | null;
   currentSegmentPosterUrl: string | null;
@@ -53,7 +52,6 @@ function formatDuration(value: number | null): string {
 
 export function StoryPreviewShell({
   blockedMessage,
-  currentCaptionText,
   currentPreviewBeatLabel,
   currentSegmentClipUrl,
   currentSegmentPosterUrl,
@@ -209,30 +207,24 @@ export function StoryPreviewShell({
           testID="story-preview-media-frame"
         >
           {previewReady && currentSegmentClipUrl ? (
-            <>
-              <Video
-                ref={videoRef}
-                source={{ uri: currentSegmentClipUrl }}
-                style={styles.video}
-                resizeMode={ResizeMode.COVER}
-                shouldPlay={false}
-                isLooping={false}
-                progressUpdateIntervalMillis={250}
-                onLoad={onVideoLoad}
-                onReadyForDisplay={onVideoLoad}
-                posterSource={
-                  currentSegmentPosterUrl
-                    ? { uri: currentSegmentPosterUrl }
-                    : undefined
-                }
-                usePoster={Boolean(currentSegmentPosterUrl)}
-              />
-              <View style={styles.captionOverlay} pointerEvents="none">
-                <ThemedText style={styles.captionText}>
-                  {currentCaptionText ?? "Preview timing will appear here."}
-                </ThemedText>
-              </View>
-            </>
+            <Video
+              ref={videoRef}
+              source={{ uri: currentSegmentClipUrl }}
+              style={styles.video}
+              resizeMode={ResizeMode.COVER}
+              shouldPlay={false}
+              isLooping={false}
+              progressUpdateIntervalMillis={250}
+              onLoad={onVideoLoad}
+              onReadyForDisplay={onVideoLoad}
+              posterSource={
+                currentSegmentPosterUrl
+                  ? { uri: currentSegmentPosterUrl }
+                  : undefined
+              }
+              usePoster={Boolean(currentSegmentPosterUrl)}
+              testID="story-preview-shell-video"
+            />
           ) : (
             <View style={styles.blockedSurface}>
               <Feather name="lock" size={24} color={theme.tabIconDefault} />
@@ -311,21 +303,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     opacity: 0.8,
     textAlign: "center",
-  },
-  captionOverlay: {
-    bottom: Spacing.lg,
-    left: Spacing.md,
-    position: "absolute",
-    right: Spacing.md,
-  },
-  captionText: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "700",
-    textAlign: "center",
-    textShadowColor: "rgba(0,0,0,0.75)",
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 8,
   },
   container: {
     borderRadius: BorderRadius.xl,

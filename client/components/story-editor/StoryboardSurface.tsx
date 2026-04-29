@@ -4,11 +4,9 @@ import { Feather } from "@expo/vector-icons";
 
 import { ThemedText } from "@/components/ThemedText";
 import { BorderRadius, Spacing } from "@/constants/theme";
-import type { CaptionPlacement } from "@/screens/story-editor/model";
 import type { Step3BeatRailItem } from "@/screens/story-editor/step3";
 import type { AVPlaybackStatus, Video } from "expo-av";
 import type { RefObject } from "react";
-import type { StoryCaptionOverlayV1 } from "@/types/story";
 
 import { StoryboardPreviewStage } from "./StoryboardPreviewStage";
 import { StoryTimelineRail } from "./StoryTimelineRail";
@@ -16,8 +14,6 @@ import { StoryTimelineRail } from "./StoryTimelineRail";
 interface StoryboardSurfaceProps {
   activeSentenceIndex: number | null;
   blockedMessage: string | null;
-  captionPlacement: CaptionPlacement;
-  currentCaptionText: string | null;
   currentPreviewBeatLabel: string | null;
   helperBannerCopy: string | null;
   isPreviewAvailable: boolean;
@@ -31,7 +27,6 @@ interface StoryboardSurfaceProps {
   onStopPreview: () => void;
   onTogglePreview: () => void;
   playbackSentenceIndex: number | null;
-  captionOverlay: StoryCaptionOverlayV1 | null;
   previewArtifactUrl: string | null;
   previewDurationSec: number | null;
   previewIsRequesting: boolean;
@@ -57,8 +52,6 @@ interface StoryboardSurfaceProps {
 export function StoryboardSurface({
   activeSentenceIndex,
   blockedMessage,
-  captionPlacement,
-  currentCaptionText,
   currentPreviewBeatLabel,
   helperBannerCopy,
   isPreviewAvailable,
@@ -72,7 +65,6 @@ export function StoryboardSurface({
   onStopPreview,
   onTogglePreview,
   playbackSentenceIndex,
-  captionOverlay,
   previewArtifactUrl,
   previewDurationSec,
   previewIsRequesting,
@@ -146,7 +138,9 @@ export function StoryboardSurface({
             ]}
             testID="preview-status-chip"
           >
-            <ThemedText style={[styles.statusChipText, { color: statusAccentColor }]}>
+            <ThemedText
+              style={[styles.statusChipText, { color: statusAccentColor }]}
+            >
               {previewStatusLabel}
             </ThemedText>
           </View>
@@ -176,9 +170,6 @@ export function StoryboardSurface({
 
       <StoryboardPreviewStage
         blockedMessage={blockedMessage}
-        captionPlacement={captionPlacement}
-        captionOverlay={captionOverlay}
-        currentCaptionText={currentCaptionText}
         maxVideoHeight={maxVideoHeight}
         onPlaybackStatusUpdate={onPreviewPlaybackStatus}
         onRequestPreview={onRequestPreview}

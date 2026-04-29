@@ -30,7 +30,6 @@ describe("client/components/story-editor/StoryPreviewShell", () => {
     const { getAllByText, getByTestId, getByText } = render(
       <StoryPreviewShell
         blockedMessage="Sync voice and timing to unlock the synced preview."
-        currentCaptionText={null}
         currentPreviewBeatLabel={null}
         currentSegmentClipUrl={null}
         currentSegmentPosterUrl={null}
@@ -73,11 +72,10 @@ describe("client/components/story-editor/StoryPreviewShell", () => {
     expect(frameStyle.width).toBeCloseTo(123.75, 2);
   });
 
-  test("renders the preview surface and timing UI when preview is ready", () => {
-    const { getByText, getByTestId, queryByTestId, UNSAFE_getByType } = render(
+  test("renders the preview surface and timing UI without local caption text when preview is ready", () => {
+    const { getByText, getByTestId, queryByTestId, queryByText } = render(
       <StoryPreviewShell
         blockedMessage={null}
-        currentCaptionText="Beat one"
         currentPreviewBeatLabel="Beat 1"
         currentSegmentClipUrl="https://cdn.example.com/clip-a.mp4"
         currentSegmentPosterUrl="https://cdn.example.com/clip-a.jpg"
@@ -108,6 +106,8 @@ describe("client/components/story-editor/StoryPreviewShell", () => {
     expect(getByText("Synced Preview")).toBeTruthy();
     expect(queryByTestId("preview-helper-banner")).toBeNull();
     expect(getByText("0:04 / 0:12")).toBeTruthy();
-    expect(UNSAFE_getByType("Video")).toBeTruthy();
+    expect(getByTestId("story-preview-shell-video")).toBeTruthy();
+    expect(queryByTestId("story-preview-shell-caption")).toBeNull();
+    expect(queryByText("Beat one")).toBeNull();
   });
 });

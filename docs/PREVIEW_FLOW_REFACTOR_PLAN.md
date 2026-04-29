@@ -3,8 +3,8 @@
 - Status: Planned
 - Owner repo: mobile
 - Purpose: Single source of truth for the mobile Preview-flow refactor so phased implementation stays aligned with approved UX direction, current repo architecture, and existing backend/mobile behavior.
-- Last verified against repo: 2026-04-23
-- Current phase: Completed; final alignment landed
+- Last verified against repo: 2026-04-28
+- Current phase: Phase 1D completed; ready preview uses backend-burned captions only
 
 ## Goal
 
@@ -34,11 +34,11 @@
 - `FlowTabsHeader` still keeps internal `storyboard` and `speech` step semantics, but only renders `Create`, `Script`, `Preview`, and `Render` after Phase 1. Evidence: `client/components/FlowTabsHeader.tsx:6-14`, `client/components/FlowTabsHeader.tsx:51-53`.
 - `StoryEditorScreen` still owns `openVoiceSyncModal()` and still passes `onSpeechPress` into `FlowTabsHeader`, but visible voice-sync entry now lives inside the Step 3 Preview workspace surfaces instead of the top pill row. Evidence: `client/screens/StoryEditorScreen.tsx:541-583`, `client/screens/StoryEditorScreen.tsx:630-714`.
 - `StoryboardSurface` is already the unified Step 3 Preview workspace render surface, composing `StoryboardPreviewStage` and `StoryTimelineRail`, and now renders the Phase 2 Preview header/status/CTA treatment from screen-derived props. Evidence: `client/components/story-editor/StoryboardSurface.tsx:16-55`, `client/components/story-editor/StoryboardSurface.tsx:117-207`.
-- `StoryPreviewShell` remains the legacy Step 3 fallback path behind the feature flag and now carries a minimal fallback Preview header/status/CTA treatment so voice sync stays reachable when unified Step 3 is off. Evidence: `client/components/story-editor/StoryPreviewShell.tsx:14-43`, `client/components/story-editor/StoryPreviewShell.tsx:124-280`.
+- `StoryPreviewShell` remains the legacy Step 3 fallback path behind the feature flag and now carries a minimal fallback Preview header/status/CTA treatment so voice sync stays reachable when unified Step 3 is off. It no longer renders a local RN caption overlay over ready preview video. Evidence: `client/components/story-editor/StoryPreviewShell.tsx:14-42`, `client/components/story-editor/StoryPreviewShell.tsx:124-280`.
 - `StoryTimelineRail` remains the rail owner, still derives width from `durationSec` using stable mobile clamps, and now renders a connected fixed-height filmstrip while keeping the top progress bar as the moving playback indicator. Evidence: `client/components/story-editor/StoryTimelineRail.tsx:40-48`, `client/components/story-editor/StoryTimelineRail.tsx:67-188`, `client/components/story-editor/StoryTimelineRail.tsx:224-302`.
 - `useStep3SessionModel` remains the composition point for preview playback state plus voice sync state. Evidence: `client/screens/story-editor/useStep3SessionModel.ts:40-57`, `client/screens/story-editor/useStep3SessionModel.ts:59-111`.
 - `Step3BeatRailItem` remains the rail data contract and already contains `startTimeSec`, `endTimeSec`, `durationSec`, `clipThumbUrl`, `clipUrl`, `sentenceIndex`, and `text`. Evidence: `client/screens/story-editor/step3.ts:36-45`, `client/screens/story-editor/step3.ts:314-349`.
-- Unified Step 3 is still behind the feature flag `EXPO_PUBLIC_STEP3_UNIFIED_SURFACE === "1"`. Evidence: `client/screens/story-editor/featureFlags.ts:1-3`, `client/screens/StoryEditorScreen.tsx:148`, `client/screens/StoryEditorScreen.tsx:630-725`, `client/screens/StoryEditorScreen.test.tsx:219-310`.
+- Unified Step 3 is still behind the feature flag `EXPO_PUBLIC_STEP3_UNIFIED_SURFACE === "1"`. Checked-in `eas.json` and `app.json` do not force the flag for beta/release, so the legacy fallback must be treated as potentially user-visible unless external EAS environment config proves otherwise. Evidence: `client/screens/story-editor/featureFlags.ts:1-3`, `client/screens/StoryEditorScreen.tsx:148`, `client/screens/StoryEditorScreen.tsx:630-725`, `client/screens/StoryEditorScreen.test.tsx:219-310`, `eas.json:2-10`, `app.json:1-57`.
 - Backend/mobile behavior for this refactor is preserved, not redesigned. Mobile caller truth already uses `GET /api/story/:sessionId`, `POST /api/story/preview`, `POST /api/story/sync`, and `POST /api/story/finalize` with the current normalized transport. Evidence: `client/api/client.ts:703-786`, `client/api/client.ts:887-1023`, `docs/MOBILE_USED_SURFACES.md:49-61`, plus backend contract references in backend repo docs `MOBILE_BACKEND_CONTRACT.md` sections covering session projection, preview, and sync.
 
 ## Non-Negotiable Guardrails
@@ -57,6 +57,7 @@
 - Do not duplicate contract truth from backend docs into this file; reference backend docs when preserving server behavior matters.
 - Keep `client/api/client.ts` as the transport owner for these flows.
 - Keep current render gating semantics intact unless an explicit later phase is approved separately.
+- Backend `draftPreviewV1.artifact.url` is the only visual caption source for ready preview; do not keep React Native ready-preview captions as a runtime backup.
 
 ## Phase Plan
 
@@ -396,10 +397,40 @@ Additional execution rules:
   - legacy cleanup remains a separate follow-up and was not part of this refactor-completion phase
   - feature-flag removal remains out-of-scope follow-up work and did not happen here
 
+### Phase 1D Update
+
+- Phase: Phase 1D - Backend-Burned Ready Preview Captions Only
+- Date: 2026-04-28
+- Branch / PR: local working tree on `main`
+- Release flag decision:
+  - checked-in `eas.json` and `app.json` do not set `EXPO_PUBLIC_STEP3_UNIFIED_SURFACE=1`
+  - because external beta/release EAS env cannot be proven from repo truth, legacy `StoryPreviewShell` is treated as potentially user-visible
+  - local RN ready-preview caption overlays were removed from both the unified `StoryboardPreviewStage` and the legacy fallback `StoryPreviewShell`
+- Files changed:
+  - `client/components/story-editor/StoryboardPreviewStage.tsx`
+  - `client/components/story-editor/StoryboardSurface.tsx`
+  - `client/components/story-editor/StoryboardSurface.test.tsx`
+  - `client/components/story-editor/StoryPreviewShell.tsx`
+  - `client/components/story-editor/StoryPreviewShell.test.tsx`
+  - `client/screens/StoryEditorScreen.tsx`
+  - `docs/MOBILE_USED_SURFACES.md`
+  - `docs/PREVIEW_FLOW_REFACTOR_PLAN.md`
+- What actually changed:
+  - ready unified preview now renders only the backend preview video from `draftPreviewV1.artifact.url`
+  - ready legacy fallback preview no longer overlays local RN caption text
+  - `captionOverlayV1` and current caption metadata remain available upstream for timeline, voice modal, compatibility, and non-visual state
+  - blocked/generate-preview UI, preview queue, polling, route contracts, billing, final render, and backend behavior were unchanged
+- Tests run:
+  - `npm run test:ci -- client/components/story-editor/StoryboardSurface.test.tsx client/components/story-editor/StoryPreviewShell.test.tsx` - pass
+  - `npm run test:ci -- client/screens/StoryEditorScreen.test.tsx` - pass
+  - `npm run test:ci` - pass
+  - `npm run check:types` - pass
+  - `npx prettier --check <changed Phase 1D files>` - pass
+
 ## Current Open Questions
 
 - The exact visual token system for the mockup is not defined in repo assets or design docs. Implementation should aim toward the attached mockup direction while staying inside existing mobile theme/token patterns.
-- The unified Preview workspace remains behind `EXPO_PUBLIC_STEP3_UNIFIED_SURFACE`. This plan preserves that rollout boundary unless a later explicit phase changes it.
+- The unified Preview workspace remains behind `EXPO_PUBLIC_STEP3_UNIFIED_SURFACE`. Checked-in config does not prove beta/release enables it, so the legacy fallback should stay free of local RN ready-preview captions until a later explicit phase removes or permanently enables the flag.
 
 ## Recommended Execution Order
 
