@@ -427,6 +427,31 @@ Additional execution rules:
   - `npm run check:types` - pass
   - `npx prettier --check <changed Phase 1D files>` - pass
 
+### Studio Preview Polish Update
+
+- Phase: Focused UI composition/style polish for the mobile Preview surface
+- Date: 2026-04-29
+- Branch / PR: local working tree on `main`
+- Files changed:
+  - `client/screens/StoryEditorScreen.tsx`
+  - `client/components/FlowTabsHeader.tsx`
+  - `client/components/story-editor/StoryboardSurface.tsx`
+  - `client/components/story-editor/StoryboardPreviewStage.tsx`
+  - `client/components/story-editor/StoryTimelineRail.tsx`
+  - `client/components/story-editor/StoryPreviewShell.tsx`
+  - related component/screen tests
+- What actually changed:
+  - recomposed the unified Preview surface into a larger studio-monitor-style hero with in-frame status, dark layered gradients, and a single blocked-state primary CTA
+  - kept CTA routing UI-only: voice-not-current/local-draft states open existing `Voice & Timing`; current-voice preview missing/stale/failed states call existing `onRequestPreview`
+  - visually docked transport controls and the filmstrip rail to the monitor and changed selected beat treatment to a subtle blue ring/glow
+  - added a subtle selected-tab glow only for the active `storyboard`/Preview tab
+  - applied restrained visual consistency to the legacy `StoryPreviewShell` fallback without changing fallback playback behavior
+- Guardrail confirmation:
+  - no backend, API route, billing, preview generation, voice sync, polling, finalize, or render behavior changed
+  - no direct sync handler was passed into the Preview surface
+  - no React Native ready-preview caption overlay was reintroduced; `storyboard-preview-caption` remains absent
+  - backend/mobile contract docs were not changed because caller/route truth stayed unchanged
+
 ## Current Open Questions
 
 - The exact visual token system for the mockup is not defined in repo assets or design docs. Implementation should aim toward the attached mockup direction while staying inside existing mobile theme/token patterns.

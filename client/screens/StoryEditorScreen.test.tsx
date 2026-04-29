@@ -230,15 +230,15 @@ describe("client/screens/StoryEditorScreen", () => {
 
     expect(mockStoryboardSurfaceRender).not.toHaveBeenCalled();
     expect(mockStoryPreviewShellRender).toHaveBeenCalled();
-    expect(
-      mockStoryPreviewShellRender.mock.calls.at(-1)?.[0],
-    ).toMatchObject({
+    expect(mockStoryPreviewShellRender.mock.calls.at(-1)?.[0]).toMatchObject({
       onOpenVoiceSync: expect.any(Function),
-      previewStatusLabel: "Rough Preview",
-      previewStatusTone: "neutral",
+      previewHeroHeadline: "Generate a synced preview",
+      previewHeroHint: "Uses synced voice timing",
+      previewStatusLabel: "Ready",
+      previewStatusTone: "info",
       previewSupportingText:
         "Generate a synced preview to play this storyboard.",
-      helperBannerCopy: "Clip selection first, then voice sync locks timing.",
+      helperBannerCopy: "Uses synced voice timing.",
     });
   });
 
@@ -300,10 +300,12 @@ describe("client/screens/StoryEditorScreen", () => {
 
     expect(mockStoryDeckRender).not.toHaveBeenCalled();
     expect(mockStoryPreviewShellRender).not.toHaveBeenCalled();
-    expect(
-      mockStoryboardSurfaceRender.mock.calls.at(-1)?.[0],
-    ).toMatchObject({
+    expect(mockStoryboardSurfaceRender.mock.calls.at(-1)?.[0]).toMatchObject({
       onOpenVoiceSync: expect.any(Function),
+      previewHeroActionLabel: "Generate Preview",
+      previewHeroActionTarget: "preview",
+      previewHeroHeadline: "Synced preview ready",
+      previewHeroHint: null,
       previewStatusLabel: "Synced Preview",
       previewStatusTone: "success",
       previewSupportingText: "Timing locked to narration.",

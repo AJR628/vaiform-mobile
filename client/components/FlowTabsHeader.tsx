@@ -79,8 +79,15 @@ export function FlowTabsHeader({
             disabled={disabled}
             style={[
               styles.tab,
+              isCurrent && isStoryboard && styles.previewTabActive,
               {
-                backgroundColor: isCurrent ? theme.backgroundSecondary : theme.backgroundTertiary,
+                backgroundColor: isCurrent
+                  ? theme.backgroundSecondary
+                  : theme.backgroundTertiary,
+                borderColor:
+                  isCurrent && isStoryboard
+                    ? "rgba(10,132,255,0.55)"
+                    : "transparent",
                 opacity: disabled ? 0.6 : 1,
               },
             ]}
@@ -111,10 +118,18 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   tab: {
+    borderWidth: 1,
     paddingHorizontal: 10,
     paddingVertical: 6,
     borderRadius: 8,
     minWidth: 0,
+  },
+  previewTabActive: {
+    shadowColor: "#0A84FF",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.22,
+    shadowRadius: 12,
+    elevation: 3,
   },
   tabLabel: {
     fontSize: 12,

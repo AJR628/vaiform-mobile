@@ -1,6 +1,7 @@
 import React from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 
 import { ThemedText } from "@/components/ThemedText";
 import { BorderRadius, Spacing } from "@/constants/theme";
@@ -29,6 +30,10 @@ interface StoryboardSurfaceProps {
   playbackSentenceIndex: number | null;
   previewArtifactUrl: string | null;
   previewDurationSec: number | null;
+  previewHeroActionLabel: string;
+  previewHeroActionTarget: "voice" | "preview";
+  previewHeroHeadline: string;
+  previewHeroHint: string | null;
   previewIsRequesting: boolean;
   previewPositionSec: number;
   previewReady: boolean;
@@ -67,6 +72,10 @@ export function StoryboardSurface({
   playbackSentenceIndex,
   previewArtifactUrl,
   previewDurationSec,
+  previewHeroActionLabel,
+  previewHeroActionTarget,
+  previewHeroHeadline,
+  previewHeroHint,
   previewIsRequesting,
   previewPositionSec,
   previewReady,
@@ -78,29 +87,15 @@ export function StoryboardSurface({
   videoRef,
   theme,
 }: StoryboardSurfaceProps) {
-  const statusAccentColor =
-    previewStatusTone === "success"
-      ? "#66d17a"
-      : previewStatusTone === "warning"
-        ? "#f2b24d"
-        : previewStatusTone === "info"
-          ? theme.link
-          : theme.text;
-  const statusBackgroundColor =
-    previewStatusTone === "success"
-      ? "rgba(102, 209, 122, 0.14)"
-      : previewStatusTone === "warning"
-        ? "rgba(242, 178, 77, 0.14)"
-        : previewStatusTone === "info"
-          ? "rgba(74, 95, 255, 0.14)"
-          : theme.backgroundSecondary;
+  const handleHeroAction =
+    previewHeroActionTarget === "voice" ? onOpenVoiceSync : onRequestPreview;
 
   return (
-    <View
+    <LinearGradient
+      colors={["#11161D", "#1B2028"]}
       style={[
         styles.container,
         {
-          backgroundColor: theme.backgroundDefault,
           borderColor: theme.border,
         },
       ]}
@@ -127,55 +122,22 @@ export function StoryboardSurface({
             </ThemedText>
           </Pressable>
         </View>
-        <View style={styles.headerStatusRow}>
-          <View
-            style={[
-              styles.statusChip,
-              {
-                backgroundColor: statusBackgroundColor,
-                borderColor: statusAccentColor,
-              },
-            ]}
-            testID="preview-status-chip"
-          >
-            <ThemedText
-              style={[styles.statusChipText, { color: statusAccentColor }]}
-            >
-              {previewStatusLabel}
-            </ThemedText>
-          </View>
-        </View>
-        <ThemedText style={[styles.copy, { color: theme.tabIconDefault }]}>
-          {previewSupportingText}
-        </ThemedText>
       </View>
-
-      {helperBannerCopy ? (
-        <View
-          style={[
-            styles.helperBanner,
-            {
-              backgroundColor: theme.backgroundSecondary,
-              borderColor: theme.border,
-            },
-          ]}
-          testID="preview-helper-banner"
-        >
-          <Feather name="star" size={14} color={theme.tabIconDefault} />
-          <ThemedText style={styles.helperBannerText}>
-            {helperBannerCopy}
-          </ThemedText>
-        </View>
-      ) : null}
 
       <StoryboardPreviewStage
         blockedMessage={blockedMessage}
         maxVideoHeight={maxVideoHeight}
         onPlaybackStatusUpdate={onPreviewPlaybackStatus}
-        onRequestPreview={onRequestPreview}
+        onPrimaryAction={handleHeroAction}
+        previewHeroActionLabel={previewHeroActionLabel}
+        previewHeroHeadline={previewHeroHeadline}
+        previewHeroHint={previewHeroHint ?? helperBannerCopy}
         previewArtifactUrl={previewArtifactUrl}
         previewIsRequesting={previewIsRequesting}
         previewReady={previewReady}
+        previewStatusLabel={previewStatusLabel}
+        previewStatusTone={previewStatusTone}
+        previewSupportingText={previewSupportingText}
         theme={theme}
         videoRef={videoRef}
       />
@@ -195,7 +157,7 @@ export function StoryboardSurface({
         selectedSentenceIndex={selectedSentenceIndex}
         theme={theme}
       />
-    </View>
+    </LinearGradient>
   );
 }
 
@@ -203,20 +165,14 @@ const styles = StyleSheet.create({
   container: {
     borderRadius: BorderRadius.xl,
     borderWidth: 1,
-    gap: Spacing.md,
+    gap: Spacing.sm,
     marginHorizontal: Spacing.md,
     marginTop: Spacing.md,
-    padding: Spacing.md,
-  },
-  copy: {
-    fontSize: 13,
-    lineHeight: 18,
+    padding: Spacing.sm,
   },
   header: {
-    gap: Spacing.xs,
-  },
-  headerStatusRow: {
-    alignItems: "flex-start",
+    paddingHorizontal: Spacing.sm,
+    paddingTop: Spacing.sm,
   },
   headerTopRow: {
     alignItems: "center",
@@ -224,33 +180,11 @@ const styles = StyleSheet.create({
     gap: Spacing.sm,
     justifyContent: "space-between",
   },
-  helperBanner: {
-    alignItems: "center",
-    borderRadius: BorderRadius.full,
-    borderWidth: 1,
-    flexDirection: "row",
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-  },
-  helperBannerText: {
-    flex: 1,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  statusChip: {
-    borderRadius: BorderRadius.full,
-    borderWidth: 1,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 6,
-  },
-  statusChipText: {
-    fontSize: 13,
-    fontWeight: "700",
-  },
   title: {
-    fontSize: 17,
+    color: "#fff",
+    fontSize: 28,
     fontWeight: "800",
+    lineHeight: 34,
   },
   voiceSyncButton: {
     alignItems: "center",
@@ -260,8 +194,13 @@ const styles = StyleSheet.create({
     gap: Spacing.xs,
     paddingHorizontal: Spacing.md,
     paddingVertical: Spacing.sm,
+    shadowColor: "#0A84FF",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
   },
   voiceSyncButtonText: {
+    color: "#fff",
     fontSize: 13,
     fontWeight: "600",
   },

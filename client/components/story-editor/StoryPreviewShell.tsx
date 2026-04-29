@@ -7,6 +7,7 @@ import {
 } from "react-native";
 import { ResizeMode, Video } from "expo-av";
 import { Feather } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 
 import { ThemedText } from "@/components/ThemedText";
 import { BorderRadius, Spacing } from "@/constants/theme";
@@ -25,6 +26,8 @@ interface StoryPreviewShellProps {
   onTogglePreview: () => void;
   onVideoLoad: () => void;
   previewDurationSec: number | null;
+  previewHeroHeadline: string;
+  previewHeroHint: string | null;
   previewPositionSec: number;
   previewReady: boolean;
   previewStatusLabel: string;
@@ -64,6 +67,8 @@ export function StoryPreviewShell({
   onTogglePreview,
   onVideoLoad,
   previewDurationSec,
+  previewHeroHeadline,
+  previewHeroHint,
   previewPositionSec,
   previewReady,
   previewStatusLabel,
@@ -120,11 +125,11 @@ export function StoryPreviewShell({
   }, [availableWidth, maxVideoHeight]);
 
   return (
-    <View
+    <LinearGradient
+      colors={["#11161D", "#1B2028"]}
       style={[
         styles.container,
         {
-          backgroundColor: theme.backgroundDefault,
           borderColor: theme.border,
         },
       ]}
@@ -132,29 +137,6 @@ export function StoryPreviewShell({
       <View style={styles.header}>
         <View style={styles.headerCopy}>
           <ThemedText style={styles.title}>Preview</ThemedText>
-          <View style={styles.headerStatusRow}>
-            <View
-              style={[
-                styles.statusChip,
-                {
-                  backgroundColor: statusBackgroundColor,
-                  borderColor: statusAccentColor,
-                },
-              ]}
-              testID="preview-status-chip"
-            >
-              <ThemedText
-                style={[styles.statusChipText, { color: statusAccentColor }]}
-              >
-                {previewStatusLabel}
-              </ThemedText>
-            </View>
-          </View>
-          <ThemedText
-            style={[styles.subtleText, { color: theme.tabIconDefault }]}
-          >
-            {previewSupportingText}
-          </ThemedText>
         </View>
         <Pressable
           accessibilityRole="button"
@@ -175,24 +157,6 @@ export function StoryPreviewShell({
         </Pressable>
       </View>
 
-      {helperBannerCopy ? (
-        <View
-          style={[
-            styles.helperBanner,
-            {
-              backgroundColor: theme.backgroundSecondary,
-              borderColor: theme.border,
-            },
-          ]}
-          testID="preview-helper-banner"
-        >
-          <Feather name="star" size={14} color={theme.tabIconDefault} />
-          <ThemedText style={styles.helperBannerText}>
-            {helperBannerCopy}
-          </ThemedText>
-        </View>
-      ) : null}
-
       <View
         style={styles.frameArea}
         onLayout={handleFrameAreaLayout}
@@ -201,11 +165,31 @@ export function StoryPreviewShell({
         <View
           style={[
             styles.videoFrame,
-            { backgroundColor: theme.backgroundSecondary },
+            {
+              backgroundColor: "#070A0F",
+              borderColor: theme.border,
+            },
             frameStyle,
           ]}
           testID="story-preview-media-frame"
         >
+          <View
+            style={[
+              styles.statusChip,
+              {
+                backgroundColor: statusBackgroundColor,
+                borderColor: statusAccentColor,
+              },
+            ]}
+            testID="preview-status-chip"
+          >
+            <View
+              style={[styles.statusDot, { backgroundColor: statusAccentColor }]}
+            />
+            <ThemedText style={styles.statusChipText} numberOfLines={1}>
+              {previewStatusLabel}
+            </ThemedText>
+          </View>
           {previewReady && currentSegmentClipUrl ? (
             <Video
               ref={videoRef}
@@ -226,13 +210,29 @@ export function StoryPreviewShell({
               testID="story-preview-shell-video"
             />
           ) : (
-            <View style={styles.blockedSurface}>
-              <Feather name="lock" size={24} color={theme.tabIconDefault} />
-              <ThemedText style={styles.blockedText}>
-                {blockedMessage ??
+            <LinearGradient
+              colors={[
+                "rgba(10,132,255,0.18)",
+                "rgba(7,10,15,0.94)",
+                "#070A0F",
+              ]}
+              locations={[0, 0.52, 1]}
+              style={styles.blockedSurface}
+            >
+              <View style={styles.syncIcon}>
+                <Feather name="refresh-cw" size={22} color={theme.link} />
+              </View>
+              <ThemedText style={styles.blockedTitle}>
+                {previewHeroHeadline ||
+                  blockedMessage ||
                   "Synced preview is blocked for this session."}
               </ThemedText>
-            </View>
+              <ThemedText
+                style={[styles.blockedText, { color: theme.tabIconDefault }]}
+              >
+                {previewHeroHint ?? helperBannerCopy ?? previewSupportingText}
+              </ThemedText>
+            </LinearGradient>
           )}
         </View>
       </View>
@@ -282,7 +282,7 @@ export function StoryPreviewShell({
           </Pressable>
         </View>
       </View>
-    </View>
+    </LinearGradient>
   );
 }
 
@@ -296,21 +296,30 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flex: 1,
     justifyContent: "center",
-    paddingHorizontal: Spacing.lg,
-    gap: Spacing.sm,
+    paddingHorizontal: Spacing.xl,
+  },
+  blockedTitle: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "800",
+    lineHeight: 24,
+    marginTop: Spacing.md,
+    textAlign: "center",
   },
   blockedText: {
-    fontSize: 14,
-    opacity: 0.8,
+    fontSize: 12,
+    fontWeight: "600",
+    lineHeight: 17,
+    marginTop: Spacing.sm,
     textAlign: "center",
   },
   container: {
     borderRadius: BorderRadius.xl,
     borderWidth: 1,
-    gap: Spacing.md,
+    gap: Spacing.sm,
     marginHorizontal: Spacing.lg,
     marginTop: Spacing.lg,
-    padding: Spacing.md,
+    padding: Spacing.sm,
   },
   frameArea: {
     alignItems: "center",
@@ -326,23 +335,6 @@ const styles = StyleSheet.create({
     flex: 1,
     gap: Spacing.xs,
   },
-  headerStatusRow: {
-    alignItems: "flex-start",
-  },
-  helperBanner: {
-    alignItems: "center",
-    borderRadius: BorderRadius.full,
-    borderWidth: 1,
-    flexDirection: "row",
-    gap: Spacing.sm,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
-  },
-  helperBannerText: {
-    flex: 1,
-    fontSize: 13,
-    lineHeight: 18,
-  },
   secondaryButton: {
     alignItems: "center",
     borderRadius: BorderRadius.full,
@@ -357,18 +349,44 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   title: {
-    fontSize: 17,
-    fontWeight: "700",
+    color: "#fff",
+    fontSize: 24,
+    fontWeight: "800",
+    lineHeight: 30,
   },
   statusChip: {
+    alignItems: "center",
     borderRadius: BorderRadius.full,
     borderWidth: 1,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: 6,
+    flexDirection: "row",
+    gap: Spacing.xs,
+    left: Spacing.md,
+    maxWidth: "72%",
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 7,
+    position: "absolute",
+    top: Spacing.md,
+    zIndex: 2,
   },
   statusChipText: {
+    color: "#F7FAFF",
     fontSize: 13,
     fontWeight: "700",
+  },
+  statusDot: {
+    borderRadius: BorderRadius.full,
+    height: 9,
+    width: 9,
+  },
+  syncIcon: {
+    alignItems: "center",
+    backgroundColor: "rgba(10,132,255,0.14)",
+    borderColor: "rgba(10,132,255,0.34)",
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    height: 60,
+    justifyContent: "center",
+    width: 60,
   },
   transportButton: {
     alignItems: "center",
@@ -402,6 +420,7 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
   },
   voiceSyncButtonText: {
+    color: "#fff",
     fontSize: 13,
     fontWeight: "600",
   },
@@ -411,7 +430,12 @@ const styles = StyleSheet.create({
   },
   videoFrame: {
     alignSelf: "center",
+    borderWidth: 1,
     borderRadius: BorderRadius.lg,
     overflow: "hidden",
+    shadowColor: "#0A84FF",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.14,
+    shadowRadius: 14,
   },
 });

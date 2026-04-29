@@ -75,8 +75,8 @@ export function StoryTimelineRail({
       style={[
         styles.container,
         {
-          backgroundColor: theme.backgroundSecondary,
-          borderColor: theme.border,
+          backgroundColor: "rgba(7,10,15,0.9)",
+          borderColor: "rgba(255,255,255,0.10)",
         },
       ]}
       testID="story-timeline-rail"
@@ -85,22 +85,26 @@ export function StoryTimelineRail({
         <Pressable
           onPress={onTogglePreview}
           disabled={!isPreviewAvailable}
+          accessibilityRole="button"
           style={[
             styles.playButton,
             {
               backgroundColor: isPreviewAvailable
-                ? theme.link
+                ? "rgba(10,132,255,0.18)"
                 : "rgba(255,255,255,0.08)",
+              borderColor: isPreviewAvailable
+                ? "rgba(10,132,255,0.42)"
+                : "rgba(255,255,255,0.10)",
               opacity: isPreviewAvailable ? 1 : 0.55,
             },
           ]}
           testID="story-timeline-play"
         >
-          <ThemedText
-            style={[styles.playButtonText, { color: theme.buttonText }]}
-          >
-            {isPreviewPlaying ? "Pause" : "Play"}
-          </ThemedText>
+          <Feather
+            name={isPreviewPlaying ? "pause" : "play"}
+            size={20}
+            color={theme.buttonText}
+          />
         </Pressable>
         <ThemedText style={[styles.timeText, { color: theme.tabIconDefault }]}>
           {formatDuration(previewPositionSec)}
@@ -120,8 +124,15 @@ export function StoryTimelineRail({
         <Pressable
           onPress={onStopPreview}
           disabled={!isPreviewAvailable}
+          accessibilityRole="button"
           hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          style={{ opacity: isPreviewAvailable ? 1 : 0.45 }}
+          style={[
+            styles.stopButton,
+            {
+              borderColor: "rgba(255,255,255,0.10)",
+              opacity: isPreviewAvailable ? 1 : 0.45,
+            },
+          ]}
           testID="story-timeline-stop"
         >
           <Feather name="square" size={16} color={theme.tabIconDefault} />
@@ -138,15 +149,16 @@ export function StoryTimelineRail({
           style={[
             styles.strip,
             {
-              backgroundColor: "rgba(255,255,255,0.04)",
-              borderColor: theme.border,
+              backgroundColor: "rgba(255,255,255,0.05)",
+              borderColor: "rgba(255,255,255,0.10)",
             },
           ]}
           testID="story-timeline-strip"
         >
           {items.map((item, index) => {
             const isSelected = selectedSentenceIndex === item.sentenceIndex;
-            const isPlaybackActive = playbackSentenceIndex === item.sentenceIndex;
+            const isPlaybackActive =
+              playbackSentenceIndex === item.sentenceIndex;
             const isActive = activeSentenceIndex === item.sentenceIndex;
             const durationLabel = getDurationLabel(item.durationSec);
 
@@ -161,10 +173,15 @@ export function StoryTimelineRail({
                     width: getTileWidth(item),
                     height: SEGMENT_HEIGHT,
                     backgroundColor: isActive
-                      ? "rgba(255,255,255,0.14)"
+                      ? "rgba(10,132,255,0.12)"
                       : "rgba(255,255,255,0.06)",
                     borderRightColor:
                       index < items.length - 1 ? theme.border : "transparent",
+                    shadowColor: isSelected ? theme.link : "transparent",
+                    shadowOffset: { width: 0, height: 0 },
+                    shadowOpacity: isSelected ? 0.28 : 0,
+                    shadowRadius: isSelected ? 12 : 0,
+                    elevation: isSelected ? 2 : 0,
                   },
                 ]}
                 testID={`story-timeline-tile-${item.sentenceIndex}`}
@@ -210,10 +227,7 @@ export function StoryTimelineRail({
                 {isSelected ? (
                   <View
                     pointerEvents="none"
-                    style={[
-                      styles.selectionRing,
-                      { borderColor: "rgba(255,255,255,0.6)" },
-                    ]}
+                    style={[styles.selectionRing, { borderColor: theme.link }]}
                     testID={`story-timeline-selected-${item.sentenceIndex}`}
                   />
                 ) : null}
@@ -221,10 +235,7 @@ export function StoryTimelineRail({
                   <>
                     <View
                       pointerEvents="none"
-                      style={[
-                        styles.playbackRing,
-                        { borderColor: theme.link },
-                      ]}
+                      style={[styles.playbackRing, { borderColor: theme.link }]}
                       testID={`story-timeline-playback-${item.sentenceIndex}`}
                     />
                     <View
@@ -248,22 +259,22 @@ export function StoryTimelineRail({
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: BorderRadius.xl,
+    borderRadius: BorderRadius.lg,
     borderWidth: 1,
     gap: Spacing.sm,
     padding: Spacing.sm,
+    shadowColor: "#0A84FF",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.1,
+    shadowRadius: 14,
   },
   playButton: {
     alignItems: "center",
     borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    height: 48,
     justifyContent: "center",
-    minHeight: 32,
-    minWidth: 62,
-    paddingHorizontal: Spacing.md,
-  },
-  playButtonText: {
-    fontSize: 13,
-    fontWeight: "700",
+    width: 48,
   },
   progressFill: {
     borderRadius: BorderRadius.full,
@@ -275,20 +286,20 @@ const styles = StyleSheet.create({
   progressTrack: {
     borderRadius: BorderRadius.full,
     flex: 1,
-    height: 4,
+    height: 5,
     overflow: "hidden",
   },
   railContent: {
     paddingVertical: 2,
   },
   selectionRing: {
-    borderRadius: BorderRadius.sm,
+    borderRadius: BorderRadius.md,
     borderWidth: 2,
-    bottom: 4,
-    left: 4,
+    bottom: 3,
+    left: 3,
     position: "absolute",
-    right: 4,
-    top: 4,
+    right: 3,
+    top: 3,
   },
   playbackMarker: {
     borderRadius: BorderRadius.full,
@@ -308,7 +319,7 @@ const styles = StyleSheet.create({
     top: 3,
   },
   strip: {
-    borderRadius: BorderRadius.lg,
+    borderRadius: BorderRadius.md,
     borderWidth: 1,
     flexDirection: "row",
     overflow: "hidden",
@@ -376,5 +387,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     flexDirection: "row",
     gap: Spacing.sm,
+  },
+  stopButton: {
+    alignItems: "center",
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    height: 36,
+    justifyContent: "center",
+    width: 36,
   },
 });

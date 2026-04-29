@@ -74,6 +74,10 @@ type PreviewWorkspaceStatusTone = "neutral" | "success" | "warning" | "info";
 
 interface PreviewWorkspaceChrome {
   helperBannerCopy: string | null;
+  heroActionLabel: string;
+  heroActionTarget: "voice" | "preview";
+  heroHeadline: string;
+  heroHint: string | null;
   statusLabel: string;
   statusTone: PreviewWorkspaceStatusTone;
   supportingText: string;
@@ -97,6 +101,10 @@ function getPreviewWorkspaceChrome({
   if (isSyncing) {
     return {
       helperBannerCopy: null,
+      heroActionLabel: "Voice & Timing",
+      heroActionTarget: "voice",
+      heroHeadline: "Syncing voice timing",
+      heroHint: "Preview updates after sync",
       statusLabel: "Syncing",
       statusTone: "info",
       supportingText: "Updating narration timing for synced preview.",
@@ -106,20 +114,29 @@ function getPreviewWorkspaceChrome({
   if (voiceSyncState === "current" && previewReady) {
     return {
       helperBannerCopy: null,
+      heroActionLabel: "Generate Preview",
+      heroActionTarget: "preview",
+      heroHeadline: "Synced preview ready",
+      heroHint: null,
       statusLabel: "Synced Preview",
       statusTone: "success",
       supportingText: "Timing locked to narration.",
     };
   }
 
-  if (
-    hasLocalVoiceDraft ||
-    voiceSyncState === "stale" ||
-    draftPreviewState === "stale"
-  ) {
+  if (hasLocalVoiceDraft || voiceSyncState !== "current") {
+    const statusLabel = hasLocalVoiceDraft
+      ? "Voice changed"
+      : voiceSyncState === "stale"
+        ? "Preview stale"
+        : "Voice needed";
     return {
-      helperBannerCopy: "Voice changed. Re-sync to refresh timing and preview.",
-      statusLabel: "Preview Stale",
+      helperBannerCopy: "Generate preview after sync",
+      heroActionLabel: "Voice & Timing",
+      heroActionTarget: "voice",
+      heroHeadline: "Re-sync to update preview",
+      heroHint: "Generate preview after sync",
+      statusLabel,
       statusTone: "warning",
       supportingText:
         previewBlockedMessage ??
@@ -127,12 +144,32 @@ function getPreviewWorkspaceChrome({
     };
   }
 
+  const needsRegeneration =
+    draftPreviewState === "stale" || draftPreviewState === "failed";
+
   return {
-    helperBannerCopy: "Clip selection first, then voice sync locks timing.",
-    statusLabel: "Rough Preview",
-    statusTone: "neutral",
+    helperBannerCopy: "Uses synced voice timing.",
+    heroActionLabel: needsRegeneration
+      ? "Regenerate Preview"
+      : "Generate Preview",
+    heroActionTarget: "preview",
+    heroHeadline: "Generate a synced preview",
+    heroHint: "Uses synced voice timing",
+    statusLabel:
+      draftPreviewState === "failed"
+        ? "Preview failed"
+        : draftPreviewState === "stale"
+          ? "Preview stale"
+          : draftPreviewState === "queued" || draftPreviewState === "running"
+            ? "Generating"
+            : "Ready",
+    statusTone:
+      draftPreviewState === "failed" || draftPreviewState === "stale"
+        ? "warning"
+        : "info",
     supportingText:
-      previewBlockedMessage ?? "Sync voice to unlock the synced preview.",
+      previewBlockedMessage ??
+      "Generate a synced preview to play this storyboard.",
   };
 }
 
@@ -297,14 +334,8 @@ export default function StoryEditorScreen() {
     previewReady,
     voiceSyncState: voiceSync?.state,
   });
-  const previewShellChromeReserve =
-    PREVIEW_SHELL_CHROME_RESERVE +
-    56 +
-    (previewWorkspaceChrome.helperBannerCopy ? 52 : 0);
-  const unifiedSurfaceChromeReserve =
-    UNIFIED_SURFACE_CHROME_RESERVE +
-    56 +
-    (previewWorkspaceChrome.helperBannerCopy ? 52 : 0);
+  const previewShellChromeReserve = PREVIEW_SHELL_CHROME_RESERVE + 48;
+  const unifiedSurfaceChromeReserve = UNIFIED_SURFACE_CHROME_RESERVE + 48;
 
   const scrollX = useSharedValue(0);
   const onDeckScroll = useAnimatedScrollHandler({
@@ -645,6 +676,10 @@ export default function StoryEditorScreen() {
           onPreviewPlaybackStatus={handlePreviewPlaybackStatus}
           previewArtifactUrl={previewArtifactUrl}
           previewDurationSec={previewDurationSec}
+          previewHeroActionLabel={previewWorkspaceChrome.heroActionLabel}
+          previewHeroActionTarget={previewWorkspaceChrome.heroActionTarget}
+          previewHeroHeadline={previewWorkspaceChrome.heroHeadline}
+          previewHeroHint={previewWorkspaceChrome.heroHint}
           previewIsRequesting={isPreviewRequesting}
           previewPositionSec={previewPositionSec}
           previewReady={previewReady}
@@ -680,6 +715,8 @@ export default function StoryEditorScreen() {
             onTogglePreview={() => void togglePreviewPlayback()}
             onVideoLoad={handleFollowerVideoLoad}
             previewDurationSec={previewDurationSec}
+            previewHeroHeadline={previewWorkspaceChrome.heroHeadline}
+            previewHeroHint={previewWorkspaceChrome.heroHint}
             previewPositionSec={previewPositionSec}
             previewReady={previewReady}
             previewStatusLabel={previewWorkspaceChrome.statusLabel}

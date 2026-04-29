@@ -14,6 +14,15 @@ jest.mock("@expo/vector-icons", () => ({
   Feather: "Feather",
 }));
 
+jest.mock("expo-linear-gradient", () => {
+  const React = require("react");
+  const { View } = require("react-native");
+  return {
+    LinearGradient: ({ children, ...props }: any) =>
+      React.createElement(View, props, children),
+  };
+});
+
 const theme = {
   backgroundDefault: "#111111",
   backgroundSecondary: "#222222",
@@ -27,7 +36,7 @@ const theme = {
 describe("client/components/story-editor/StoryPreviewShell", () => {
   test("renders fallback header chrome and the backend blocked message when preview is not ready", () => {
     const onOpenVoiceSync = jest.fn();
-    const { getAllByText, getByTestId, getByText } = render(
+    const { getByTestId, getByText, queryByTestId } = render(
       <StoryPreviewShell
         blockedMessage="Sync voice and timing to unlock the synced preview."
         currentPreviewBeatLabel={null}
@@ -42,10 +51,12 @@ describe("client/components/story-editor/StoryPreviewShell", () => {
         onTogglePreview={jest.fn()}
         onVideoLoad={jest.fn()}
         previewDurationSec={null}
+        previewHeroHeadline="Re-sync to update preview"
+        previewHeroHint="Generate preview after sync"
         previewPositionSec={0}
         previewReady={false}
-        previewStatusLabel="Rough Preview"
-        previewStatusTone="neutral"
+        previewStatusLabel="Voice changed"
+        previewStatusTone="warning"
         previewSupportingText="Sync voice and timing to unlock the synced preview."
         theme={theme}
         videoRef={{ current: null }}
@@ -54,10 +65,9 @@ describe("client/components/story-editor/StoryPreviewShell", () => {
 
     expect(getByText("Preview")).toBeTruthy();
     expect(getByTestId("preview-status-chip")).toBeTruthy();
-    expect(getByTestId("preview-helper-banner")).toBeTruthy();
-    expect(
-      getAllByText("Sync voice and timing to unlock the synced preview."),
-    ).toHaveLength(2);
+    expect(queryByTestId("preview-helper-banner")).toBeNull();
+    expect(getByText("Re-sync to update preview")).toBeTruthy();
+    expect(getByText("Generate preview after sync")).toBeTruthy();
     fireEvent.press(getByTestId("preview-voice-timing-cta"));
     expect(onOpenVoiceSync).toHaveBeenCalledTimes(1);
 
@@ -88,6 +98,8 @@ describe("client/components/story-editor/StoryPreviewShell", () => {
         onTogglePreview={jest.fn()}
         onVideoLoad={jest.fn()}
         previewDurationSec={12}
+        previewHeroHeadline="Synced preview ready"
+        previewHeroHint={null}
         previewPositionSec={4}
         previewReady={true}
         previewStatusLabel="Synced Preview"
