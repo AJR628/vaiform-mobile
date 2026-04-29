@@ -37,8 +37,8 @@ If backend route behavior changes, update the backend canonical docs first. Upda
 - Current mobile readers are AuthContext bootstrap + refreshUsage(), surfaced by SettingsScreen and post-render refresh in StoryEditorScreen.
 - Current billing fields read by mobile are `data.usage.availableSec` and session `billingEstimate.estimatedSec`.
 - StoryEditorScreen now also uses `POST /api/story/sync` as the explicit speech/timing commit point and reads `voiceSync`, `voicePreset`, `voicePacePreset`, `voiceOptions`, and synced `captions` from `GET /api/story/:sessionId`.
-- StoryEditorScreen Step 3 now uses `POST /api/story/preview` to request a backend-owned base preview artifact, then polls only `GET /api/story/:sessionId` for `draftPreviewV1` and `captionOverlayV1`.
-- Step 3 playback truth is `draftPreviewV1` plus `captionOverlayV1`. `playbackTimelineV1` may still be present as compatibility timing metadata, but it is not the active mobile preview playback engine.
+- StoryEditorScreen Step 3 now uses `POST /api/story/preview` to request a backend-owned captioned preview artifact, then polls only `GET /api/story/:sessionId` for `draftPreviewV1` readiness/readback.
+- Step 3 ready-preview playback truth is `draftPreviewV1.artifact.url`. `captionOverlayV1` and `playbackTimelineV1` may still be present as compatibility/timing/style metadata, but neither is the ready-preview visual renderer or active mobile playback engine.
 - Render is now blocked client-side unless sync is current and there is no local unsynced voice draft.
 - StoryEditorScreen reads the current backend-owned session `billingEstimate.estimatedSec` as the render charge only after sync is current; sync charge estimation lives under `voiceSync.nextEstimatedChargeSec`.
 - Current `/api/users/ensure` profile shape used by mobile is `{ uid, email, plan, freeShortsUsed }`.
