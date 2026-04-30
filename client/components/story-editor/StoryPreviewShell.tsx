@@ -26,6 +26,9 @@ interface StoryPreviewShellProps {
   onTogglePreview: () => void;
   onVideoLoad: () => void;
   previewDurationSec: number | null;
+  previewHeroActionDisabled?: boolean;
+  previewHeroActionLabel?: string;
+  previewHeroActionTarget?: "voice" | "preview";
   previewHeroHeadline: string;
   previewHeroHint: string | null;
   previewPositionSec: number;
@@ -67,6 +70,9 @@ export function StoryPreviewShell({
   onTogglePreview,
   onVideoLoad,
   previewDurationSec,
+  previewHeroActionDisabled: _previewHeroActionDisabled,
+  previewHeroActionLabel: _previewHeroActionLabel,
+  previewHeroActionTarget: _previewHeroActionTarget,
   previewHeroHeadline,
   previewHeroHint,
   previewPositionSec,
@@ -126,7 +132,7 @@ export function StoryPreviewShell({
 
   return (
     <LinearGradient
-      colors={["#11161D", "#1B2028"]}
+      colors={["#0A0F16", "#141B24"]}
       style={[
         styles.container,
         {
@@ -134,9 +140,23 @@ export function StoryPreviewShell({
         },
       ]}
     >
-      <View style={styles.header}>
-        <View style={styles.headerCopy}>
-          <ThemedText style={styles.title}>Preview</ThemedText>
+      <View style={styles.monitorChrome}>
+        <View
+          style={[
+            styles.statusChip,
+            {
+              backgroundColor: statusBackgroundColor,
+              borderColor: statusAccentColor,
+            },
+          ]}
+          testID="preview-status-chip"
+        >
+          <View
+            style={[styles.statusDot, { backgroundColor: statusAccentColor }]}
+          />
+          <ThemedText style={styles.statusChipText} numberOfLines={1}>
+            {previewStatusLabel}
+          </ThemedText>
         </View>
         <Pressable
           accessibilityRole="button"
@@ -173,23 +193,6 @@ export function StoryPreviewShell({
           ]}
           testID="story-preview-media-frame"
         >
-          <View
-            style={[
-              styles.statusChip,
-              {
-                backgroundColor: statusBackgroundColor,
-                borderColor: statusAccentColor,
-              },
-            ]}
-            testID="preview-status-chip"
-          >
-            <View
-              style={[styles.statusDot, { backgroundColor: statusAccentColor }]}
-            />
-            <ThemedText style={styles.statusChipText} numberOfLines={1}>
-              {previewStatusLabel}
-            </ThemedText>
-          </View>
           {previewReady && currentSegmentClipUrl ? (
             <Video
               ref={videoRef}
@@ -226,11 +229,6 @@ export function StoryPreviewShell({
                 {previewHeroHeadline ||
                   blockedMessage ||
                   "Synced preview is blocked for this session."}
-              </ThemedText>
-              <ThemedText
-                style={[styles.blockedText, { color: theme.tabIconDefault }]}
-              >
-                {previewHeroHint ?? helperBannerCopy ?? previewSupportingText}
               </ThemedText>
             </LinearGradient>
           )}
@@ -316,24 +314,14 @@ const styles = StyleSheet.create({
   container: {
     borderRadius: BorderRadius.xl,
     borderWidth: 1,
-    gap: Spacing.sm,
-    marginHorizontal: Spacing.lg,
-    marginTop: Spacing.lg,
-    padding: Spacing.sm,
+    gap: Spacing.xs,
+    marginHorizontal: Spacing.sm,
+    marginTop: Spacing.sm,
+    padding: 6,
   },
   frameArea: {
     alignItems: "center",
     width: "100%",
-  },
-  header: {
-    alignItems: "flex-start",
-    flexDirection: "row",
-    gap: Spacing.sm,
-    justifyContent: "space-between",
-  },
-  headerCopy: {
-    flex: 1,
-    gap: Spacing.xs,
   },
   secondaryButton: {
     alignItems: "center",
@@ -348,11 +336,14 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
   },
-  title: {
-    color: "#fff",
-    fontSize: 24,
-    fontWeight: "800",
-    lineHeight: 30,
+  monitorChrome: {
+    alignItems: "center",
+    flexDirection: "row",
+    gap: Spacing.sm,
+    justifyContent: "space-between",
+    paddingBottom: Spacing.xs,
+    paddingHorizontal: Spacing.sm,
+    paddingTop: Spacing.xs,
   },
   statusChip: {
     alignItems: "center",
@@ -360,13 +351,10 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexDirection: "row",
     gap: Spacing.xs,
-    left: Spacing.md,
+    flexShrink: 1,
     maxWidth: "72%",
     paddingHorizontal: Spacing.sm,
     paddingVertical: 7,
-    position: "absolute",
-    top: Spacing.md,
-    zIndex: 2,
   },
   statusChipText: {
     color: "#F7FAFF",

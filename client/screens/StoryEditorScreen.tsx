@@ -74,6 +74,7 @@ type PreviewWorkspaceStatusTone = "neutral" | "success" | "warning" | "info";
 
 interface PreviewWorkspaceChrome {
   helperBannerCopy: string | null;
+  heroActionDisabled: boolean;
   heroActionLabel: string;
   heroActionTarget: "voice" | "preview";
   heroHeadline: string;
@@ -86,6 +87,7 @@ interface PreviewWorkspaceChrome {
 function getPreviewWorkspaceChrome({
   draftPreviewState,
   hasLocalVoiceDraft,
+  isPreviewRequesting,
   isSyncing,
   previewBlockedMessage,
   previewReady,
@@ -93,6 +95,7 @@ function getPreviewWorkspaceChrome({
 }: {
   draftPreviewState: string;
   hasLocalVoiceDraft: boolean;
+  isPreviewRequesting: boolean;
   isSyncing: boolean;
   previewBlockedMessage: string | null;
   previewReady: boolean;
@@ -101,10 +104,11 @@ function getPreviewWorkspaceChrome({
   if (isSyncing) {
     return {
       helperBannerCopy: null,
+      heroActionDisabled: false,
       heroActionLabel: "Voice & Timing",
       heroActionTarget: "voice",
       heroHeadline: "Syncing voice timing",
-      heroHint: "Preview updates after sync",
+      heroHint: null,
       statusLabel: "Syncing",
       statusTone: "info",
       supportingText: "Updating narration timing for synced preview.",
@@ -114,6 +118,7 @@ function getPreviewWorkspaceChrome({
   if (voiceSyncState === "current" && previewReady) {
     return {
       helperBannerCopy: null,
+      heroActionDisabled: false,
       heroActionLabel: "Generate Preview",
       heroActionTarget: "preview",
       heroHeadline: "Synced preview ready",
@@ -125,18 +130,14 @@ function getPreviewWorkspaceChrome({
   }
 
   if (hasLocalVoiceDraft || voiceSyncState !== "current") {
-    const statusLabel = hasLocalVoiceDraft
-      ? "Voice changed"
-      : voiceSyncState === "stale"
-        ? "Preview stale"
-        : "Voice needed";
     return {
-      helperBannerCopy: "Generate preview after sync",
+      helperBannerCopy: null,
+      heroActionDisabled: false,
       heroActionLabel: "Voice & Timing",
       heroActionTarget: "voice",
       heroHeadline: "Re-sync to update preview",
-      heroHint: "Generate preview after sync",
-      statusLabel,
+      heroHint: null,
+      statusLabel: "Voice changed",
       statusTone: "warning",
       supportingText:
         previewBlockedMessage ??
@@ -146,25 +147,34 @@ function getPreviewWorkspaceChrome({
 
   const needsRegeneration =
     draftPreviewState === "stale" || draftPreviewState === "failed";
+  const isGenerating =
+    isPreviewRequesting ||
+    draftPreviewState === "queued" ||
+    draftPreviewState === "running";
 
   return {
-    helperBannerCopy: "Uses synced voice timing.",
-    heroActionLabel: needsRegeneration
-      ? "Regenerate Preview"
-      : "Generate Preview",
+    helperBannerCopy: null,
+    heroActionDisabled: isGenerating,
+    heroActionLabel: isGenerating
+      ? "Generating..."
+      : needsRegeneration
+        ? "Regenerate Preview"
+        : "Generate Preview",
     heroActionTarget: "preview",
-    heroHeadline: "Generate a synced preview",
-    heroHint: "Uses synced voice timing",
-    statusLabel:
-      draftPreviewState === "failed"
-        ? "Preview failed"
-        : draftPreviewState === "stale"
-          ? "Preview stale"
-          : draftPreviewState === "queued" || draftPreviewState === "running"
-            ? "Generating"
-            : "Ready",
-    statusTone:
-      draftPreviewState === "failed" || draftPreviewState === "stale"
+    heroHeadline: isGenerating
+      ? "Building preview..."
+      : needsRegeneration
+        ? "Regenerate preview"
+        : "Generate synced preview",
+    heroHint: null,
+    statusLabel: isGenerating
+      ? "Generating"
+      : draftPreviewState === "failed" || draftPreviewState === "stale"
+        ? "Preview stale"
+        : "Ready",
+    statusTone: isGenerating
+      ? "info"
+      : draftPreviewState === "failed" || draftPreviewState === "stale"
         ? "warning"
         : "info",
     supportingText:
@@ -329,13 +339,14 @@ export default function StoryEditorScreen() {
   const previewWorkspaceChrome = getPreviewWorkspaceChrome({
     draftPreviewState: draftPreview.state,
     hasLocalVoiceDraft,
+    isPreviewRequesting,
     isSyncing,
     previewBlockedMessage,
     previewReady,
     voiceSyncState: voiceSync?.state,
   });
-  const previewShellChromeReserve = PREVIEW_SHELL_CHROME_RESERVE + 48;
-  const unifiedSurfaceChromeReserve = UNIFIED_SURFACE_CHROME_RESERVE + 48;
+  const previewShellChromeReserve = PREVIEW_SHELL_CHROME_RESERVE;
+  const unifiedSurfaceChromeReserve = UNIFIED_SURFACE_CHROME_RESERVE;
 
   const scrollX = useSharedValue(0);
   const onDeckScroll = useAnimatedScrollHandler({
@@ -676,6 +687,7 @@ export default function StoryEditorScreen() {
           onPreviewPlaybackStatus={handlePreviewPlaybackStatus}
           previewArtifactUrl={previewArtifactUrl}
           previewDurationSec={previewDurationSec}
+          previewHeroActionDisabled={previewWorkspaceChrome.heroActionDisabled}
           previewHeroActionLabel={previewWorkspaceChrome.heroActionLabel}
           previewHeroActionTarget={previewWorkspaceChrome.heroActionTarget}
           previewHeroHeadline={previewWorkspaceChrome.heroHeadline}
@@ -715,6 +727,11 @@ export default function StoryEditorScreen() {
             onTogglePreview={() => void togglePreviewPlayback()}
             onVideoLoad={handleFollowerVideoLoad}
             previewDurationSec={previewDurationSec}
+            previewHeroActionDisabled={
+              previewWorkspaceChrome.heroActionDisabled
+            }
+            previewHeroActionLabel={previewWorkspaceChrome.heroActionLabel}
+            previewHeroActionTarget={previewWorkspaceChrome.heroActionTarget}
             previewHeroHeadline={previewWorkspaceChrome.heroHeadline}
             previewHeroHint={previewWorkspaceChrome.heroHint}
             previewPositionSec={previewPositionSec}

@@ -232,13 +232,16 @@ describe("client/screens/StoryEditorScreen", () => {
     expect(mockStoryPreviewShellRender).toHaveBeenCalled();
     expect(mockStoryPreviewShellRender.mock.calls.at(-1)?.[0]).toMatchObject({
       onOpenVoiceSync: expect.any(Function),
-      previewHeroHeadline: "Generate a synced preview",
-      previewHeroHint: "Uses synced voice timing",
+      previewHeroActionDisabled: false,
+      previewHeroActionLabel: "Generate Preview",
+      previewHeroActionTarget: "preview",
+      previewHeroHeadline: "Generate synced preview",
+      previewHeroHint: null,
       previewStatusLabel: "Ready",
       previewStatusTone: "info",
       previewSupportingText:
         "Generate a synced preview to play this storyboard.",
-      helperBannerCopy: "Uses synced voice timing.",
+      helperBannerCopy: null,
     });
   });
 
@@ -302,6 +305,7 @@ describe("client/screens/StoryEditorScreen", () => {
     expect(mockStoryPreviewShellRender).not.toHaveBeenCalled();
     expect(mockStoryboardSurfaceRender.mock.calls.at(-1)?.[0]).toMatchObject({
       onOpenVoiceSync: expect.any(Function),
+      previewHeroActionDisabled: false,
       previewHeroActionLabel: "Generate Preview",
       previewHeroActionTarget: "preview",
       previewHeroHeadline: "Synced preview ready",

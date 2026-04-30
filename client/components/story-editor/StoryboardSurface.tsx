@@ -30,6 +30,7 @@ interface StoryboardSurfaceProps {
   playbackSentenceIndex: number | null;
   previewArtifactUrl: string | null;
   previewDurationSec: number | null;
+  previewHeroActionDisabled: boolean;
   previewHeroActionLabel: string;
   previewHeroActionTarget: "voice" | "preview";
   previewHeroHeadline: string;
@@ -72,6 +73,7 @@ export function StoryboardSurface({
   playbackSentenceIndex,
   previewArtifactUrl,
   previewDurationSec,
+  previewHeroActionDisabled,
   previewHeroActionLabel,
   previewHeroActionTarget,
   previewHeroHeadline,
@@ -89,10 +91,26 @@ export function StoryboardSurface({
 }: StoryboardSurfaceProps) {
   const handleHeroAction =
     previewHeroActionTarget === "voice" ? onOpenVoiceSync : onRequestPreview;
+  const statusAccentColor =
+    previewStatusTone === "success"
+      ? "#66D17A"
+      : previewStatusTone === "warning"
+        ? "#F2B24D"
+        : previewStatusTone === "info"
+          ? theme.link
+          : theme.text;
+  const statusBackgroundColor =
+    previewStatusTone === "success"
+      ? "rgba(102,209,122,0.16)"
+      : previewStatusTone === "warning"
+        ? "rgba(242,178,77,0.16)"
+        : previewStatusTone === "info"
+          ? "rgba(10,132,255,0.18)"
+          : "rgba(255,255,255,0.12)";
 
   return (
     <LinearGradient
-      colors={["#11161D", "#1B2028"]}
+      colors={["#0A0F16", "#141B24"]}
       style={[
         styles.container,
         {
@@ -101,62 +119,84 @@ export function StoryboardSurface({
       ]}
       testID="storyboard-surface"
     >
-      <View style={styles.header}>
-        <View style={styles.headerTopRow}>
-          <ThemedText style={styles.title}>Preview</ThemedText>
-          <Pressable
-            accessibilityRole="button"
-            onPress={onOpenVoiceSync}
-            style={[
-              styles.voiceSyncButton,
-              {
-                backgroundColor: theme.backgroundSecondary,
-                borderColor: theme.border,
-              },
-            ]}
-            testID="preview-voice-timing-cta"
-          >
-            <Feather name="radio" size={14} color={theme.text} />
-            <ThemedText style={styles.voiceSyncButtonText}>
-              {"Voice & Timing"}
-            </ThemedText>
-          </Pressable>
+      <View style={styles.monitorChrome}>
+        <View
+          style={[
+            styles.statusBadge,
+            {
+              backgroundColor: statusBackgroundColor,
+              borderColor: statusAccentColor,
+            },
+          ]}
+          testID="preview-status-chip"
+        >
+          <View
+            style={[styles.statusDot, { backgroundColor: statusAccentColor }]}
+          />
+          <ThemedText style={styles.statusBadgeText} numberOfLines={1}>
+            {previewStatusLabel}
+          </ThemedText>
         </View>
+        <Pressable
+          accessibilityRole="button"
+          onPress={onOpenVoiceSync}
+          style={[
+            styles.voiceSyncButton,
+            {
+              backgroundColor: "rgba(255,255,255,0.08)",
+              borderColor: "rgba(255,255,255,0.14)",
+            },
+          ]}
+          testID="preview-voice-timing-cta"
+        >
+          <Feather name="radio" size={14} color={theme.text} />
+          <ThemedText style={styles.voiceSyncButtonText}>
+            {"Voice & Timing"}
+          </ThemedText>
+        </Pressable>
       </View>
 
-      <StoryboardPreviewStage
-        blockedMessage={blockedMessage}
-        maxVideoHeight={maxVideoHeight}
-        onPlaybackStatusUpdate={onPreviewPlaybackStatus}
-        onPrimaryAction={handleHeroAction}
-        previewHeroActionLabel={previewHeroActionLabel}
-        previewHeroHeadline={previewHeroHeadline}
-        previewHeroHint={previewHeroHint ?? helperBannerCopy}
-        previewArtifactUrl={previewArtifactUrl}
-        previewIsRequesting={previewIsRequesting}
-        previewReady={previewReady}
-        previewStatusLabel={previewStatusLabel}
-        previewStatusTone={previewStatusTone}
-        previewSupportingText={previewSupportingText}
-        theme={theme}
-        videoRef={videoRef}
-      />
+      <View
+        style={[
+          styles.viewportWrap,
+          {
+            borderColor: theme.border,
+          },
+        ]}
+      >
+        <StoryboardPreviewStage
+          blockedMessage={blockedMessage}
+          maxVideoHeight={maxVideoHeight}
+          onPlaybackStatusUpdate={onPreviewPlaybackStatus}
+          onPrimaryAction={handleHeroAction}
+          previewHeroActionDisabled={previewHeroActionDisabled}
+          previewHeroActionLabel={previewHeroActionLabel}
+          previewHeroHeadline={previewHeroHeadline}
+          previewArtifactUrl={previewArtifactUrl}
+          previewIsRequesting={previewIsRequesting}
+          previewReady={previewReady}
+          theme={theme}
+          videoRef={videoRef}
+        />
+      </View>
 
-      <StoryTimelineRail
-        activeSentenceIndex={activeSentenceIndex}
-        isPreviewAvailable={isPreviewAvailable}
-        isPreviewPlaying={isPreviewPlaying}
-        items={railItems}
-        onLongPressBeat={onLongPressBeat}
-        onPressBeat={onPressBeat}
-        onStopPreview={onStopPreview}
-        onTogglePreview={onTogglePreview}
-        playbackSentenceIndex={playbackSentenceIndex}
-        previewDurationSec={previewDurationSec}
-        previewPositionSec={previewPositionSec}
-        selectedSentenceIndex={selectedSentenceIndex}
-        theme={theme}
-      />
+      <View style={styles.railDock}>
+        <StoryTimelineRail
+          activeSentenceIndex={activeSentenceIndex}
+          isPreviewAvailable={isPreviewAvailable}
+          isPreviewPlaying={isPreviewPlaying}
+          items={railItems}
+          onLongPressBeat={onLongPressBeat}
+          onPressBeat={onPressBeat}
+          onStopPreview={onStopPreview}
+          onTogglePreview={onTogglePreview}
+          playbackSentenceIndex={playbackSentenceIndex}
+          previewDurationSec={previewDurationSec}
+          previewPositionSec={previewPositionSec}
+          selectedSentenceIndex={selectedSentenceIndex}
+          theme={theme}
+        />
+      </View>
     </LinearGradient>
   );
 }
@@ -165,26 +205,54 @@ const styles = StyleSheet.create({
   container: {
     borderRadius: BorderRadius.xl,
     borderWidth: 1,
-    gap: Spacing.sm,
-    marginHorizontal: Spacing.md,
-    marginTop: Spacing.md,
-    padding: Spacing.sm,
+    gap: 0,
+    marginHorizontal: Spacing.xs,
+    marginTop: Spacing.sm,
+    overflow: "hidden",
+    padding: 6,
+    shadowColor: "#0A84FF",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.16,
+    shadowRadius: 18,
   },
-  header: {
-    paddingHorizontal: Spacing.sm,
-    paddingTop: Spacing.sm,
-  },
-  headerTopRow: {
+  monitorChrome: {
     alignItems: "center",
     flexDirection: "row",
     gap: Spacing.sm,
     justifyContent: "space-between",
+    paddingBottom: Spacing.xs,
+    paddingHorizontal: Spacing.sm,
+    paddingTop: Spacing.xs,
   },
-  title: {
-    color: "#fff",
-    fontSize: 28,
-    fontWeight: "800",
-    lineHeight: 34,
+  railDock: {
+    paddingTop: 0,
+  },
+  statusBadge: {
+    alignItems: "center",
+    borderRadius: BorderRadius.full,
+    borderWidth: 1,
+    flexDirection: "row",
+    flexShrink: 1,
+    gap: Spacing.xs,
+    maxWidth: "56%",
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 7,
+  },
+  statusBadgeText: {
+    color: "#F7FAFF",
+    fontSize: 13,
+    fontWeight: "700",
+  },
+  statusDot: {
+    borderRadius: BorderRadius.full,
+    height: 9,
+    width: 9,
+  },
+  viewportWrap: {
+    alignItems: "center",
+    borderRadius: BorderRadius.lg,
+    borderWidth: 1,
+    overflow: "hidden",
   },
   voiceSyncButton: {
     alignItems: "center",
@@ -192,8 +260,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     flexDirection: "row",
     gap: Spacing.xs,
-    paddingHorizontal: Spacing.md,
-    paddingVertical: Spacing.sm,
+    paddingHorizontal: Spacing.sm,
+    paddingVertical: 7,
     shadowColor: "#0A84FF",
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.12,

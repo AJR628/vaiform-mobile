@@ -47,7 +47,7 @@ function getDurationLabel(value: number | null): string {
   return formatDuration(value);
 }
 
-const SEGMENT_HEIGHT = 96;
+const SEGMENT_HEIGHT = 78;
 
 export function StoryTimelineRail({
   activeSentenceIndex,
@@ -76,7 +76,7 @@ export function StoryTimelineRail({
         styles.container,
         {
           backgroundColor: "rgba(7,10,15,0.9)",
-          borderColor: "rgba(255,255,255,0.10)",
+          borderColor: "rgba(255,255,255,0.08)",
         },
       ]}
       testID="story-timeline-rail"
@@ -90,7 +90,7 @@ export function StoryTimelineRail({
             styles.playButton,
             {
               backgroundColor: isPreviewAvailable
-                ? "rgba(10,132,255,0.18)"
+                ? "rgba(10,132,255,0.16)"
                 : "rgba(255,255,255,0.08)",
               borderColor: isPreviewAvailable
                 ? "rgba(10,132,255,0.42)"
@@ -259,10 +259,11 @@ export function StoryTimelineRail({
 
 const styles = StyleSheet.create({
   container: {
-    borderRadius: BorderRadius.lg,
-    borderWidth: 1,
-    gap: Spacing.sm,
-    padding: Spacing.sm,
+    borderBottomLeftRadius: BorderRadius.lg,
+    borderBottomRightRadius: BorderRadius.lg,
+    borderTopWidth: 1,
+    gap: 6,
+    padding: 6,
     shadowColor: "#0A84FF",
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.1,
@@ -272,9 +273,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderRadius: BorderRadius.full,
     borderWidth: 1,
-    height: 48,
+    height: 40,
     justifyContent: "center",
-    width: 48,
+    width: 40,
   },
   progressFill: {
     borderRadius: BorderRadius.full,
@@ -290,7 +291,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
   },
   railContent: {
-    paddingVertical: 2,
+    paddingVertical: 0,
   },
   selectionRing: {
     borderRadius: BorderRadius.md,
@@ -340,7 +341,7 @@ const styles = StyleSheet.create({
     fontWeight: "700",
   },
   tileCopy: {
-    bottom: 8,
+    bottom: 6,
     left: 6,
     position: "absolute",
     right: 6,
@@ -392,8 +393,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderRadius: BorderRadius.full,
     borderWidth: 1,
-    height: 36,
+    height: 32,
     justifyContent: "center",
-    width: 36,
+    width: 32,
   },
 });

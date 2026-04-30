@@ -51,8 +51,11 @@ describe("client/components/story-editor/StoryPreviewShell", () => {
         onTogglePreview={jest.fn()}
         onVideoLoad={jest.fn()}
         previewDurationSec={null}
+        previewHeroActionDisabled={false}
+        previewHeroActionLabel="Voice & Timing"
+        previewHeroActionTarget="voice"
         previewHeroHeadline="Re-sync to update preview"
-        previewHeroHint="Generate preview after sync"
+        previewHeroHint={null}
         previewPositionSec={0}
         previewReady={false}
         previewStatusLabel="Voice changed"
@@ -63,11 +66,9 @@ describe("client/components/story-editor/StoryPreviewShell", () => {
       />,
     );
 
-    expect(getByText("Preview")).toBeTruthy();
     expect(getByTestId("preview-status-chip")).toBeTruthy();
     expect(queryByTestId("preview-helper-banner")).toBeNull();
     expect(getByText("Re-sync to update preview")).toBeTruthy();
-    expect(getByText("Generate preview after sync")).toBeTruthy();
     fireEvent.press(getByTestId("preview-voice-timing-cta"));
     expect(onOpenVoiceSync).toHaveBeenCalledTimes(1);
 
@@ -98,6 +99,9 @@ describe("client/components/story-editor/StoryPreviewShell", () => {
         onTogglePreview={jest.fn()}
         onVideoLoad={jest.fn()}
         previewDurationSec={12}
+        previewHeroActionDisabled={false}
+        previewHeroActionLabel="Generate Preview"
+        previewHeroActionTarget="preview"
         previewHeroHeadline="Synced preview ready"
         previewHeroHint={null}
         previewPositionSec={4}

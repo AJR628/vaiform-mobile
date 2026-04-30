@@ -50,7 +50,7 @@ describe("client/components/story-editor/StoryboardSurface", () => {
   test("renders blocked state, header chrome, and compact rail inside one surface", () => {
     const onOpenVoiceSync = jest.fn();
     const onRequestPreview = jest.fn();
-    const { getByTestId, getByText, queryByTestId } = render(
+    const { getAllByText, getByTestId, getByText, queryByTestId } = render(
       <StoryboardSurface
         activeSentenceIndex={null}
         blockedMessage="Sync voice and timing to unlock the synced preview."
@@ -69,10 +69,11 @@ describe("client/components/story-editor/StoryboardSurface", () => {
         playbackSentenceIndex={null}
         previewArtifactUrl={null}
         previewDurationSec={null}
+        previewHeroActionDisabled={false}
         previewHeroActionLabel="Voice & Timing"
         previewHeroActionTarget="voice"
         previewHeroHeadline="Re-sync to update preview"
-        previewHeroHint="Generate preview after sync"
+        previewHeroHint={null}
         previewIsRequesting={false}
         previewPositionSec={0}
         previewReady={false}
@@ -88,11 +89,10 @@ describe("client/components/story-editor/StoryboardSurface", () => {
 
     expect(getByTestId("storyboard-surface")).toBeTruthy();
     expect(getByTestId("story-timeline-rail")).toBeTruthy();
-    expect(getByText("Preview")).toBeTruthy();
     expect(getByTestId("preview-status-chip")).toBeTruthy();
     expect(queryByTestId("preview-helper-banner")).toBeNull();
     expect(getByText("Re-sync to update preview")).toBeTruthy();
-    expect(getByText("Generate preview after sync")).toBeTruthy();
+    expect(getAllByText("Voice & Timing").length).toBeGreaterThanOrEqual(1);
     fireEvent.press(getByTestId("storyboard-preview-regenerate"));
     expect(onOpenVoiceSync).toHaveBeenCalledTimes(1);
     expect(onRequestPreview).not.toHaveBeenCalled();
@@ -122,10 +122,11 @@ describe("client/components/story-editor/StoryboardSurface", () => {
         playbackSentenceIndex={null}
         previewArtifactUrl={null}
         previewDurationSec={null}
+        previewHeroActionDisabled={false}
         previewHeroActionLabel="Generate Preview"
         previewHeroActionTarget="preview"
-        previewHeroHeadline="Generate a synced preview"
-        previewHeroHint="Uses synced voice timing"
+        previewHeroHeadline="Generate synced preview"
+        previewHeroHint={null}
         previewIsRequesting={false}
         previewPositionSec={0}
         previewReady={false}
@@ -139,10 +140,56 @@ describe("client/components/story-editor/StoryboardSurface", () => {
       />,
     );
 
-    expect(getByText("Generate a synced preview")).toBeTruthy();
+    expect(getByText("Generate synced preview")).toBeTruthy();
     fireEvent.press(getByTestId("storyboard-preview-regenerate"));
     expect(onRequestPreview).toHaveBeenCalledTimes(1);
     expect(onOpenVoiceSync).not.toHaveBeenCalled();
+  });
+
+  test("renders requesting state without an enabled duplicate generate CTA", () => {
+    const onRequestPreview = jest.fn();
+    const { getByTestId, getByText, queryByText } = render(
+      <StoryboardSurface
+        activeSentenceIndex={null}
+        blockedMessage="Preview generation is running."
+        currentPreviewBeatLabel={null}
+        helperBannerCopy={null}
+        isPreviewAvailable={false}
+        isPreviewPlaying={false}
+        maxVideoHeight={260}
+        onLongPressBeat={jest.fn()}
+        onOpenVoiceSync={jest.fn()}
+        onPressBeat={jest.fn()}
+        onPreviewPlaybackStatus={jest.fn()}
+        onRequestPreview={onRequestPreview}
+        onStopPreview={jest.fn()}
+        onTogglePreview={jest.fn()}
+        playbackSentenceIndex={null}
+        previewArtifactUrl={null}
+        previewDurationSec={null}
+        previewHeroActionDisabled
+        previewHeroActionLabel="Generating..."
+        previewHeroActionTarget="preview"
+        previewHeroHeadline="Building preview..."
+        previewHeroHint={null}
+        previewIsRequesting
+        previewPositionSec={0}
+        previewReady={false}
+        previewStatusLabel="Generating"
+        previewStatusTone="info"
+        previewSupportingText="Preview generation is running."
+        railItems={railItems}
+        selectedSentenceIndex={null}
+        videoRef={{ current: null }}
+        theme={theme}
+      />,
+    );
+
+    expect(getByText("Building preview...")).toBeTruthy();
+    expect(getByText("Generating...")).toBeTruthy();
+    expect(queryByText("Generate Preview")).toBeNull();
+    fireEvent.press(getByTestId("storyboard-preview-regenerate"));
+    expect(onRequestPreview).not.toHaveBeenCalled();
   });
 
   test("renders ready preview without depending on caption raster assets", () => {
@@ -165,6 +212,7 @@ describe("client/components/story-editor/StoryboardSurface", () => {
         playbackSentenceIndex={0}
         previewArtifactUrl="https://cdn.example.com/base.mp4"
         previewDurationSec={10}
+        previewHeroActionDisabled={false}
         previewHeroActionLabel="Generate Preview"
         previewHeroActionTarget="preview"
         previewHeroHeadline="Synced preview ready"

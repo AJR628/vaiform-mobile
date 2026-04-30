@@ -452,6 +452,31 @@ Additional execution rules:
   - no React Native ready-preview caption overlay was reintroduced; `storyboard-preview-caption` remains absent
   - backend/mobile contract docs were not changed because caller/route truth stayed unchanged
 
+### Second Preview Simplification Update
+
+- Phase: Second focused Preview UI simplification pass
+- Date: 2026-04-30
+- Branch / PR: local working tree on `main`
+- Files changed:
+  - `client/screens/StoryEditorScreen.tsx`
+  - `client/components/story-editor/StoryboardSurface.tsx`
+  - `client/components/story-editor/StoryboardPreviewStage.tsx`
+  - `client/components/story-editor/StoryTimelineRail.tsx`
+  - `client/components/story-editor/StoryPreviewShell.tsx`
+  - related component/screen tests
+- What actually changed:
+  - removed the large duplicate internal `Preview` heading from the unified and fallback Preview surfaces
+  - flattened the unified surface so the monitor shell owns compact top chrome, a dedicated 9:16 viewport, and a docked rail area
+  - kept status and `Voice & Timing` outside the ready video viewport so burned-in captions are not obscured by persistent controls
+  - simplified blocked/requesting copy to one headline plus one primary action or disabled `Generating...` state
+  - compacted the filmstrip/transport rail so it reads as docked monitor chrome rather than a separate bulky card
+  - kept the restrained fallback path behavior unchanged while removing duplicate helper/status copy
+- Guardrail confirmation:
+  - no backend, API route, billing, preview generation, voice sync, polling, finalize, or render behavior changed
+  - ready playback still uses backend `draftPreviewV1.artifact.url`
+  - no React Native ready-preview caption overlay was reintroduced; `storyboard-preview-caption` remains absent
+  - backend/mobile contract docs were not changed because caller/route truth stayed unchanged
+
 ## Current Open Questions
 
 - The exact visual token system for the mockup is not defined in repo assets or design docs. Implementation should aim toward the attached mockup direction while staying inside existing mobile theme/token patterns.
