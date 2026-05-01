@@ -709,6 +709,20 @@ export async function storyGet(
   });
 }
 
+/**
+ * POST /api/story/update-script - Replace script sentences before storyboard planning
+ */
+export async function storyUpdateScript(body: {
+  sessionId: string;
+  sentences: string[];
+}): Promise<NormalizedResponse<StorySession>> {
+  return apiRequestNormalized<StorySession>("/api/story/update-script", {
+    method: "POST",
+    body,
+    requireAuth: true,
+  });
+}
+
 export interface StoryPreviewPendingMeta {
   state?: "pending" | string;
   attemptId?: string | null;

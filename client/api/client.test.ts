@@ -7,6 +7,7 @@ import {
   clearTokenCache,
   normalizeResponse,
   storyFinalize,
+  storyUpdateScript,
   storyUpdateBeatText,
 } from "@/api/client";
 
@@ -292,6 +293,63 @@ describe("client/api/client", () => {
           sessionId: "session-1",
           sentenceIndex: 0,
           text: "Updated sentence text",
+        }),
+        headers: expect.objectContaining({
+          Authorization: "Bearer firebase-id-token",
+          "Content-Type": "application/json",
+          "x-client": "mobile",
+        }),
+      }),
+    );
+  });
+
+  test("storyUpdateScript posts full sentences and returns a full story session", async () => {
+    auth.currentUser = {
+      getIdToken: jest.fn(async () => "firebase-id-token"),
+    } as any;
+
+    (global.fetch as jest.Mock).mockResolvedValue(
+      mockJsonResponse(
+        {
+          success: true,
+          data: {
+            id: "session-1",
+            story: {
+              sentences: ["Beat one", "Beat two"],
+            },
+            status: "story_generated",
+          },
+        },
+        {
+          status: 200,
+          headers: { "x-request-id": "request-update-script" },
+        },
+      ),
+    );
+
+    const result = await storyUpdateScript({
+      sessionId: "session-1",
+      sentences: ["Beat one", "Beat two"],
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      data: {
+        id: "session-1",
+        story: {
+          sentences: ["Beat one", "Beat two"],
+        },
+        status: "story_generated",
+      },
+      requestId: "request-update-script",
+    });
+    expect(global.fetch).toHaveBeenCalledWith(
+      "https://api.test.local/api/story/update-script",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          sessionId: "session-1",
+          sentences: ["Beat one", "Beat two"],
         }),
         headers: expect.objectContaining({
           Authorization: "Bearer firebase-id-token",

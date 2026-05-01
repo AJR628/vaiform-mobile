@@ -13,6 +13,7 @@ const mockStoryPlan = jest.fn();
 const mockStorySearchAll = jest.fn();
 const mockStoryUpdateBeatText = jest.fn();
 const mockStoryDeleteBeat = jest.fn();
+const mockStoryUpdateScript = jest.fn();
 
 let mockRouteParams = { sessionId: "session-1" };
 
@@ -83,9 +84,13 @@ jest.mock("@/components/Card", () => ({
 }));
 
 jest.mock("@/components/Button", () => ({
-  Button: ({ children, onPress }: any) => {
-    const { Pressable } = require("react-native");
-    return <Pressable onPress={onPress}>{children}</Pressable>;
+  Button: ({ children, disabled, onPress }: any) => {
+    const { Pressable, Text } = require("react-native");
+    return (
+      <Pressable disabled={disabled} onPress={onPress}>
+        {typeof children === "string" ? <Text>{children}</Text> : children}
+      </Pressable>
+    );
   },
 }));
 
@@ -95,18 +100,19 @@ jest.mock("@/api/client", () => ({
   storySearchAll: (...args: unknown[]) => mockStorySearchAll(...args),
   storyUpdateBeatText: (...args: unknown[]) => mockStoryUpdateBeatText(...args),
   storyDeleteBeat: (...args: unknown[]) => mockStoryDeleteBeat(...args),
+  storyUpdateScript: (...args: unknown[]) => mockStoryUpdateScript(...args),
 }));
 
 import ScriptScreen from "@/screens/ScriptScreen";
 
-function buildSession(sentence: string) {
+function buildSession(sentences: string[] | string, shots: unknown[] = []) {
   return {
     id: "session-1",
     status: "story_generated",
     story: {
-      sentences: [sentence],
+      sentences: Array.isArray(sentences) ? sentences : [sentences],
     },
-    shots: [],
+    shots,
   };
 }
 
@@ -132,21 +138,89 @@ describe("client/screens/ScriptScreen", () => {
     mockStorySearchAll.mockReset();
     mockStoryUpdateBeatText.mockReset();
     mockStoryDeleteBeat.mockReset();
+    mockStoryUpdateScript.mockReset();
   });
 
-  test("saves once, refetches once, and keeps edited text visible while refetch is pending", async () => {
-    const refetch = createDeferred<{ ok: boolean; data: ReturnType<typeof buildSession> }>();
+  test("pre-storyboard edit uses update-script, refetches once, and keeps edited text visible", async () => {
+    const refetch = createDeferred<{
+      ok: boolean;
+      data: ReturnType<typeof buildSession>;
+    }>();
     mockStoryGet
       .mockResolvedValueOnce({
         ok: true,
         data: buildSession("Original sentence text"),
       })
       .mockReturnValueOnce(refetch.promise);
+    mockStoryUpdateScript.mockResolvedValue({
+      ok: true,
+      data: buildSession("Updated sentence text"),
+    });
+
+    const screen = render(<ScriptScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Original sentence text")).toBeTruthy();
+    });
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId("beat-card"));
+    });
+
+    const input = await screen.findByDisplayValue("Original sentence text");
+
+    await act(async () => {
+      fireEvent.changeText(input, "Updated sentence text\n");
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(mockStoryUpdateScript).toHaveBeenCalledTimes(1);
+    });
+
+    expect(mockStoryUpdateScript).toHaveBeenCalledWith({
+      sessionId: "session-1",
+      sentences: ["Updated sentence text"],
+    });
+    expect(mockStoryUpdateBeatText).not.toHaveBeenCalled();
+    expect(mockStoryDeleteBeat).not.toHaveBeenCalled();
+    expect(mockStoryPlan).not.toHaveBeenCalled();
+    expect(mockStorySearchAll).not.toHaveBeenCalled();
+    expect(mockStoryGet).toHaveBeenCalledTimes(2);
+    expect(screen.getByText("Updated sentence text")).toBeTruthy();
+    expect(screen.queryByText("Original sentence text")).toBeNull();
+
+    await act(async () => {
+      refetch.resolve({
+        ok: true,
+        data: buildSession("Updated sentence text"),
+      });
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Updated sentence text")).toBeTruthy();
+    });
+
+    expect(mockStoryGet).toHaveBeenCalledTimes(2);
+    expect(mockShowError).not.toHaveBeenCalled();
+  });
+
+  test("post-storyboard edit preserves the storyboard-aware update-beat-text endpoint", async () => {
+    mockStoryGet
+      .mockResolvedValueOnce({
+        ok: true,
+        data: buildSession("Original sentence text", [{ sentenceIndex: 0 }]),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        data: buildSession("Updated sentence text", [{ sentenceIndex: 0 }]),
+      });
     mockStoryUpdateBeatText.mockResolvedValue({
       ok: true,
       data: {
         sentences: ["Updated sentence text"],
-        shots: [],
+        shots: [{ sentenceIndex: 0 }],
       },
     });
 
@@ -176,23 +250,144 @@ describe("client/screens/ScriptScreen", () => {
       sentenceIndex: 0,
       text: "Updated sentence text",
     });
-    expect(mockStoryGet).toHaveBeenCalledTimes(2);
-    expect(screen.getByText("Updated sentence text")).toBeTruthy();
-    expect(screen.queryByText("Original sentence text")).toBeNull();
+    expect(mockStoryUpdateScript).not.toHaveBeenCalled();
+  });
+
+  test("pre-storyboard add beat appends through update-script only", async () => {
+    mockStoryGet
+      .mockResolvedValueOnce({
+        ok: true,
+        data: buildSession(["Beat one", "Beat two"]),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        data: buildSession(["Beat one", "Beat two", "Beat three"]),
+      });
+    mockStoryUpdateScript.mockResolvedValue({
+      ok: true,
+      data: buildSession(["Beat one", "Beat two", "Beat three"]),
+    });
+
+    const screen = render(<ScriptScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Beat one")).toBeTruthy();
+    });
 
     await act(async () => {
-      refetch.resolve({
-        ok: true,
-        data: buildSession("Updated sentence text"),
-      });
+      fireEvent.press(screen.getByText("+ Add beat"));
+    });
+
+    const input = await screen.findByPlaceholderText("Write the next beat");
+    await act(async () => {
+      fireEvent.changeText(input, "Beat three");
+    });
+    await act(async () => {
+      fireEvent.press(screen.getByText("Save"));
       await Promise.resolve();
     });
 
     await waitFor(() => {
-      expect(screen.getByText("Updated sentence text")).toBeTruthy();
+      expect(mockStoryUpdateScript).toHaveBeenCalledTimes(1);
     });
 
-    expect(mockStoryGet).toHaveBeenCalledTimes(2);
-    expect(mockShowError).not.toHaveBeenCalled();
+    expect(mockStoryUpdateScript).toHaveBeenCalledWith({
+      sessionId: "session-1",
+      sentences: ["Beat one", "Beat two", "Beat three"],
+    });
+    expect(mockStoryUpdateBeatText).not.toHaveBeenCalled();
+    expect(mockStoryDeleteBeat).not.toHaveBeenCalled();
+    expect(mockStoryPlan).not.toHaveBeenCalled();
+    expect(mockStorySearchAll).not.toHaveBeenCalled();
+  });
+
+  test("pre-storyboard delete uses update-script instead of delete-beat", async () => {
+    const { Alert } = require("react-native");
+    const alertSpy = jest
+      .spyOn(Alert, "alert")
+      .mockImplementation(
+        (
+          _title: string,
+          _message?: string,
+          buttons?: Array<{ text: string; onPress?: () => void }>,
+        ) => {
+          buttons?.find((button) => button.text === "Delete")?.onPress?.();
+        },
+      );
+
+    mockStoryGet
+      .mockResolvedValueOnce({
+        ok: true,
+        data: buildSession(["Beat one", "Beat two"]),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        data: buildSession(["Beat two"]),
+      });
+    mockStoryUpdateScript.mockResolvedValue({
+      ok: true,
+      data: buildSession(["Beat two"]),
+    });
+
+    const screen = render(<ScriptScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Beat one")).toBeTruthy();
+    });
+
+    await act(async () => {
+      fireEvent.press(screen.getByLabelText("Delete beat 1"));
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(mockStoryUpdateScript).toHaveBeenCalledTimes(1);
+    });
+
+    expect(mockStoryUpdateScript).toHaveBeenCalledWith({
+      sessionId: "session-1",
+      sentences: ["Beat two"],
+    });
+    expect(mockStoryDeleteBeat).not.toHaveBeenCalled();
+    alertSpy.mockRestore();
+  });
+
+  test("Generate Storyboard still calls plan then search", async () => {
+    mockStoryGet.mockResolvedValue({
+      ok: true,
+      data: buildSession("Beat one"),
+    });
+    mockStoryPlan.mockResolvedValue({
+      ok: true,
+      data: buildSession("Beat one"),
+    });
+    mockStorySearchAll.mockResolvedValue({
+      ok: true,
+      data: buildSession("Beat one"),
+    });
+
+    const screen = render(<ScriptScreen />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Generate Storyboard")).toBeTruthy();
+    });
+
+    await act(async () => {
+      fireEvent.press(screen.getByText("Generate Storyboard"));
+      await Promise.resolve();
+    });
+
+    await waitFor(() => {
+      expect(mockNavigation.replace).toHaveBeenCalledWith("StoryEditor", {
+        sessionId: "session-1",
+      });
+    });
+
+    expect(mockStoryPlan).toHaveBeenCalledWith({ sessionId: "session-1" });
+    expect(mockStorySearchAll).toHaveBeenCalledWith({ sessionId: "session-1" });
+    expect(mockStoryPlan.mock.invocationCallOrder[0]).toBeLessThan(
+      mockStorySearchAll.mock.invocationCallOrder[0],
+    );
+    expect(mockStoryUpdateScript).not.toHaveBeenCalled();
   });
 });
